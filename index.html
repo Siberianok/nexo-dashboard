@@ -14,10 +14,69 @@
     /* Paleta y estilos inspirados en Nexo */
     .nx-gradient{background:linear-gradient(135deg,#0b1e4b 0%,#1b44a6 50%,#2052c1 100%)}
     .nx-gradient-soft{background:linear-gradient(180deg,#eef3ff 0%, #f6f9ff 100%)}
-    .nx-card{border:1px solid #e6eaf5; box-shadow:0 6px 20px rgba(23,43,77,.06)}
+    .nx-card{border:1px solid #dfe6ff; box-shadow:0 12px 30px rgba(16,35,90,.08); border-radius:1.5rem}
     .nx-kpi{border:1px solid #e6eaf5}
-    .nx-kpi-btn{background:linear-gradient(135deg,#2a56d8 0%, #3c7bff 100%); color:#fff; border:none}
-    .nx-kpi-btn:hover{filter:brightness(0.98)}
+    .nx-kpi-btn{
+      position:relative;
+      border-radius:1.25rem;
+      background:linear-gradient(155deg,#1c3fa0 0%,#2f5de0 45%,#4c8fff 100%);
+      color:#fff;
+      border:1px solid rgba(255,255,255,0.22);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),0 16px 30px rgba(8,20,66,0.35);
+      transition:transform .25s ease, box-shadow .25s ease, filter .25s ease;
+    }
+    .nx-kpi-btn::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      border-radius:inherit;
+      box-shadow:inset 0 0 0 1px rgba(255,255,255,0.08), inset 0 -18px 30px rgba(0,0,0,0.18);
+      pointer-events:none;
+    }
+    .nx-kpi-btn:hover{
+      transform:translateY(-3px);
+      filter:brightness(1.02);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),0 22px 36px rgba(12,28,84,0.42);
+    }
+    .nx-kpi-btn:active{
+      transform:translateY(1px);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),0 10px 18px rgba(10,24,70,0.3);
+    }
+    .nx-btn{
+      position:relative;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:.4rem;
+      background:linear-gradient(155deg,#2451d5 0%,#3368f0 45%,#4a8cff 100%);
+      color:#fff;
+      border-radius:1rem;
+      padding:.55rem 1.35rem;
+      font-weight:600;
+      border:1px solid rgba(255,255,255,0.22);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),0 14px 28px rgba(15,33,90,0.32);
+      transition:transform .22s ease, box-shadow .22s ease, filter .22s ease;
+    }
+    .nx-btn:hover{
+      transform:translateY(-2px);
+      filter:brightness(1.03);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),0 20px 34px rgba(12,30,88,0.4);
+    }
+    .nx-btn:active{
+      transform:translateY(1px);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),0 10px 20px rgba(10,26,70,0.25);
+    }
+    .nx-btn-ghost{
+      background:linear-gradient(150deg,#ffffff 0%,#f1f5ff 100%);
+      color:#1e2f67;
+      border:1px solid rgba(30,64,175,0.16);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.8),0 10px 22px rgba(15,30,70,0.12);
+    }
+    .nx-btn-ghost:hover{
+      filter:brightness(1.02);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.8),0 16px 26px rgba(15,30,70,0.18);
+    }
+    .nx-btn-sm{padding:.35rem .95rem; font-size:.8rem; border-radius:.9rem;}
   </style>
 </head>
 <body class="nx-gradient-soft">
@@ -284,7 +343,29 @@
 
       const netMonthly = useMemo(() => earnMonthly - monthlyLoanCost, [earnMonthly, monthlyLoanCost]);
 
+      const timeline = useMemo(() => {
+        const totalDays = Math.max(1, daysUntilRepay);
+        const steps = Math.max(4, Math.min(12, Math.ceil(totalDays / 20)));
+        const arr = [];
+        for (let i = 0; i <= steps; i++) {
+          const day = (totalDays / steps) * i;
+          const interest = loanAmount * (Math.pow(1 + chosenAPR / 365, day) - 1);
+          let earn = 0;
+          if (earnEligible) {
+            earn = totals.withValue.reduce((acc, asset) => {
+              if (!params.earnOnCollateral && asset.useAsCollateral) return acc;
+              const apr = EARN_APR_TOP[(asset.ticker || "").toUpperCase()] ?? 0;
+              return acc + asset.value * (Math.pow(1 + apr / 365, day) - 1);
+            }, 0);
+          }
+          const balance = Math.max(0, loanAmount + interest - earn);
+          arr.push({ day, cost: interest, earn, balance });
+        }
+        return arr;
+      }, [chosenAPR, daysUntilRepay, earnEligible, loanAmount, params.earnOnCollateral, totals.withValue]);
+
       const overallLTVIfBorrow = useMemo(() => (totals.totalCollateralValue > 0 ? loanAmount / totals.totalCollateralValue : 0), [loanAmount, totals.totalCollateralValue]);
+      const ltvTone = overallLTVIfBorrow <= TARGET_LTV ? "ok" : (overallLTVIfBorrow <= marginCallLTV ? "warn" : "danger");
 
       const extraCollateralForTarget = useMemo(() => {
         const neededCollateral = loanAmount / TARGET_LTV;
@@ -345,7 +426,7 @@
               <KPI title="Neto mensual (Earn − crédito)" value={fmt(netMonthly * rate, currency)} tone={netMonthly>=0?"ok":"danger"} variant="button" />
             </section>
 
-            <section className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <Card title="Préstamo & Repago">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Field label={`Monto a pedir (${currency})`}>
@@ -356,9 +437,19 @@
                   </Field>
                 </div>
                 <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <Pill label="LTV si pides esto" value={`${(overallLTVIfBorrow*100).toFixed(2)}%`} tone={overallLTVIfBorrow <= TARGET_LTV ? "ok" : (overallLTVIfBorrow <= 0.7 ? "warn" : "danger")} />
+                  <Pill label="LTV si pides esto" value={`${(overallLTVIfBorrow*100).toFixed(2)}%`} tone={ltvTone} />
                   <Pill label="≤20% LTV (fijo)" value={loanAmount <= recommendedLoanAtTarget ? "Sí" : "No"} tone={loanAmount <= recommendedLoanAtTarget ? "ok" : "warn"} />
                   <Pill label="¿Califica Low-Cost?" value={meetsLowCost ? "Sí" : "No"} tone={meetsLowCost ? "ok" : "warn"} />
+                </div>
+              </Card>
+
+              <Card title="Salud del LTV">
+                <LTVGauge value={overallLTVIfBorrow} target={TARGET_LTV} marginCall={marginCallLTV} autoRepay={autoRepayLTV} />
+                <div className="mt-4 space-y-2">
+                  <Line label="LTV actual" value={`${(overallLTVIfBorrow*100).toFixed(1)}%`} tone={ltvTone} />
+                  <Line label="Objetivo Low-Cost" value={`${(TARGET_LTV*100).toFixed(0)}%`} muted />
+                  <Line label="Margin call" value={`${(marginCallLTV*100).toFixed(0)}%`} muted />
+                  <Line label="Auto-repay" value={`${(autoRepayLTV*100).toFixed(0)}%`} muted />
                 </div>
               </Card>
 
@@ -374,7 +465,7 @@
                     <div className="w-48">
                       <NumberParam label="Frecuencia (s)" value={params.refreshSec ?? 60} onChange={(v)=> setParams({ ...params, refreshSec: v })} />
                     </div>
-                    <button onClick={fetchLivePricesNow} className="rounded-2xl bg-neutral-900 text-white px-4 py-2 shadow hover:bg-neutral-800">Actualizar ahora</button>
+                    <button onClick={fetchLivePricesNow} className="nx-btn text-sm">Actualizar ahora</button>
                     <span className="text-xs text-neutral-500">{lastPriceTs ? `Últ. actualización: ${new Date(lastPriceTs).toLocaleTimeString()}` : '— sin actualizar —'}</span>
                     {liveError && <span className="text-xs text-rose-600">Error: {liveError}</span>}
                   </div>
@@ -415,8 +506,8 @@
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-xl font-semibold">Activos y colateral</h2>
                 <div className="flex items-center gap-2">
-                  <button onClick={addRow} className="rounded-2xl bg-neutral-900 text-white px-4 py-2 shadow hover:bg-neutral-800">Añadir activo</button>
-                  <button onClick={() => { localStorage.removeItem("nexo_assets_v1"); setAssets(defaultAssets); }} className="rounded-2xl bg-white border border-neutral-300 px-4 py-2 shadow-sm hover:bg-neutral-50">Reset</button>
+                  <button onClick={addRow} className="nx-btn text-sm">Añadir activo</button>
+                  <button onClick={() => { localStorage.removeItem("nexo_assets_v1"); setAssets(defaultAssets); }} className="nx-btn nx-btn-ghost text-sm">Reset</button>
                 </div>
               </div>
 
@@ -465,7 +556,7 @@
                           <span className="inline-block rounded-xl bg-blue-50 text-blue-700 px-3 py-1 font-semibold">{pct(EARN_APR_TOP[(a.ticker||"").toUpperCase()] ?? 0)}</span>
                         </Td>
                         <Td align="center">
-                          <button onClick={() => removeRow(a.id)} className="rounded-xl bg-white border border-neutral-300 px-3 py-1 hover:bg-neutral-50">Borrar</button>
+                          <button onClick={() => removeRow(a.id)} className="nx-btn nx-btn-ghost nx-btn-sm">Borrar</button>
                         </Td>
                       </tr>
                     ))}
@@ -474,7 +565,11 @@
               </div>
             </section>
 
-            <section className="mb-10 grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <section className="mb-10 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              <Card title="Proyección del préstamo">
+                <TrendChart data={timeline} currency={currency} rate={rate} />
+              </Card>
+
               <Card title="Diagnóstico & Sugerencias">
                 <ul className="list-disc pl-5 space-y-2 text-sm">
                   <li>
@@ -498,15 +593,15 @@
               <Card title="Exportar / Plantilla">
                 <p className="text-sm text-neutral-700 mb-3">Guardamos tus datos en <code>localStorage</code>. Podés exportar un JSON con todo o resetear la demo.</p>
                 <div className="flex flex-wrap gap-3">
-                  <button className="rounded-2xl bg-neutral-900 text-white px-4 py-2 shadow hover:bg-neutral-800" onClick={() => {
+                  <button className="nx-btn text-sm" onClick={() => {
                     const blob = new Blob([ JSON.stringify({ assets, params }, null, 2) ], { type: "application/json" });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement("a");
                     a.href = url; a.download = `nexo_dashboard_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
                   }}>Exportar JSON</button>
 
-                  <button className="rounded-2xl bg-white border border-neutral-300 px-4 py-2 shadow-sm hover:bg-neutral-50" onClick={() => { if (confirm("¿Restablecer parámetros por defecto?")) setParams(defaultParams); }}>Reset parámetros</button>
-                  <button className="rounded-2xl bg-white border border-neutral-300 px-4 py-2 shadow-sm hover:bg-neutral-50" onClick={() => { if (confirm("¿Restablecer activos por defecto?")) setAssets(defaultAssets); }}>Reset activos</button>
+                  <button className="nx-btn nx-btn-ghost text-sm" onClick={() => { if (confirm("¿Restablecer parámetros por defecto?")) setParams(defaultParams); }}>Reset parámetros</button>
+                  <button className="nx-btn nx-btn-ghost text-sm" onClick={() => { if (confirm("¿Restablecer activos por defecto?")) setAssets(defaultAssets); }}>Reset activos</button>
                 </div>
                 <div className="mt-4 text-xs text-neutral-500"><p>* Este simulador es orientativo. Verifica términos/tasas vigentes en Nexo.</p></div>
               </Card>
@@ -523,7 +618,7 @@
       const toneCls = tone === 'ok' ? 'text-emerald-200' : tone === 'danger' ? 'text-rose-200' : '';
       const baseCls = variant === 'button' ? 'nx-kpi-btn' : 'bg-white nx-kpi';
       return (
-        <div className={`rounded-2xl p-4 shadow-sm ${baseCls}`} role="button" aria-label={title}>
+        <div className={`relative overflow-hidden rounded-2xl p-4 shadow-sm transition-transform duration-200 ${baseCls} cursor-pointer`} role="button" aria-label={title}>
           <div className={`text-xs uppercase tracking-wide text-center ${variant==='button' ? 'text-white/80' : 'text-neutral-500'}`}>{title}</div>
           <div className={`mt-1 text-xl font-bold text-center ${toneCls}`}>{value}</div>
           {subtle && <div className={`text-xs mt-1 text-center ${variant==='button' ? 'text-white/70' : 'text-neutral-500'}`}>{subtle}</div>}
@@ -573,6 +668,153 @@
         <div className="flex items-center justify-between gap-4">
           <span className={`text-sm ${muted ? "text-neutral-400" : "text-neutral-700"}`}>{label}</span>
           <span className={`text-sm font-medium ${color}`}>{value}</span>
+        </div>
+      );
+    }
+
+    function LTVGauge({ value, target, marginCall, autoRepay }) {
+      const clamp = (v) => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
+      const size = 220;
+      const center = size / 2;
+      const radius = center - 18;
+      const viewHeight = center + 32;
+      const angleFor = (pct) => Math.PI - clamp(pct) * Math.PI;
+      const pointFor = (pct) => {
+        const angle = angleFor(pct);
+        return {
+          x: center + radius * Math.cos(angle),
+          y: center - radius * Math.sin(angle),
+        };
+      };
+      const describeArc = (from, to) => {
+        const start = pointFor(from);
+        const end = pointFor(to);
+        const largeArc = (to - from) > 0.5 ? 1 : 0;
+        return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 0 ${end.x} ${end.y}`;
+      };
+      const segments = [
+        { from: 0, to: Math.min(target, 1), color: '#34d399' },
+        { from: Math.min(target, 1), to: Math.min(marginCall, 1), color: '#facc15' },
+        { from: Math.min(marginCall, 1), to: Math.min(autoRepay, 1), color: '#fb923c' },
+        { from: Math.min(autoRepay, 1), to: 1, color: '#f87171' },
+      ].filter(seg => seg.to > seg.from + 0.001);
+      const trackPath = describeArc(0, 1);
+      const valuePct = clamp(value);
+      const needle = pointFor(valuePct);
+      const status = valuePct <= target ? 'Saludable' : valuePct <= marginCall ? 'Precaución' : valuePct <= autoRepay ? 'Riesgo alto' : 'Crítico';
+      const statusColor = valuePct <= target ? 'text-emerald-500' : valuePct <= marginCall ? 'text-amber-500' : valuePct <= autoRepay ? 'text-orange-500' : 'text-rose-500';
+      const legends = [
+        { label: '≤20% Óptimo', color: '#34d399' },
+        { label: '≤70% Estable', color: '#facc15' },
+        { label: '≤83% Riesgo', color: '#fb923c' },
+        { label: '>83% Crítico', color: '#f87171' },
+      ];
+      return (
+        <div className="flex flex-col items-center">
+          <svg viewBox={`0 0 ${size} ${viewHeight}`} className="w-full max-w-[280px]">
+            <defs>
+              <linearGradient id="gaugeTrack" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="rgba(148,163,184,0.25)" />
+                <stop offset="100%" stopColor="rgba(148,163,184,0.05)" />
+              </linearGradient>
+            </defs>
+            <path d={trackPath} stroke="url(#gaugeTrack)" strokeWidth="18" fill="none" strokeLinecap="round" />
+            {segments.map((seg, idx) => (
+              <path key={idx} d={describeArc(seg.from, seg.to)} stroke={seg.color} strokeWidth="18" fill="none" strokeLinecap="round" />
+            ))}
+            <line x1={center} y1={center} x2={needle.x} y2={needle.y} stroke="#0f172a" strokeWidth="4" strokeLinecap="round" />
+            <circle cx={center} cy={center} r="10" fill="#1d3abf" stroke="#f8fafc" strokeWidth="3" />
+            <text x={center} y={center + 32} textAnchor="middle" className="fill-slate-600" style={{ fontWeight: 600, fontSize: '18px' }}>{`${(valuePct * 100).toFixed(1)}%`}</text>
+            <text x={center} y={center + 52} textAnchor="middle" className={`fill-current ${statusColor}`} style={{ fontWeight: 600, fontSize: '12px' }}>{status}</text>
+          </svg>
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-[11px] font-medium text-neutral-500">
+            {legends.map((item) => (
+              <span key={item.label} className="flex items-center gap-1">
+                <span className="h-2.5 w-3.5 rounded-full" style={{ backgroundColor: item.color }} />
+                {item.label}
+              </span>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function TrendChart({ data, currency, rate }) {
+      if (!data || data.length < 2) {
+        return <div className="text-sm text-neutral-500">Configura un monto y una fecha de repago para visualizar la trayectoria.</div>;
+      }
+      const maxVal = Math.max(...data.flatMap(d => [d.cost, d.earn, d.balance]));
+      if (!(maxVal > 0)) {
+        return <div className="text-sm text-neutral-500">Agrega colateral o préstamo para generar la proyección.</div>;
+      }
+      const width = 420;
+      const height = 220;
+      const paddingX = 36;
+      const paddingY = 28;
+      const step = data.length > 1 ? (width - paddingX * 2) / (data.length - 1) : 0;
+      const baseY = height - paddingY;
+      const scaleY = (value) => {
+        if (!maxVal) return baseY;
+        const ratio = value / maxVal;
+        const usableHeight = height - paddingY * 1.6;
+        return baseY - ratio * usableHeight;
+      };
+      const pathFor = (key) => data.map((point, index) => {
+        const x = paddingX + index * step;
+        const y = scaleY(point[key]);
+        return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
+      }).join(' ');
+      const areaPath = data.map((point, index) => {
+        const x = paddingX + index * step;
+        const y = scaleY(point.balance);
+        return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
+      }).join(' ');
+      const areaPathClosed = `${areaPath} L ${paddingX + step * (data.length - 1)} ${baseY} L ${paddingX} ${baseY} Z`;
+      const tickIndexes = Array.from(new Set([0, Math.floor(data.length / 2), data.length - 1])).filter(i => i >= 0 && i < data.length);
+      const ticks = tickIndexes.map((i) => ({ x: paddingX + i * step, label: `Día ${Math.round(data[i].day)}` }));
+      const colors = { balance: '#8b5cf6', cost: '#60a5fa', earn: '#34d399' };
+      const lastPoint = data[data.length - 1];
+      return (
+        <div>
+          <svg viewBox={`0 0 ${width} ${height}`} className="w-full">
+            <defs>
+              <linearGradient id="balanceArea" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#a855f7" stopOpacity="0.35" />
+                <stop offset="100%" stopColor="#a855f7" stopOpacity="0.05" />
+              </linearGradient>
+            </defs>
+            <rect x="0" y="0" width={width} height={height} fill="url(#chartBg)" opacity="0" />
+            <path d={`M ${paddingX} ${baseY} L ${paddingX + step * (data.length - 1)} ${baseY}`} stroke="rgba(148,163,184,0.35)" strokeWidth="1.5" strokeLinecap="round" />
+            <path d={areaPathClosed} fill="url(#balanceArea)" opacity="0.6" />
+            <path d={pathFor('balance')} stroke={colors.balance} strokeWidth="3" fill="none" strokeLinecap="round" />
+            <path d={pathFor('cost')} stroke={colors.cost} strokeWidth="2.5" fill="none" strokeLinecap="round" strokeDasharray="4 4" />
+            <path d={pathFor('earn')} stroke={colors.earn} strokeWidth="2.5" fill="none" strokeLinecap="round" strokeDasharray="6 4" />
+            {ticks.map((tick) => (
+              <g key={tick.label} transform={`translate(${tick.x}, ${baseY + 14})`}>
+                <circle cx="0" cy="0" r="2" fill="rgba(148,163,184,0.5)" />
+                <text textAnchor="middle" dy="12" className="fill-slate-400" style={{ fontSize: '10px', letterSpacing: '0.04em' }}>{tick.label}</text>
+              </g>
+            ))}
+          </svg>
+          <div className="mt-3 flex flex-wrap gap-4 text-xs font-semibold text-neutral-500">
+            <span className="flex items-center gap-2"><span className="h-2 w-4 rounded-full" style={{ background: colors.balance }} />Balance neto</span>
+            <span className="flex items-center gap-2"><span className="h-2 w-4 rounded-full" style={{ background: colors.cost }} />Costo (interés)</span>
+            <span className="flex items-center gap-2"><span className="h-2 w-4 rounded-full" style={{ background: colors.earn }} />Earn estimado</span>
+          </div>
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+            <div className="rounded-xl bg-blue-50/70 px-3 py-2">
+              <div className="text-xs uppercase text-blue-600">Interés total</div>
+              <div className="font-semibold text-blue-700">{fmt(lastPoint.cost * rate, currency)}</div>
+            </div>
+            <div className="rounded-xl bg-emerald-50/70 px-3 py-2">
+              <div className="text-xs uppercase text-emerald-600">Earn acumulado</div>
+              <div className="font-semibold text-emerald-700">{fmt(lastPoint.earn * rate, currency)}</div>
+            </div>
+            <div className="rounded-xl bg-violet-50/70 px-3 py-2">
+              <div className="text-xs uppercase text-violet-600">Balance estimado</div>
+              <div className="font-semibold text-violet-700">{fmt(lastPoint.balance * rate, currency)}</div>
+            </div>
+          </div>
         </div>
       );
     }
