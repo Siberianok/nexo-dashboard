@@ -283,6 +283,7 @@
 
       const recommendedLoanAtTarget = useMemo(() => TARGET_LTV * totals.totalCollateralValue, [totals.totalCollateralValue]);
       const capLowCost = useMemo(() => Math.min(recommendedLoanAtTarget, totals.maxBorrow), [recommendedLoanAtTarget, totals.maxBorrow]);
+      const lowCostHeadroom = useMemo(() => Math.max(0, capLowCost - loanAmount), [capLowCost, loanAmount]);
 
       const marginCallLTV = 0.70; // soporte Nexo
       const autoRepayLTV = 0.8333333333; // 83.33%
@@ -367,6 +368,41 @@
       const overallLTVIfBorrow = useMemo(() => (totals.totalCollateralValue > 0 ? loanAmount / totals.totalCollateralValue : 0), [loanAmount, totals.totalCollateralValue]);
       const ltvTone = overallLTVIfBorrow <= TARGET_LTV ? "ok" : (overallLTVIfBorrow <= marginCallLTV ? "warn" : "danger");
 
+      const collateralBreakdown = useMemo(() => {
+        const totalCollateral = totals.totalCollateralValue || 0;
+        if (!(totalCollateral > 0)) return [];
+        return totals.withValue
+          .filter((asset) => asset.useAsCollateral && asset.value > 0)
+          .map((asset) => {
+            const ticker = (asset.ticker || "").toUpperCase();
+            const policyLTV = LTV_BY_TICKER[ticker] ?? asset.ltv ?? 0;
+            const maxBorrowForAsset = asset.value * policyLTV;
+            const share = asset.value / totalCollateral;
+            const allocatedLoan = loanAmount * share;
+            const usageVsCap = maxBorrowForAsset > 0 ? allocatedLoan / maxBorrowForAsset : 0;
+            let tone = "ok";
+            if (usageVsCap > 0.85 || overallLTVIfBorrow >= autoRepayLTV) {
+              tone = "danger";
+            } else if (usageVsCap > 0.6 || overallLTVIfBorrow >= marginCallLTV) {
+              tone = "warn";
+            }
+            return {
+              id: asset.id,
+              name: asset.name || ticker || `Activo ${asset.id}`,
+              ticker,
+              value: asset.value,
+              share,
+              policyLTV,
+              policyPct: policyLTV * 100,
+              maxBorrowForAsset,
+              allocatedLoan,
+              usageVsCap: Math.max(0, usageVsCap),
+              tone,
+            };
+          })
+          .sort((a, b) => b.value - a.value);
+      }, [autoRepayLTV, loanAmount, marginCallLTV, overallLTVIfBorrow, totals.totalCollateralValue, totals.withValue]);
+
       const extraCollateralForTarget = useMemo(() => {
         const neededCollateral = loanAmount / TARGET_LTV;
         return Math.max(0, neededCollateral - totals.totalCollateralValue);
@@ -417,7 +453,7 @@
               <KPI title="Balance total" value={fmt(totals.total * rate, currency)} variant="button" />
               <KPI title="Loyalty Tier" value={loyaltyTier} subtle={totals.total < MIN_BALANCE_PERKS ? "(balance < mínimo)" : undefined} variant="button" />
               <KPI title="APR crédito" value={`${(chosenAPR * 100).toFixed(2)}%`} subtle={meetsLowCost ? "Low-Cost activo" : undefined} variant="button" />
-              <KPI title="Cap. Low-Cost (≤20% LTV)" value={fmt(Math.min(recommendedLoanAtTarget, totals.maxBorrow) * rate, currency)} subtle="potencial" variant="button" />
+              <KPI title="Cap. Low-Cost (≤20% LTV)" value={fmt(capLowCost * rate, currency)} subtle="potencial" variant="button" />
               <KPI title="Tope por LTVs" value={fmt(totals.maxBorrow * rate, currency)} variant="button" />
               <KPI title="Préstamo recomendado (≤20%)" value={fmt(recommendedLoanAtTarget * rate, currency)} variant="button" />
               <KPI title="Interés hasta repago" value={fmt(interestCalc.total * rate, currency)} subtle={`${useMemo(()=>{const a=new Date(); const b=new Date(repayDate); return Math.ceil(Math.max(0,b-a)/86400000);},[repayDate])} días`} variant="button" />
@@ -436,20 +472,22 @@
                     <input type="date" className="w-full rounded-2xl border border-neutral-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-700" value={repayDate} min={todayISO()} onChange={(e)=> setRepayDate(e.target.value)} />
                   </Field>
                 </div>
-                <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                   <Pill label="LTV si pides esto" value={`${(overallLTVIfBorrow*100).toFixed(2)}%`} tone={ltvTone} />
                   <Pill label="≤20% LTV (fijo)" value={loanAmount <= recommendedLoanAtTarget ? "Sí" : "No"} tone={loanAmount <= recommendedLoanAtTarget ? "ok" : "warn"} />
                   <Pill label="¿Califica Low-Cost?" value={meetsLowCost ? "Sí" : "No"} tone={meetsLowCost ? "ok" : "warn"} />
+                  <Pill label="Margen Low-Cost" value={fmt(lowCostHeadroom * rate, currency)} tone={lowCostHeadroom > 0 ? "ok" : "danger"} />
                 </div>
               </Card>
 
-              <Card title="Salud del LTV">
+              <Card title="Salud del préstamo">
                 <LTVGauge value={overallLTVIfBorrow} target={TARGET_LTV} marginCall={marginCallLTV} autoRepay={autoRepayLTV} />
                 <div className="mt-4 space-y-2">
                   <Line label="LTV actual" value={`${(overallLTVIfBorrow*100).toFixed(1)}%`} tone={ltvTone} />
                   <Line label="Objetivo Low-Cost" value={`${(TARGET_LTV*100).toFixed(0)}%`} muted />
                   <Line label="Margin call" value={`${(marginCallLTV*100).toFixed(0)}%`} muted />
                   <Line label="Auto-repay" value={`${(autoRepayLTV*100).toFixed(0)}%`} muted />
+                  <Line label="Cap Low-Cost" value={fmt(capLowCost * rate, currency)} tone={lowCostHeadroom > 0 ? "ok" : "danger"} />
                 </div>
               </Card>
 
@@ -570,6 +608,22 @@
                 <TrendChart data={timeline} currency={currency} rate={rate} />
               </Card>
 
+              <Card title="Breakdown de colateral & LTV">
+                <CollateralBreakdownCard
+                  breakdown={collateralBreakdown}
+                  currency={currency}
+                  rate={rate}
+                  totalCollateral={totals.totalCollateralValue}
+                  totalMaxBorrow={totals.maxBorrow}
+                  overallLTV={overallLTVIfBorrow}
+                  target={TARGET_LTV}
+                  marginCall={marginCallLTV}
+                  autoRepay={autoRepayLTV}
+                  capLowCost={capLowCost}
+                  lowCostHeadroom={lowCostHeadroom}
+                />
+              </Card>
+
               <Card title="Diagnóstico & Sugerencias">
                 <ul className="list-disc pl-5 space-y-2 text-sm">
                   <li>
@@ -578,8 +632,10 @@
                   </li>
                   <li>Para alcanzar <b>Gold</b> faltan {fmt(nexoReqs.missingGold * rate, currency)}; para <b>Platinum</b> faltan {fmt(nexoReqs.missingPlat * rate, currency)}.</li>
                   <li>
-                    Con tu colateral actual, el tope por LTVs es {fmt(totals.maxBorrow * rate, currency)}. Para pedir {fmt(loanAmount * rate, currency)} y mantener ≤{(TARGET_LTV * 100).toFixed(0)}% LTV,
-                    se requieren {fmt(extraCollateralForTarget * rate, currency)} adicionales en colateral.
+                    Con tu colateral actual, el tope por LTVs es {fmt(totals.maxBorrow * rate, currency)}. El cap Low-Cost ({(TARGET_LTV * 100).toFixed(0)}%) te permite pedir hasta {fmt(capLowCost * rate, currency)} y aún quedan {fmt(lowCostHeadroom * rate, currency)} de margen.
+                  </li>
+                  <li>
+                    Para pedir {fmt(loanAmount * rate, currency)} y mantener ≤{(TARGET_LTV * 100).toFixed(0)}% LTV se requieren {fmt(extraCollateralForTarget * rate, currency)} adicionales en colateral.
                   </li>
                   <li>
                     APR estimado: <b>{(chosenAPR * 100).toFixed(2)}%</b>. Interés hasta repago ({daysUntilRepay} días): {fmt(interestCalc.total * rate, currency)}.{interestCalc.early > 0 && <span> Incluye interés por "early rule".</span>}
@@ -663,7 +719,7 @@
       );
     }
     function Line({ label, value, muted = false, tone }) {
-      const color = tone === "ok" ? "text-emerald-700" : tone === "warn" ? "text-amber-700" : "";
+      const color = tone === "ok" ? "text-emerald-700" : tone === "warn" ? "text-amber-700" : tone === "danger" ? "text-rose-700" : "";
       return (
         <div className="flex items-center justify-between gap-4">
           <span className={`text-sm ${muted ? "text-neutral-400" : "text-neutral-700"}`}>{label}</span>
@@ -692,47 +748,76 @@
         const largeArc = (to - from) > 0.5 ? 1 : 0;
         return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 0 ${end.x} ${end.y}`;
       };
-      const segments = [
-        { from: 0, to: Math.min(target, 1), color: '#34d399' },
-        { from: Math.min(target, 1), to: Math.min(marginCall, 1), color: '#facc15' },
-        { from: Math.min(marginCall, 1), to: Math.min(autoRepay, 1), color: '#fb923c' },
-        { from: Math.min(autoRepay, 1), to: 1, color: '#f87171' },
-      ].filter(seg => seg.to > seg.from + 0.001);
+      const zones = [
+        { label: 'Óptimo', max: target, color: '#22c55e', legend: `≤${Math.round(target * 100)}%` },
+        { label: 'Estable', max: marginCall, color: '#facc15', legend: `≤${Math.round(marginCall * 100)}%` },
+        { label: 'A riesgo', max: autoRepay, color: '#fb923c', legend: `≤${Math.round(autoRepay * 100)}%` },
+        { label: 'Crítico', max: 1, color: '#f87171', legend: '> límite' },
+      ];
+      const pad = 0.01;
+      const segments = zones.reduce((acc, zone) => {
+        const from = acc.length ? acc[acc.length - 1].rawTo : 0;
+        const capped = Math.min(zone.max, 1);
+        if (capped <= from) return acc;
+        const seg = {
+          from: Math.max(0, from + (from === 0 ? 0 : pad)),
+          to: Math.max(Math.min(1, capped - pad), from + 0.001),
+          rawTo: capped,
+          color: zone.color,
+          label: zone.label,
+          legend: zone.legend,
+        };
+        return [...acc, seg];
+      }, []);
       const trackPath = describeArc(0, 1);
       const valuePct = clamp(value);
       const needle = pointFor(valuePct);
-      const status = valuePct <= target ? 'Saludable' : valuePct <= marginCall ? 'Precaución' : valuePct <= autoRepay ? 'Riesgo alto' : 'Crítico';
-      const statusColor = valuePct <= target ? 'text-emerald-500' : valuePct <= marginCall ? 'text-amber-500' : valuePct <= autoRepay ? 'text-orange-500' : 'text-rose-500';
-      const legends = [
-        { label: '≤20% Óptimo', color: '#34d399' },
-        { label: '≤70% Estable', color: '#facc15' },
-        { label: '≤83% Riesgo', color: '#fb923c' },
-        { label: '>83% Crítico', color: '#f87171' },
-      ];
+      const status = valuePct <= target
+        ? 'Óptimo'
+        : valuePct <= marginCall
+          ? 'Estable'
+          : valuePct <= autoRepay
+            ? 'A riesgo'
+            : 'Crítico';
+      const statusColor = valuePct <= target
+        ? 'text-emerald-500'
+        : valuePct <= marginCall
+          ? 'text-amber-500'
+          : valuePct <= autoRepay
+            ? 'text-orange-500'
+            : 'text-rose-500';
       return (
         <div className="flex flex-col items-center">
-          <svg viewBox={`0 0 ${size} ${viewHeight}`} className="w-full max-w-[280px]">
+          <svg viewBox={`0 0 ${size} ${viewHeight}`} className="w-full max-w-[300px]">
             <defs>
               <linearGradient id="gaugeTrack" x1="0%" y1="0%" x2="100%" y2="0%">
                 <stop offset="0%" stopColor="rgba(148,163,184,0.25)" />
                 <stop offset="100%" stopColor="rgba(148,163,184,0.05)" />
               </linearGradient>
             </defs>
-            <path d={trackPath} stroke="url(#gaugeTrack)" strokeWidth="18" fill="none" strokeLinecap="round" />
+            <path d={trackPath} stroke="url(#gaugeTrack)" strokeWidth="20" fill="none" strokeLinecap="round" />
             {segments.map((seg, idx) => (
-              <path key={idx} d={describeArc(seg.from, seg.to)} stroke={seg.color} strokeWidth="18" fill="none" strokeLinecap="round" />
+              <path
+                key={idx}
+                d={describeArc(seg.from, seg.to)}
+                stroke={seg.color}
+                strokeWidth="20"
+                fill="none"
+                strokeLinecap="butt"
+              />
             ))}
             <line x1={center} y1={center} x2={needle.x} y2={needle.y} stroke="#0f172a" strokeWidth="4" strokeLinecap="round" />
             <circle cx={center} cy={center} r="10" fill="#1d3abf" stroke="#f8fafc" strokeWidth="3" />
-            <text x={center} y={center + 32} textAnchor="middle" className="fill-slate-600" style={{ fontWeight: 600, fontSize: '18px' }}>{`${(valuePct * 100).toFixed(1)}%`}</text>
-            <text x={center} y={center + 52} textAnchor="middle" className={`fill-current ${statusColor}`} style={{ fontWeight: 600, fontSize: '12px' }}>{status}</text>
+            <text x={center} y={center + 28} textAnchor="middle" className="fill-slate-500" style={{ fontWeight: 600, fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Salud</text>
+            <text x={center} y={center + 46} textAnchor="middle" className="fill-slate-600" style={{ fontWeight: 700, fontSize: '20px' }}>{`${(valuePct * 100).toFixed(1)}%`}</text>
+            <text x={center} y={center + 66} textAnchor="middle" className={`fill-current ${statusColor}`} style={{ fontWeight: 700, fontSize: '13px' }}>{status}</text>
           </svg>
-          <div className="mt-3 flex flex-wrap items-center justify-center gap-3 text-[11px] font-medium text-neutral-500">
-            {legends.map((item) => (
-              <span key={item.label} className="flex items-center gap-1">
-                <span className="h-2.5 w-3.5 rounded-full" style={{ backgroundColor: item.color }} />
-                {item.label}
-              </span>
+          <div className="mt-3 grid grid-cols-2 gap-3 text-[11px] font-semibold text-neutral-600">
+            {segments.map((seg) => (
+              <div key={seg.label} className="flex items-center gap-2">
+                <span className="h-2.5 w-3.5 rounded-full" style={{ backgroundColor: seg.color }} />
+                <span>{seg.legend} {seg.label}</span>
+              </div>
             ))}
           </div>
         </div>
@@ -778,12 +863,16 @@
         <div>
           <svg viewBox={`0 0 ${width} ${height}`} className="w-full">
             <defs>
+              <linearGradient id="chartBg" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="rgba(15,23,42,0.08)" />
+                <stop offset="100%" stopColor="rgba(15,23,42,0.02)" />
+              </linearGradient>
               <linearGradient id="balanceArea" x1="0%" y1="0%" x2="0%" y2="100%">
                 <stop offset="0%" stopColor="#a855f7" stopOpacity="0.35" />
                 <stop offset="100%" stopColor="#a855f7" stopOpacity="0.05" />
               </linearGradient>
             </defs>
-            <rect x="0" y="0" width={width} height={height} fill="url(#chartBg)" opacity="0" />
+            <rect x="0" y="0" width={width} height={height} fill="url(#chartBg)" opacity="1" rx="18" />
             <path d={`M ${paddingX} ${baseY} L ${paddingX + step * (data.length - 1)} ${baseY}`} stroke="rgba(148,163,184,0.35)" strokeWidth="1.5" strokeLinecap="round" />
             <path d={areaPathClosed} fill="url(#balanceArea)" opacity="0.6" />
             <path d={pathFor('balance')} stroke={colors.balance} strokeWidth="3" fill="none" strokeLinecap="round" />
@@ -795,6 +884,12 @@
                 <text textAnchor="middle" dy="12" className="fill-slate-400" style={{ fontSize: '10px', letterSpacing: '0.04em' }}>{tick.label}</text>
               </g>
             ))}
+            {data.map((point, index) => {
+              const x = paddingX + index * step;
+              return (
+                <circle key={`dot-${index}`} cx={x} cy={scaleY(point.balance)} r="3.5" fill="#8b5cf6" stroke="#fff" strokeWidth="1.5" />
+              );
+            })}
           </svg>
           <div className="mt-3 flex flex-wrap gap-4 text-xs font-semibold text-neutral-500">
             <span className="flex items-center gap-2"><span className="h-2 w-4 rounded-full" style={{ background: colors.balance }} />Balance neto</span>
@@ -814,6 +909,75 @@
               <div className="text-xs uppercase text-violet-600">Balance estimado</div>
               <div className="font-semibold text-violet-700">{fmt(lastPoint.balance * rate, currency)}</div>
             </div>
+          </div>
+        </div>
+      );
+    }
+
+    function CollateralBreakdownCard({ breakdown, currency, rate, totalCollateral, totalMaxBorrow, overallLTV, target, marginCall, autoRepay, capLowCost, lowCostHeadroom }) {
+      if (!breakdown || breakdown.length === 0) {
+        return <div className="text-sm text-neutral-500">Activa al menos un activo como colateral y asigna un préstamo para visualizar la distribución.</div>;
+      }
+      const toneColors = { ok: '#34d399', warn: '#facc15', danger: '#fb7185' };
+      const toneBadge = { ok: 'bg-emerald-50 text-emerald-700', warn: 'bg-amber-50 text-amber-700', danger: 'bg-rose-50 text-rose-700' };
+      let accShare = 0;
+      const segments = breakdown.map((item) => {
+        const start = accShare;
+        accShare += item.share;
+        const end = Math.min(1, accShare);
+        return { ...item, start, end };
+      });
+      const gradientStops = segments.map((seg) => `${toneColors[seg.tone]} ${(seg.start * 100).toFixed(2)}% ${(seg.end * 100).toFixed(2)}%`).join(', ');
+      const covered = Math.min(1, accShare);
+      const gradient = `conic-gradient(${gradientStops}${covered < 1 ? `, rgba(148,163,184,0.2) ${(covered * 100).toFixed(2)}% 100%` : ''})`;
+      const overallTone = overallLTV <= target ? 'ok' : overallLTV <= marginCall ? 'warn' : 'danger';
+      const overallLabel = overallTone === 'ok' ? 'Sano' : overallTone === 'warn' ? 'Observar' : 'En riesgo';
+      const overallToneClass = overallTone === 'ok' ? 'text-emerald-600' : overallTone === 'warn' ? 'text-amber-600' : 'text-rose-600';
+      return (
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-wrap items-center justify-center gap-6">
+            <div className="relative h-40 w-40 rounded-full shadow-inner" style={{ background: gradient }}>
+              <div className="absolute inset-8 rounded-full bg-white shadow flex flex-col items-center justify-center text-center">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">LTV actual</span>
+                <span className="text-xl font-bold text-neutral-900">{(overallLTV * 100).toFixed(1)}%</span>
+                <span className={`mt-1 text-xs font-semibold ${overallToneClass}`}>{overallLabel}</span>
+              </div>
+            </div>
+            <div className="space-y-2 text-sm text-neutral-600">
+              <div><span className="font-semibold text-neutral-800">Colateral</span>: {fmt(totalCollateral * rate, currency)}</div>
+              <div><span className="font-semibold text-neutral-800">Tope por LTVs</span>: {fmt(totalMaxBorrow * rate, currency)}</div>
+              <div><span className="font-semibold text-neutral-800">Cap Low-Cost</span>: {fmt(capLowCost * rate, currency)} ({lowCostHeadroom > 0 ? `${fmt(lowCostHeadroom * rate, currency)} libres` : 'sin margen'})</div>
+              <div className="flex flex-wrap gap-3 text-xs text-neutral-500 pt-1">
+                <span className="flex items-center gap-1"><span className="h-2.5 w-3.5 rounded-full" style={{ backgroundColor: toneColors.ok }} />Sano ≤ {Math.round(target * 100)}%</span>
+                <span className="flex items-center gap-1"><span className="h-2.5 w-3.5 rounded-full" style={{ backgroundColor: toneColors.warn }} />Observar ≤ {Math.round(marginCall * 100)}%</span>
+                <span className="flex items-center gap-1"><span className="h-2.5 w-3.5 rounded-full" style={{ backgroundColor: toneColors.danger }} />Riesgo ≥ {Math.round(autoRepay * 100)}%</span>
+              </div>
+            </div>
+          </div>
+          <div className="space-y-3">
+            {breakdown.map((item) => {
+              const usagePct = Math.max(0, Math.min(100, item.usageVsCap * 100));
+              const badgeLabel = item.tone === 'ok' ? 'Sano' : item.tone === 'warn' ? 'Vigilar' : 'Crítico';
+              return (
+                <div key={item.id} className="rounded-2xl border border-neutral-200 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-neutral-800">{item.name}</div>
+                      <div className="text-xs text-neutral-500">{item.ticker || '—'} · Colateral {fmt(item.value * rate, currency)} ({(item.share * 100).toFixed(1)}%)</div>
+                      <div className="text-xs text-neutral-500">LTV tope {item.policyPct.toFixed(0)}% · Cap {fmt(item.maxBorrowForAsset * rate, currency)}</div>
+                    </div>
+                    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${toneBadge[item.tone]}`}>{badgeLabel}</span>
+                  </div>
+                  <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-neutral-200">
+                    <div className="h-full" style={{ width: `${usagePct.toFixed(1)}%`, backgroundColor: toneColors[item.tone], transition: 'width .3s ease' }} />
+                  </div>
+                  <div className="mt-1 flex justify-between text-[11px] text-neutral-500">
+                    <span>Uso: {fmt(item.allocatedLoan * rate, currency)}</span>
+                    <span>Tope: {fmt(item.maxBorrowForAsset * rate, currency)}</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       );
