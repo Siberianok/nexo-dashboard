@@ -973,7 +973,8 @@
       const improvementIdeas = useMemo(() => {
         const base = FEATURE_IMPROVEMENT_TASKS.common || [];
         const extras = (FEATURE_IMPROVEMENT_TASKS.byPlatform || {})[platformId] || [];
-        return [...base, ...extras];
+        const implementedIds = new Set(["benchmarking", "cashflow-planning"]);
+        return [...base, ...extras].filter((idea) => !implementedIds.has(idea.id));
       }, [platformId]);
       const loyaltyModels = loyalty?.models ?? [];
       const loyaltyModelFallback = platformDefaultParams?.loyaltyModel ?? loyaltyModels[0]?.id ?? "vsRest";
@@ -2082,6 +2083,69 @@
               </div>
             </section>
 
+            <section className="mb-10">
+              <div className="flex flex-col items-center gap-4 md:flex-row md:items-center md:justify-between mb-4">
+                <h2 className="text-xl font-semibold text-center md:text-left">Activos y colateral</h2>
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <button onClick={addRow} className="nx-btn text-sm">Añadir activo</button>
+                  <button onClick={() => { localStorage.removeItem(storageKeys.assets); setAssets(sanitizeAssets(platformDefaultAssets)); }} className="nx-btn nx-btn-ghost text-sm">Reset</button>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto rounded-2xl nx-card bg-white">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-neutral-900 text-white sticky top-0 z-10">
+                    <tr>
+                      <Th>Activo</Th>
+                      <Th>Ticker</Th>
+                      <Th>Cantidad</Th>
+                      <Th>Precio (USD)</Th>
+                      <Th>Auto</Th>
+                      <Th>Valor</Th>
+                      <Th>Colateral</Th>
+                      <Th>LTV (fijo)</Th>
+                      <Th>APR Earn (flex máx)</Th>
+                      <Th></Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {totals.withValue.map((a) => (
+                      <tr key={a.id} className="border-t border-neutral-100 even:bg-neutral-50 hover:bg-neutral-100/50 transition-colors">
+                        <Td align="center">
+                          <input value={a.name} onChange={(e) => handleAssetChange(a.id, { name: e.target.value })} className="w-full rounded-xl border border-neutral-300 px-2 py-1 text-center" />
+                        </Td>
+                        <Td align="center">
+                          <input value={a.ticker} onChange={(e) => { const newT = sanitizeTicker(e.target.value); const newL = ltvByTicker[newT] ?? defaultLtv; handleAssetChange(a.id, { ticker: newT, ltv: newL }); if (a.priceAuto !== false) { fetchPricesForTickers([newT]); } }} className="w-24 rounded-xl border border-neutral-300 px-2 py-1 text-center" />
+                        </Td>
+                        <Td align="center">
+                          <input type="number" min={0} step="any" value={a.qty} onChange={(e) => { const v = e.target.valueAsNumber; handleAssetChange(a.id, { qty: Number.isFinite(v) ? v : 0 }); }} placeholder="0.00" className="w-full rounded-xl border border-neutral-300 px-2 py-1 text-center" />
+                        </Td>
+                        <Td align="center">
+                          <input type="number" min={0} step="any" value={a.price} onChange={(e) => { const v = e.target.valueAsNumber; handleAssetChange(a.id, { price: Number.isFinite(v) ? v : 0 }); }} placeholder="0.00" disabled={a.priceAuto !== false} className="w-full rounded-xl border border-neutral-300 px-2 py-1 text-center disabled:bg-neutral-50 disabled:text-neutral-400" />
+                        </Td>
+                        <Td align="center">
+                          <input type="checkbox" checked={a.priceAuto !== false} onChange={(e) => { handleAssetChange(a.id, { priceAuto: e.target.checked }); if (e.target.checked) { fetchPricesForTickers([a.ticker]); } }} className="h-5 w-5" />
+                        </Td>
+                        <Td align="center" className="font-medium">{fmt(a.value * rate, currency)}</Td>
+                        <Td align="center">
+                          <input type="checkbox" title="Si está activo, este activo cuenta como colateral para LTV y Tope por LTVs" checked={a.useAsCollateral} onChange={(e) => handleAssetChange(a.id, { useAsCollateral: e.target.checked })} className="h-5 w-5" />
+                        </Td>
+                        <Td align="center" title="Política de LTV fija por plataforma">
+                          <span className="inline-block rounded-xl bg-neutral-100 px-3 py-1 font-semibold">{pct(ltvByTicker[sanitizeTicker(a.ticker)] ?? a.ltv ?? 0)}</span>
+                        </Td>
+                        <Td align="center" title="Flexible Savings – tasa tope mostrada públicamente">
+                          <span className="inline-block rounded-xl bg-blue-50 text-blue-700 px-3 py-1 font-semibold">{pct(earnAprTop[sanitizeTicker(a.ticker)] ?? 0)}</span>
+                        </Td>
+                        <Td align="center">
+                          <button onClick={() => removeRow(a.id)} className="nx-btn nx-btn-ghost nx-btn-sm">Borrar</button>
+                        </Td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
             <section className="mb-10 grid grid-cols-1 xl:grid-cols-2 gap-6">
               <CashflowPlanner
                 plan={cashflowPlan}
@@ -2122,9 +2186,9 @@
               />
             </section>
 
-            <section className="mb-10">
+            <section className="mb-8">
               <Card title="Parámetros (solo entorno)">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-4">
                   {SUPPORTED_CURRENCIES.filter((option) => option.code !== 'USD').map((option) => (
                     <NumberParam
                       key={option.code}
@@ -2187,74 +2251,6 @@
                 </div>
               </Card>
             </section>
-
-            <section className="mb-8">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-xl font-semibold">Activos y colateral</h2>
-                <div className="flex items-center gap-2">
-                  <button onClick={addRow} className="nx-btn text-sm">Añadir activo</button>
-                  <button onClick={() => { localStorage.removeItem(storageKeys.assets); setAssets(sanitizeAssets(platformDefaultAssets)); }} className="nx-btn nx-btn-ghost text-sm">Reset</button>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto rounded-2xl nx-card bg-white">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-neutral-900 text-white sticky top-0 z-10">
-                    <tr>
-                      <Th>Activo</Th>
-                      <Th>Ticker</Th>
-                      <Th>Cantidad</Th>
-                      <Th>Precio (USD)</Th>
-                      <Th>Auto</Th>
-                      <Th>Valor</Th>
-                      <Th>Colateral</Th>
-                      <Th>LTV (fijo)</Th>
-                      <Th>APR Earn (flex máx)</Th>
-                      <Th></Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {totals.withValue.map((a) => (
-                      <tr key={a.id} className="border-t border-neutral-100 even:bg-neutral-50 hover:bg-neutral-100/50 transition-colors">
-                        <Td align="center">
-                          <input value={a.name} onChange={(e) => handleAssetChange(a.id, { name: e.target.value })} className="w-full rounded-xl border border-neutral-300 px-2 py-1 text-center" />
-                        </Td>
-                        <Td align="center">
-                          <input value={a.ticker} onChange={(e) => { const newT = sanitizeTicker(e.target.value); const newL = ltvByTicker[newT] ?? defaultLtv; handleAssetChange(a.id, { ticker: newT, ltv: newL }); if (a.priceAuto !== false) { fetchPricesForTickers([newT]); } }} className="w-24 rounded-xl border border-neutral-300 px-2 py-1 text-center" />
-                        </Td>
-                        <Td align="center">
-                          <input type="number" min={0} step="any" value={a.qty} onChange={(e) => { const v = e.target.valueAsNumber; handleAssetChange(a.id, { qty: Number.isFinite(v) ? v : 0 }); }} placeholder="0.00" className="w-full rounded-xl border border-neutral-300 px-2 py-1 text-center" />
-                        </Td>
-                        <Td align="center">
-                          <input type="number" min={0} step="any" value={a.price} onChange={(e) => { const v = e.target.valueAsNumber; handleAssetChange(a.id, { price: Number.isFinite(v) ? v : 0 }); }} placeholder="0.00" disabled={a.priceAuto !== false} className="w-full rounded-xl border border-neutral-300 px-2 py-1 text-center disabled:bg-neutral-50 disabled:text-neutral-400" />
-                        </Td>
-                        <Td align="center">
-                          <input type="checkbox" checked={a.priceAuto !== false} onChange={(e) => { handleAssetChange(a.id, { priceAuto: e.target.checked }); if (e.target.checked) { fetchPricesForTickers([a.ticker]); } }} className="h-5 w-5" />
-                        </Td>
-                        <Td align="center" className="font-medium">{fmt(a.value * rate, currency)}</Td>
-                        <Td align="center">
-                          <input type="checkbox" title="Si está activo, este activo cuenta como colateral para LTV y Tope por LTVs" checked={a.useAsCollateral} onChange={(e) => handleAssetChange(a.id, { useAsCollateral: e.target.checked })} className="h-5 w-5" />
-                        </Td>
-                        <Td align="center" title="Política de LTV fija por plataforma">
-                          <span className="inline-block rounded-xl bg-neutral-100 px-3 py-1 font-semibold">{pct(ltvByTicker[sanitizeTicker(a.ticker)] ?? a.ltv ?? 0)}</span>
-                        </Td>
-                        <Td align="center" title="Flexible Savings – tasa tope mostrada públicamente">
-                          <span className="inline-block rounded-xl bg-blue-50 text-blue-700 px-3 py-1 font-semibold">{pct(earnAprTop[sanitizeTicker(a.ticker)] ?? 0)}</span>
-                        </Td>
-                        <Td align="center">
-                          <button onClick={() => removeRow(a.id)} className="nx-btn nx-btn-ghost nx-btn-sm">Borrar</button>
-                        </Td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-
-
-
-
 
             <section className="mb-10 grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card title="Plataformas en radar">
@@ -3032,7 +3028,9 @@
     function Card({ title, children }) {
       return (
         <div className="rounded-2xl bg-white p-5 shadow-sm nx-card">
-          <div className="mb-3 flex items-center justify-between"><h3 className="text-lg font-semibold">{title}</h3></div>
+          <div className="mb-4 text-center">
+            <h3 className="text-lg font-semibold tracking-tight text-neutral-800">{title}</h3>
+          </div>
           {children}
         </div>
       );
@@ -3158,7 +3156,8 @@
         .map((marker, idx) => ({ pct: clamp(marker.pct), label: marker.label ?? `${Math.round(clamp(marker.pct) * 100)}%`, key: `marker-${idx}` }))
         .filter((marker, idx, arr) => marker.pct > 0 && marker.pct <= 1 && idx === arr.findIndex((m) => m.pct === marker.pct));
       const tickOuter = radius + 6;
-      const tickInner = radius - ring + 4;
+      const tickInner = radius - ring + 6;
+      const labelRadius = radius + 28;
       return (
         <div className="flex flex-col items-center">
           <svg viewBox={`0 0 ${size} ${size}`} className="w-full max-w-[340px]">
@@ -3203,16 +3202,17 @@
             {thresholds.map((t) => {
               const outer = polarPoint(t.pct, tickOuter);
               const inner = polarPoint(t.pct, tickInner);
+              const labelPoint = polarPoint(t.pct, labelRadius);
               const labelAnchor = t.pct < 0.33 ? 'start' : t.pct > 0.67 ? 'end' : 'middle';
-              const labelOffset = t.pct > 0.67 ? -10 : t.pct < 0.33 ? 10 : 0;
-              const labelY = t.pct < 0.2 ? inner.y + 16 : t.pct > 0.8 ? inner.y + 16 : inner.y - 10;
+              const verticalNudge = t.pct > 0.8 ? 8 : t.pct < 0.2 ? -8 : 0;
               return (
                 <g key={t.key ?? t.label}>
                   <line x1={outer.x} y1={outer.y} x2={inner.x} y2={inner.y} stroke="#0f172a" strokeOpacity="0.18" strokeWidth="2" strokeLinecap="round" />
                   <text
-                    x={inner.x + labelOffset}
-                    y={labelY}
+                    x={labelPoint.x}
+                    y={labelPoint.y + verticalNudge}
                     textAnchor={labelAnchor}
+                    dominantBaseline="middle"
                     className="fill-slate-500"
                     style={{ fontSize: '10px', fontWeight: 600 }}
                   >
@@ -3336,15 +3336,15 @@
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
             <div className="rounded-xl bg-blue-50/70 px-3 py-2">
               <div className="text-xs uppercase text-blue-600">Interés total</div>
-              <div className="font-semibold text-blue-700">{fmt(lastPoint.cost * rate, currency)}</div>
+              <div className="text-sm font-semibold text-blue-700">{fmt(lastPoint.cost * rate, currency)}</div>
             </div>
             <div className="rounded-xl bg-emerald-50/70 px-3 py-2">
               <div className="text-xs uppercase text-emerald-600">Earn acumulado</div>
-              <div className="font-semibold text-emerald-700">{fmt(lastPoint.earn * rate, currency)}</div>
+              <div className="text-sm font-semibold text-emerald-700">{fmt(lastPoint.earn * rate, currency)}</div>
             </div>
             <div className="rounded-xl bg-violet-50/70 px-3 py-2">
               <div className="text-xs uppercase text-violet-600">Balance estimado</div>
-              <div className="font-semibold text-violet-700">{fmt(lastPoint.balance * rate, currency)}</div>
+              <div className="text-sm font-semibold text-violet-700">{fmt(lastPoint.balance * rate, currency)}</div>
             </div>
           </div>
         </div>
