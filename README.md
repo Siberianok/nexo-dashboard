@@ -12,6 +12,11 @@ Es 100% estático: un solo `index.html` con TailwindCDN, React UMD y CoinGecko (
 - **Velocímetro LTV** (SVG) y **gráfico costo vs. earn** en el tiempo.
 - **Persistencia local** en `localStorage` (activos y parámetros).
 
+### Próximas funcionalidades
+- **Planificador de cashflow** con escenarios de stress y alertas de LTV proyectado.
+- **Benchmark CeFi/DeFi** para comparar préstamos y estrategias de rendimiento cross-plataforma.
+- Más detalles en [`docs/simulador-unico-plan.md`](docs/simulador-unico-plan.md).
+
 ## 🚀 Uso rápido
 1. Abrí `index.html` en el navegador.  
    **Sugerido**: servirlo con un mini-servidor local para evitar bloqueos CORS.
