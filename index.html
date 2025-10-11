@@ -232,6 +232,43 @@
     const { useState, useEffect, useMemo, useRef, useCallback } = React;
 
     const LIVE_REFRESH_SECONDS = 5;
+    const FX_REFRESH_MINUTES = 30;
+
+    const DEFAULT_LOCALE = 'es-AR';
+
+    const formatDecimal = (value, {
+      minimumFractionDigits = 2,
+      maximumFractionDigits = 2,
+    } = {}) => {
+      if (!Number.isFinite(value)) return '—';
+      return new Intl.NumberFormat(DEFAULT_LOCALE, {
+        minimumFractionDigits,
+        maximumFractionDigits,
+      }).format(value);
+    };
+
+    const formatCurrency = (value, currency = 'USD') => {
+      if (!Number.isFinite(value)) return '—';
+      return new Intl.NumberFormat(DEFAULT_LOCALE, {
+        style: 'currency',
+        currency,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(value);
+    };
+
+    const formatPercent = (value, {
+      minimumFractionDigits = 2,
+      maximumFractionDigits = 2,
+    } = {}) => {
+      if (!Number.isFinite(value)) return '—';
+      const formatted = new Intl.NumberFormat(DEFAULT_LOCALE, {
+        style: 'percent',
+        minimumFractionDigits,
+        maximumFractionDigits,
+      }).format(value);
+      return formatted.replace(/\s*%/, '%');
+    };
     const FX_SYMBOLS = SUPPORTED_CURRENCIES.filter((c) => c.code !== "USD").map((c) => c.code);
 
     const PLATFORM_CONFIGS = {
@@ -915,8 +952,10 @@
     const PLATFORM_IDS = Object.keys(PLATFORM_CONFIGS);
     const GLOBAL_COINGECKO_IDS = Object.values(PLATFORM_CONFIGS).reduce((acc, cfg) => ({ ...acc, ...(cfg.coingeckoIds || {}) }), {});
 
-    const fmt = (n, currency = "USD", show = true) =>
-      show ? n.toLocaleString(undefined, { style: "currency", currency }) : n.toLocaleString();
+    const fmt = (value, currency = "USD", showCurrency = true) => {
+      if (!Number.isFinite(value)) return showCurrency ? '—' : '0';
+      return showCurrency ? formatCurrency(value, currency) : formatDecimal(value);
+    };
 
     const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -980,7 +1019,10 @@
       const loyaltyModelFallback = platformDefaultParams?.loyaltyModel ?? loyaltyModels[0]?.id ?? "vsRest";
       const isBinance = id === "binance";
       const clamp01 = (v) => Math.max(0, Math.min(1, Number(v) || 0));
-      const toPct = (value, digits = 0) => Number.isFinite(value) ? `${(value * 100).toFixed(digits)}%` : "—";
+      const toPct = (value, digits = 0) => formatPercent(Number(value), {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
+      });
       const ltvGaugeZones = React.useMemo(() => {
         if (ltvHealth?.zones?.length) {
           return ltvHealth.zones
@@ -995,10 +1037,11 @@
             .sort((a, b) => a.max - b.max);
         }
         return [
-          { label: "Óptimo", max: clamp01(targetLtv), color: "#22c55e", legend: `≤${Math.round(clamp01(targetLtv) * 100)}%`, tone: "ok" },
-          { label: "Estable", max: clamp01(marginCallLtv), color: "#facc15", legend: `≤${Math.round(clamp01(marginCallLtv) * 100)}%`, tone: "warn" },
-          { label: "A riesgo", max: clamp01(autoRepayLtv), color: "#fb923c", legend: `≤${Math.round(clamp01(autoRepayLtv) * 100)}%`, tone: "danger" },
-          { label: "Crítico", max: 1, color: "#ef4444", legend: "> límite", tone: "danger" },
+          { label: "Muy saludable", max: clamp01(0.20), color: "#064e3b", legend: "0-20%", tone: "ok" },
+          { label: "Saludable", max: clamp01(0.50), color: "#22c55e", legend: "20-50%", tone: "ok" },
+          { label: "Vigilancia", max: clamp01(0.70), color: "#facc15", legend: "50-70%", tone: "warn" },
+          { label: "Tensión", max: clamp01(0.83), color: "#fb923c", legend: "70-83%", tone: "warn" },
+          { label: "Crítico", max: 1, color: "#ef4444", legend: ">83%", tone: "danger" },
         ];
       }, [ltvHealth, targetLtv, marginCallLtv, autoRepayLtv]);
       const ltvHealthyThreshold = clamp01(ltvGaugeZones[0]?.max ?? targetLtv);
@@ -1451,7 +1494,10 @@
 
       const currency = selectedCurrency;
       const rate = params.exchangeRates?.[currency] ?? 1;
-      const pct = (x) => (x == null ? "—" : (x * 100).toFixed(1) + "%");
+      const pct = (value, digits = 1) => formatPercent(Number(value), {
+        minimumFractionDigits: digits,
+        maximumFractionDigits: digits,
+      });
 
       const tickerToId = (ticker) => {
         const key = sanitizeTicker(ticker);
@@ -1463,12 +1509,14 @@
       const inFlight = useRef(false);
       const importInputRef = useRef(null);
       const exportMenuRef = useRef(null);
+      const autoMasterRef = useRef(null);
+      const collateralMasterRef = useRef(null);
       const [exportMenuOpen, setExportMenuOpen] = useState(false);
-      async function fetchLivePricesNow() {
+      async function fetchLivePricesNow(force = false) {
         try {
           if (inFlight.current) return; inFlight.current = true;
           setLiveError(null);
-          if (!params.liveQuotes) { inFlight.current = false; return; }
+          if (!params.liveQuotes && !force) { inFlight.current = false; return; }
           const ids = Array.from(new Set(assets.filter(a => a.priceAuto !== false).map(a => tickerToId(a.ticker)).filter(Boolean)));
           if (!ids.length) { setLastPriceTs(Date.now()); inFlight.current = false; return; }
           const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(',')}&vs_currencies=usd`;
@@ -1537,6 +1585,20 @@
           setAssets(sanitizeAssets(platformDefaultAssets));
         }
         closeExportMenu();
+      };
+
+      const handleToggleAllAuto = (checked) => {
+        const nextTickers = checked
+          ? Array.from(new Set(assets.map((asset) => sanitizeTicker(asset.ticker)).filter(Boolean)))
+          : [];
+        setAssets((prev) => prev.map((asset) => ({ ...asset, priceAuto: checked })));
+        if (checked && nextTickers.length) {
+          fetchPricesForTickers(nextTickers);
+        }
+      };
+
+      const handleToggleAllCollateral = (checked) => {
+        setAssets((prev) => prev.map((asset) => ({ ...asset, useAsCollateral: checked })));
       };
 
       const handleResetPlanners = () => {
@@ -1617,6 +1679,23 @@
         const maxBorrow = collaterals.reduce((acc, a) => acc + a.value * ((ltvByTicker[a.ticker] ?? a.ltv ?? defaultLtv) || 0), 0);
         return { withValue, total, totalLoyalty, rest, ratioVsRest, ratioVsTotal, totalCollateralValue, maxBorrow };
       }, [assets, loyaltyTicker, ltvByTicker, defaultLtv]);
+
+      const allAuto = assets.length > 0 && assets.every((asset) => asset.priceAuto !== false);
+      const someAuto = assets.some((asset) => asset.priceAuto !== false);
+      const allCollateral = assets.length > 0 && assets.every((asset) => asset.useAsCollateral);
+      const someCollateral = assets.some((asset) => asset.useAsCollateral);
+
+      useEffect(() => {
+        if (autoMasterRef.current) {
+          autoMasterRef.current.indeterminate = !allAuto && someAuto;
+        }
+      }, [allAuto, someAuto]);
+
+      useEffect(() => {
+        if (collateralMasterRef.current) {
+          collateralMasterRef.current.indeterminate = !allCollateral && someCollateral;
+        }
+      }, [allCollateral, someCollateral]);
 
       const loyaltyModelActive = params.loyaltyModel ?? loyaltyModelFallback;
 
@@ -1901,23 +1980,23 @@
                 { key: 'loan-sim', title: 'Préstamo tras repago simulado', value: fmt(binanceLoanAfterRepay * rate, currency), subtle: binanceRepaySim > 0 ? `Repago simulado ${fmt(Math.min(binanceRepaySim, loanAmount) * rate, currency)}` : 'Sin repago' },
                 { key: 'collateral-current', title: 'Colateral actual', value: fmt(totals.totalCollateralValue * rate, currency) },
                 { key: 'collateral-adjusted', title: 'Colateral tras ajuste', value: fmt(binanceCollateralAfterAdjust * rate, currency), subtle: binanceCollateralDelta !== 0 ? `${binanceCollateralDelta > 0 ? '+' : '−'}${fmt(Math.abs(binanceCollateralDelta) * rate, currency)}` : 'Sin cambios' },
-                { key: 'ltv-current', title: 'LTV inicial', value: `${(overallLTVIfBorrow * 100).toFixed(2)}%`, tone: ltvTone, subtle: 'Con colateral actual' },
-                { key: 'ltv-sim', title: 'LTV simulado', value: `${(binanceLtvAfterAdjust * 100).toFixed(2)}%`, tone: binanceLtvTone, subtle: (binanceCollateralDelta !== 0 || binanceRepaySim > 0) ? 'Tras ajustes' : 'Sin ajustes' },
-                { key: 'apr', title: 'Tasa anual (APR)', value: `${(chosenAPR * 100).toFixed(2)}%` },
-                { key: 'apr-net', title: 'Tasa anual neta', value: `${(netAnnualRate * 100).toFixed(2)}%`, subtle: totalEarnDuringPeriod > 0 ? `Earn proyectado ${fmt(totalEarnDuringPeriod * rate, currency)}` : undefined, tone: netAnnualRate <= chosenAPR ? 'ok' : undefined },
-                { key: 'hourly-interest', title: 'Interés estimado por hora', value: fmt(binanceHourlyInterest * rate, currency), subtle: `${(chosenAPR / 365 / 24 * 100).toFixed(3)}%` },
+                { key: 'ltv-current', title: 'LTV inicial', value: toPct(overallLTVIfBorrow, 2), tone: ltvTone, subtle: 'Con colateral actual' },
+                { key: 'ltv-sim', title: 'LTV simulado', value: toPct(binanceLtvAfterAdjust, 2), tone: binanceLtvTone, subtle: (binanceCollateralDelta !== 0 || binanceRepaySim > 0) ? 'Tras ajustes' : 'Sin ajustes' },
+                { key: 'apr', title: 'Tasa anual (APR)', value: toPct(chosenAPR, 2) },
+                { key: 'apr-net', title: 'Tasa anual neta', value: toPct(netAnnualRate, 2), subtle: totalEarnDuringPeriod > 0 ? `Earn proyectado ${fmt(totalEarnDuringPeriod * rate, currency)}` : undefined, tone: netAnnualRate <= chosenAPR ? 'ok' : undefined },
+                { key: 'hourly-interest', title: 'Interés estimado por hora', value: fmt(binanceHourlyInterest * rate, currency), subtle: toPct(chosenAPR / 365 / 24, 3) },
                 { key: 'liquidation', title: `Valor colateral (${toPct(marginCallLtv, 0)} margin call)`, value: fmt(binanceLiquidationValue * rate, currency), subtle: binanceLiquidationBuffer >= 0 ? `Buffer ${fmt(binanceLiquidationBuffer * rate, currency)}` : `Déficit ${fmt(Math.abs(binanceLiquidationBuffer) * rate, currency)}`, tone: binanceLiquidationBuffer >= 0 ? 'ok' : 'danger' },
                 { key: 'repay-total', title: 'Total a devolver', value: fmt(interestCalc.repayTotal * rate, currency) },
               ] : [
                 { key: 'balance', title: 'Balance total', value: fmt(totals.total * rate, currency) },
                 { key: 'loyalty', title: loyalty ? (loyalty.kpiLabel || 'Loyalty Tier') : 'Programa', value: loyalty ? loyaltyTier : '—', subtle: loyalty && totals.total < minBalancePerks ? '(balance < mínimo)' : undefined },
-                { key: 'apr', title: 'APR crédito', value: `${(chosenAPR * 100).toFixed(2)}%`, subtle: meetsLowCost ? 'Low-Cost activo' : undefined },
+                { key: 'apr', title: 'APR crédito', value: toPct(chosenAPR, 2), subtle: meetsLowCost ? 'Low-Cost activo' : undefined },
                 { key: 'cap-lowcost', title: 'Cap. Low-Cost (≤20% LTV)', value: fmt(capLowCost * rate, currency), subtle: 'potencial' },
                 { key: 'ltv-top', title: 'Tope por LTVs', value: fmt(totals.maxBorrow * rate, currency) },
                 { key: 'loan-target', title: 'Préstamo recomendado (≤20%)', value: fmt(recommendedLoanAtTarget * rate, currency) },
                 { key: 'interest-total', title: 'Interés hasta repago', value: fmt(interestCalc.total * rate, currency), subtle: `${daysUntilRepay} días` },
                 { key: 'repay-total', title: 'Total a devolver', value: fmt(interestCalc.repayTotal * rate, currency) },
-                { key: 'earn-monthly', title: 'Earn mensual (hasta)', value: fmt(earnMonthly * rate, currency), subtle: earnEligible ? (minBalancePerks > 0 ? `Savings ≥ $${minBalancePerks}` : undefined) : 'no elegible' },
+                { key: 'earn-monthly', title: 'Earn mensual (hasta)', value: fmt(earnMonthly * rate, currency), subtle: earnEligible ? (minBalancePerks > 0 ? `Savings ≥ US$${formatDecimal(minBalancePerks, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : undefined) : 'no elegible' },
                 { key: 'net-monthly', title: 'Neto mensual (Earn − crédito)', value: fmt(netMonthly * rate, currency), tone: netMonthly >= 0 ? 'ok' : 'danger' },
               ]).map((item) => (
                 <KPI key={item.key} title={item.title} value={item.value} subtle={item.subtle} tone={item.tone} variant={item.variant || 'button'} />
@@ -1950,15 +2029,15 @@
                   <div className="mt-6 space-y-3">
                     {isBinance ? (
                       <>
-                        <Pill label="LTV actual" value={`${(overallLTVIfBorrow*100).toFixed(2)}%`} tone={ltvTone} />
-                        <Pill label="LTV simulado" value={`${(binanceLtvAfterAdjust*100).toFixed(2)}%`} tone={binanceLtvTone} />
+                        <Pill label="LTV actual" value={toPct(overallLTVIfBorrow, 2)} tone={ltvTone} />
+                        <Pill label="LTV simulado" value={toPct(binanceLtvAfterAdjust, 2)} tone={binanceLtvTone} />
                         <Pill label={`Colateral extra para ≤${toPct(ltvHealthyThreshold, 0)}`} value={fmt(binanceExtraCollateralNeeded * rate, currency)} tone={binanceExtraCollateralNeeded > 0 ? "warn" : "ok"} />
                         <Pill label={`Repago para ≤${toPct(ltvHealthyThreshold, 0)}`} value={fmt(binanceRepayNeeded * rate, currency)} tone={binanceRepayNeeded > 0 ? "warn" : "ok"} />
                         <Pill label={`Buffer hasta ${toPct(ltvWarnThreshold, 0)}`} value={fmt(binanceBufferToCaution * rate, currency)} tone={binanceBufferToCaution > 0 ? "ok" : "danger"} />
                       </>
                     ) : (
                       <>
-                        <Pill label="LTV si pides esto" value={`${(overallLTVIfBorrow*100).toFixed(2)}%`} tone={ltvTone} />
+                        <Pill label="LTV si pides esto" value={toPct(overallLTVIfBorrow, 2)} tone={ltvTone} />
                         <Pill label="≤20% LTV (fijo)" value={loanAmount <= recommendedLoanAtTarget ? "Sí" : "No"} tone={loanAmount <= recommendedLoanAtTarget ? "ok" : "warn"} />
                         <Pill label="¿Califica Low-Cost?" value={meetsLowCost ? "Sí" : "No"} tone={meetsLowCost ? "ok" : "warn"} />
                         <Pill label="Margen Low-Cost" value={fmt(lowCostHeadroom * rate, currency)} tone={lowCostHeadroom > 0 ? "ok" : "danger"} />
@@ -1972,7 +2051,7 @@
                     {loyalty && loyaltyReqs?.tiers?.length ? (
                       loyaltyReqs.tiers.map((tier) => (
                         <React.Fragment key={tier.label}>
-                          <Line label={`Requerido ${tier.label} (${(tier.minRatio * 100).toFixed(1)}% ${loyaltyModelActive === 'vsTotal' ? 'vs total' : 'vs resto'})`} value={fmt(tier.required * rate, currency)} />
+                          <Line label={`Requerido ${tier.label} (${toPct(tier.minRatio, 1)} ${loyaltyModelActive === 'vsTotal' ? 'vs total' : 'vs resto'})`} value={fmt(tier.required * rate, currency)} />
                           <Line label={`Faltante ${tier.label}`} value={fmt(tier.missing * rate, currency)} muted={tier.missing <= 0} />
                         </React.Fragment>
                       ))
@@ -1980,7 +2059,7 @@
                       <p className="text-sm text-neutral-500">Esta plataforma no tiene un programa de niveles ligado a un token específico.</p>
                     )}
                     <div className="h-px bg-neutral-200 my-1" />
-                    <Line label={`Colateral extra para ≤${(targetLtv * 100).toFixed(0)}%`} value={fmt(extraCollateralForTarget * rate, currency)} tone={extraCollateralForTarget <= 0 ? "ok" : "warn"} />
+                    <Line label={`Colateral extra para ≤${toPct(targetLtv, 0)}`} value={fmt(extraCollateralForTarget * rate, currency)} tone={extraCollateralForTarget <= 0 ? "ok" : "warn"} />
                   </div>
                 </Card>
               </div>
@@ -2003,9 +2082,9 @@
                   <div className="mt-4 space-y-2">
                     {isBinance ? (
                       <>
-                        <Line label="LTV proyectado (cashflow)" value={`${Number.isFinite(ltvGaugeValue) ? (ltvGaugeValue*100).toFixed(2) : '∞'}%`} tone={ltvTone} />
-                        <Line label="LTV actual" value={`${(overallLTVIfBorrow*100).toFixed(2)}%`} muted />
-                        <Line label="LTV simulado" value={`${(binanceLtvAfterAdjust*100).toFixed(2)}%`} tone={binanceLtvTone} />
+                        <Line label="LTV proyectado (cashflow)" value={Number.isFinite(ltvGaugeValue) ? toPct(ltvGaugeValue, 2) : '∞'} tone={ltvTone} />
+                        <Line label="LTV actual" value={toPct(overallLTVIfBorrow, 2)} muted />
+                        <Line label="LTV simulado" value={toPct(binanceLtvAfterAdjust, 2)} tone={binanceLtvTone} />
                         <Line label="Rango saludable" value={`≤ ${toPct(ltvHealthyThreshold, 0)}`} muted />
                         <Line label="Riesgo medio" value={binanceCautionLabel} muted />
                         <Line label="Margin call" value={toPct(marginCallLtv, 0)} muted />
@@ -2016,11 +2095,11 @@
                       </>
                     ) : (
                       <>
-                        <Line label="LTV proyectado (cashflow)" value={`${Number.isFinite(ltvGaugeValue) ? (ltvGaugeValue*100).toFixed(1) : '∞'}%`} tone={ltvTone} />
-                        <Line label="LTV actual" value={`${(overallLTVIfBorrow*100).toFixed(1)}%`} muted />
-                        <Line label="Objetivo Low-Cost" value={`${(targetLtv*100).toFixed(0)}%`} muted />
-                        <Line label="Margin call" value={`${(marginCallLtv*100).toFixed(0)}%`} muted />
-                        <Line label="Auto-repay" value={`${(autoRepayLtv*100).toFixed(0)}%`} muted />
+                        <Line label="LTV proyectado (cashflow)" value={Number.isFinite(ltvGaugeValue) ? toPct(ltvGaugeValue, 1) : '∞'} tone={ltvTone} />
+                        <Line label="LTV actual" value={toPct(overallLTVIfBorrow, 1)} muted />
+                        <Line label="Objetivo Low-Cost" value={toPct(targetLtv, 0)} muted />
+                        <Line label="Margin call" value={toPct(marginCallLtv, 0)} muted />
+                        <Line label="Auto-repay" value={toPct(autoRepayLtv, 0)} muted />
                         <Line label="Cap Low-Cost" value={fmt(capLowCost * rate, currency)} tone={lowCostHeadroom > 0 ? "ok" : "danger"} />
                       </>
                     )}
@@ -2031,7 +2110,7 @@
                   <ul className="list-disc pl-5 space-y-2 text-sm">
                     {loyalty ? (
                       <li>
-                        Tu {loyalty.ratioLabel ?? `ratio ${loyalty.tokenTicker?.toUpperCase() || ''}`} es <b>{(totals.ratioVsRest* 100).toFixed(2)}% vs resto</b> / <b>{(totals.ratioVsTotal * 100).toFixed(2)}% vs total</b>. Modelo activo: <b>{loyaltyModelActive === "vsTotal" ? "vs total" : "vs resto"}</b>. Nivel actual: <b>{loyaltyTier}</b>.
+                      Tu {loyalty.ratioLabel ?? `ratio ${loyalty.tokenTicker?.toUpperCase() || ''}`} es <b>{toPct(totals.ratioVsRest, 2)} vs resto</b> / <b>{toPct(totals.ratioVsTotal, 2)} vs total</b>. Modelo activo: <b>{loyaltyModelActive === "vsTotal" ? "vs total" : "vs resto"}</b>. Nivel actual: <b>{loyaltyTier}</b>.
                         {totals.total < minBalancePerks && (<span className="text-neutral-600"> (El balance total no supera el mínimo de perks).</span>)}
                       </li>
                     ) : (
@@ -2045,13 +2124,13 @@
                       </li>
                     ) : null}
                     <li>
-                      Con tu colateral actual, el tope por LTVs es {fmt(totals.maxBorrow * rate, currency)}. El cap Low-Cost (≤{(targetLtv * 100).toFixed(0)}%) permite pedir hasta {fmt(capLowCost * rate, currency)} y deja {fmt(lowCostHeadroom * rate, currency)} de margen.
+                      Con tu colateral actual, el tope por LTVs es {fmt(totals.maxBorrow * rate, currency)}. El cap Low-Cost (≤{toPct(targetLtv, 0)}) permite pedir hasta {fmt(capLowCost * rate, currency)} y deja {fmt(lowCostHeadroom * rate, currency)} de margen.
                     </li>
                     <li>
-                      Para solicitar {fmt(loanAmount * rate, currency)} y mantener ≤{(targetLtv * 100).toFixed(0)}% LTV se requieren {fmt(extraCollateralForTarget * rate, currency)} adicionales en colateral.
+                      Para solicitar {fmt(loanAmount * rate, currency)} y mantener ≤{toPct(targetLtv, 0)} LTV se requieren {fmt(extraCollateralForTarget * rate, currency)} adicionales en colateral.
                     </li>
                     <li>
-                      APR estimado: <b>{(chosenAPR * 100).toFixed(2)}%</b>. Interés hasta repago ({daysUntilRepay} días): {fmt(interestCalc.total * rate, currency)}.{interestCalc.early > 0 && <span> Incluye interés por "early rule".</span>}
+                      APR estimado: <b>{toPct(chosenAPR, 2)}</b>. Interés hasta repago ({daysUntilRepay} días): {fmt(interestCalc.total * rate, currency)}.{interestCalc.early > 0 && <span> Incluye interés por "early rule".</span>}
                     </li>
                     <li>
                       Earn (flex) mensual estimado {earnEligible ? (minBalancePerks > 0 ? "(tope)" : "") : (minBalancePerks > 0 ? "(requiere balance mínimo)" : "(no elegible)")}: <b>{fmt(earnMonthly * rate, currency)}</b>. Neto mensual: <b className={netMonthly>=0?"text-emerald-700":"text-rose-700"}>{fmt(netMonthly * rate, currency)}</b>.
@@ -2089,6 +2168,14 @@
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   <button onClick={addRow} className="nx-btn text-sm">Añadir activo</button>
                   <button onClick={() => { localStorage.removeItem(storageKeys.assets); setAssets(sanitizeAssets(platformDefaultAssets)); }} className="nx-btn nx-btn-ghost text-sm">Reset</button>
+                  <label className="flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium shadow-sm">
+                    <input type="checkbox" ref={autoMasterRef} className="h-4 w-4" checked={allAuto} onChange={(e) => handleToggleAllAuto(e.target.checked)} />
+                    Auto (todos)
+                  </label>
+                  <label className="flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium shadow-sm">
+                    <input type="checkbox" ref={collateralMasterRef} className="h-4 w-4" checked={allCollateral} onChange={(e) => handleToggleAllCollateral(e.target.checked)} />
+                    Colateral (todos)
+                  </label>
                 </div>
               </div>
 
@@ -2202,26 +2289,29 @@
                   ))}
 
                   <div className="sm:col-span-2 rounded-2xl border border-neutral-200 p-3 flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-2 text-sm font-medium">
+                    <div className="flex flex-wrap items-center gap-3 text-sm font-medium">
                       <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">Activo</span>
-                      <span>Precios en tiempo real (CoinGecko)</span>
+                      <label className="flex items-center gap-2 text-sm font-medium">
+                        <input type="checkbox" className="h-4 w-4" checked={!!params.liveQuotes} onChange={(e)=> setParams({ ...params, liveQuotes: e.target.checked })} />
+                        Auto-actualizar precios de activos
+                      </label>
                     </div>
-                    <span className="text-xs text-neutral-500">Actualización en tiempo real cada {LIVE_REFRESH_SECONDS} segundos.</span>
-                    <button onClick={fetchLivePricesNow} className="nx-btn text-sm">Actualizar ahora</button>
+                    <span className="text-xs text-neutral-500">Frecuencia automática: cada {LIVE_REFRESH_SECONDS} segundos.</span>
+                    <button onClick={() => fetchLivePricesNow(true)} className="nx-btn text-sm">Actualizar ahora</button>
                     <span className="text-xs text-neutral-500">{lastPriceTs ? `Últ. actualización: ${new Date(lastPriceTs).toLocaleTimeString()}` : '— sin actualizar —'}</span>
                     {liveError && <span className="text-xs text-rose-600">Error: {liveError}</span>}
                   </div>
 
                   <div className="sm:col-span-2 rounded-2xl border border-neutral-200 p-3 flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-2 text-sm font-medium">
+                    <div className="flex flex-wrap items-center gap-3 text-sm font-medium">
                       <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">FX</span>
-                      <span>Cotizaciones oficiales (USD base)</span>
+                      <span>Actualización de tipos de cambio</span>
                     </div>
+                    <span className="text-xs text-neutral-500">Frecuencia automática: cada {FX_REFRESH_MINUTES} minutos.</span>
                     <button onClick={fetchOfficialFxRates} disabled={fxMeta.loading} className="nx-btn text-sm disabled:cursor-not-allowed disabled:opacity-60">
-                      {fxMeta.loading ? 'Actualizando…' : 'Actualizar cotizaciones'}
+                      {fxMeta.loading ? 'Actualizando…' : 'Actualizar tipos de cambio'}
                     </button>
                     <span className="text-xs text-neutral-500">{fxMeta.lastUpdated ? `Últ. actualización: ${new Date(fxMeta.lastUpdated).toLocaleTimeString()}` : '— sin actualizar —'}</span>
-                    <span className="text-xs text-neutral-500">Fuente: exchangerate.host (tipo de cambio oficial)</span>
                     {fxMeta.error && <span className="text-xs text-rose-600">Error: {fxMeta.error}</span>}
                   </div>
 
@@ -2291,7 +2381,10 @@
               </Card>
             </section>
 
-      <footer className="text-xs text-neutral-500">© {new Date().getFullYear()} – Demo técnica. Estilos y métricas se adaptan según la plataforma elegida.</footer>
+      <footer className="text-xs text-neutral-500 space-y-1 text-center md:text-left">
+        <p>© {new Date().getFullYear()} – Demo técnica. Estilos y métricas se adaptan según la plataforma elegida.</p>
+        <p>Activos digitales: actualización automática cada {LIVE_REFRESH_SECONDS} segundos (fuente CoinGecko). Tipos de cambio oficiales: actualización cada {FX_REFRESH_MINUTES} minutos (exchangerate.host).</p>
+      </footer>
       </div>
     </div>
   );
@@ -2458,7 +2551,7 @@
                       <input type="number" step="0.5" value={((combinedShocks[key] ?? 0) * 100).toFixed(1)} onChange={(e) => setScenarioShock(key, e.target.value)} className={`w-20 rounded-full border border-neutral-300 px-2 py-1 text-right focus:outline-none focus:ring-2 ${focusRingClass}`} />
                     </div>
                     <div className="text-[11px] text-neutral-500">Shock sobre colateral</div>
-                    <div className="text-[11px] text-neutral-600">LTV final: {derived?.scenarioSummaries?.[key]?.last != null && Number.isFinite(derived.scenarioSummaries[key].last) ? `${(derived.scenarioSummaries[key].last * 100).toFixed(1)}%` : '—'}</div>
+                    <div className="text-[11px] text-neutral-600">LTV final: {derived?.scenarioSummaries?.[key]?.last != null && Number.isFinite(derived.scenarioSummaries[key].last) ? formatPercent(derived.scenarioSummaries[key].last, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—'}</div>
                     <div className="text-[11px] text-neutral-600">Saldo: {derived?.scenarioSummaries?.[key]?.net != null ? formatMoney(derived.scenarioSummaries[key].net) : formatMoney(netFinal)}</div>
                   </div>
                 ))}
@@ -2604,8 +2697,8 @@
             </div>
 
             <div className="rounded-2xl border border-neutral-200 bg-neutral-50/70 px-4 py-3 text-[11px] text-neutral-600 space-y-1">
-              <div>APR: {(chosenAPR * 100).toFixed(2)}% · Interés total estimado: {formatMoney(interestCalc?.total || 0)} · Plazo restante: {daysUntilRepay} días</div>
-              <div>Colateral: {formatMoney(totals.totalCollateralValue || 0)} · Objetivo LTV: {(targetLtv * 100).toFixed(0)}% · Margin call: {(marginCallLtv * 100).toFixed(0)}% · Auto-repay: {(autoRepayLtv * 100).toFixed(0)}%</div>
+              <div>APR: {formatPercent(chosenAPR, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · Interés total estimado: {formatMoney(interestCalc?.total || 0)} · Plazo restante: {daysUntilRepay} días</div>
+              <div>Colateral: {formatMoney(totals.totalCollateralValue || 0)} · Objetivo LTV: {formatPercent(targetLtv, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} · Margin call: {formatPercent(marginCallLtv, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} · Auto-repay: {formatPercent(autoRepayLtv, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
             </div>
           </div>
         </Card>
@@ -2721,9 +2814,9 @@
           scenarioSummaries[key].net = cumulativeCash - accruedInterest;
           scenarioSummaries[key].max = Math.max(scenarioSummaries[key].max || 0, Number.isFinite(ltv) ? ltv : 0);
           if (ltv >= autoRepayLtv) {
-            alerts.push(`Escenario ${key} supera auto-liquidación (${(autoRepayLtv * 100).toFixed(0)}%) en día ${day}.`);
+            alerts.push(`Escenario ${key} supera auto-liquidación (${formatPercent(autoRepayLtv, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}) en día ${day}.`);
           } else if (ltv >= marginCallLtv) {
-            alerts.push(`Escenario ${key} supera margin call (${(marginCallLtv * 100).toFixed(0)}%) en día ${day}.`);
+            alerts.push(`Escenario ${key} supera margin call (${formatPercent(marginCallLtv, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}) en día ${day}.`);
           }
         });
         const netBalance = cumulativeCash - accruedInterest;
@@ -2794,6 +2887,15 @@
       const chartData = timeline.map((item) => ({ day: item.day, cost: item.totalCost, earn: item.totalEarn, balance: item.netBalance }));
       const uniqueAlerts = [...new Set(alerts)];
       const scenarioLabel = { base: 'Escenario base', bear: 'Escenario bajista', bull: 'Escenario alcista' }[activeScenario] || activeScenario;
+      const firstSnapshot = timeline.length ? timeline[0] : null;
+      const currentGaugeLtv = firstSnapshot && Number.isFinite(firstSnapshot.scenarioStats?.[activeScenario])
+        ? firstSnapshot.scenarioStats[activeScenario]
+        : (totalCollateralValue > 0 ? loanAmount / totalCollateralValue : 0);
+      const peakGaugeLtv = timeline.reduce((max, item) => {
+        const value = item.scenarioStats?.[activeScenario];
+        return Number.isFinite(value) ? Math.max(max, value) : max;
+      }, Number.NEGATIVE_INFINITY);
+      const safePeakLtv = Number.isFinite(peakGaugeLtv) && peakGaugeLtv >= 0 ? peakGaugeLtv : currentGaugeLtv;
 
       return {
         timeline,
@@ -2806,7 +2908,9 @@
         scenarioSummaries,
         scenarioShocks: baseScenarios,
         activeScenario,
-        ltvForGauge: timeline.length ? timeline[timeline.length - 1].scenarioStats[activeScenario] : (totalCollateralValue > 0 ? loanAmount / totalCollateralValue : 0),
+        ltvForGauge: currentGaugeLtv,
+        ltvCurrent: currentGaugeLtv,
+        ltvPeak: safePeakLtv,
         scenarioLabel,
       };
     }
@@ -2915,7 +3019,7 @@
         <Card title="Benchmark CeFi vs. CeFi/DeFi">
           <div className="space-y-6 text-xs">
             <div className="rounded-2xl border border-neutral-200 bg-neutral-50/70 px-4 py-3 space-y-1 text-neutral-600">
-              <div>Monto base: {formatMoney(baseAmount)} · APR préstamo: {(chosenAPR * 100).toFixed(2)}% · Plazo: {termDays} días</div>
+              <div>Monto base: {formatMoney(baseAmount)} · APR préstamo: {formatPercent(chosenAPR, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · Plazo: {termDays} días</div>
               <div>Escenario cashflow: {scenarioName || 'Base'} · Saldo neto proyectado: {cashflowNet != null ? formatMoney(cashflowNet) : '—'}</div>
             </div>
 
@@ -2983,8 +3087,8 @@
                       </div>
                       <div className="space-y-1">
                         <div className={`text-sm font-semibold ${metrics.spread >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatMoney(metrics.spread)}</div>
-                        <div className="text-[11px] text-neutral-500">Anualizado: {(metrics.annualized * 100).toFixed(2)}%</div>
-                        <div className="text-[11px] text-neutral-500">Ajustado riesgo: {(metrics.adjustedAnnual * 100).toFixed(2)}%</div>
+                        <div className="text-[11px] text-neutral-500">Anualizado: {formatPercent(metrics.annualized, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                        <div className="text-[11px] text-neutral-500">Ajustado riesgo: {formatPercent(metrics.adjustedAnnual, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                       </div>
                       <div className="flex items-end justify-between gap-2">
                         <div className="text-sm font-semibold text-neutral-700">#{position || '–'}</div>
@@ -3002,7 +3106,7 @@
                   <div key={`rank-${item.strategy.id}`} className="rounded-2xl border border-neutral-200 bg-white px-4 py-3">
                     <div className="text-[11px] uppercase text-neutral-400">Top {idx + 1}</div>
                     <div className="text-sm font-semibold text-neutral-700">{item.strategy.label || item.strategy.id}</div>
-                    <div className="text-[11px] text-neutral-500">Spread ajustado {(item.metrics.adjustedAnnual * 100).toFixed(2)}%</div>
+                    <div className="text-[11px] text-neutral-500">Spread ajustado {formatPercent(item.metrics.adjustedAnnual, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                     <div className="text-[11px] text-neutral-500">Spread neto {formatMoney(item.metrics.spread)}</div>
                   </div>
                 ))}
@@ -3105,12 +3209,13 @@
         const sweepFlag = delta <= 0 ? 1 : 0;
         return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} ${sweepFlag} ${end.x} ${end.y}`;
       };
-      const palette = ['#22c55e', '#facc15', '#fb923c', '#ef4444'];
+      const palette = ['#064e3b', '#22c55e', '#facc15', '#fb923c', '#ef4444'];
       const normalizedZones = (zones.length ? zones : [
-        { label: 'Óptimo', max: 0.2, color: palette[0], legend: '≤20%', tone: 'ok' },
-        { label: 'Estable', max: 0.7, color: palette[1], legend: '≤70%', tone: 'warn' },
-        { label: 'A riesgo', max: 0.85, color: palette[2], legend: '≤85%', tone: 'danger' },
-        { label: 'Crítico', max: 1, color: palette[3], legend: '> límite', tone: 'danger' },
+        { label: 'Muy saludable', max: 0.2, color: palette[0], legend: '0-20%', tone: 'ok' },
+        { label: 'Saludable', max: 0.5, color: palette[1], legend: '20-50%', tone: 'ok' },
+        { label: 'Vigilancia', max: 0.7, color: palette[2], legend: '50-70%', tone: 'warn' },
+        { label: 'Tensión', max: 0.83, color: palette[3], legend: '70-83%', tone: 'warn' },
+        { label: 'Crítico', max: 1, color: palette[4], legend: '>83%', tone: 'danger' },
       ]).map((zone, idx, arr) => ({
         label: zone.label ?? `Zona ${idx + 1}`,
         color: zone.color ?? palette[Math.min(idx, palette.length - 1)],
@@ -3233,7 +3338,7 @@
               className="fill-slate-700"
               style={{ fontWeight: 700, fontSize: '24px' }}
             >
-              {`${(valuePct * 100).toFixed(1)}%`}
+              {formatPercent(valuePct, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
             </text>
             <text
               x={center}
@@ -3376,7 +3481,7 @@
             <div className="relative h-40 w-40 rounded-full shadow-inner" style={{ background: gradient }}>
               <div className="absolute inset-8 rounded-full bg-white shadow flex flex-col items-center justify-center text-center">
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">LTV actual</span>
-                <span className="text-xl font-bold text-neutral-900">{(overallLTV * 100).toFixed(1)}%</span>
+                <span className="text-xl font-bold text-neutral-900">{formatPercent(overallLTV, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
                 <span className={`mt-1 text-xs font-semibold ${overallToneClass}`}>{overallLabel}</span>
               </div>
             </div>
@@ -3385,9 +3490,9 @@
               <div><span className="font-semibold text-neutral-800">Tope por LTVs</span>: {fmt(totalMaxBorrow * rate, currency)}</div>
               <div><span className="font-semibold text-neutral-800">Cap Low-Cost</span>: {fmt(capLowCost * rate, currency)} ({lowCostHeadroom > 0 ? `${fmt(lowCostHeadroom * rate, currency)} libres` : 'sin margen'})</div>
               <div className="flex flex-wrap gap-3 text-xs text-neutral-500 pt-1">
-                <span className="flex items-center gap-1"><span className="h-2.5 w-3.5 rounded-full" style={{ backgroundColor: toneColors.ok }} />Sano ≤ {Math.round(target * 100)}%</span>
-                <span className="flex items-center gap-1"><span className="h-2.5 w-3.5 rounded-full" style={{ backgroundColor: toneColors.warn }} />Observar ≤ {Math.round(marginCall * 100)}%</span>
-                <span className="flex items-center gap-1"><span className="h-2.5 w-3.5 rounded-full" style={{ backgroundColor: toneColors.danger }} />Riesgo ≥ {Math.round(autoRepay * 100)}%</span>
+                <span className="flex items-center gap-1"><span className="h-2.5 w-3.5 rounded-full" style={{ backgroundColor: toneColors.ok }} />Sano ≤ {formatPercent(target, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                <span className="flex items-center gap-1"><span className="h-2.5 w-3.5 rounded-full" style={{ backgroundColor: toneColors.warn }} />Observar ≤ {formatPercent(marginCall, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
+                <span className="flex items-center gap-1"><span className="h-2.5 w-3.5 rounded-full" style={{ backgroundColor: toneColors.danger }} />Riesgo ≥ {formatPercent(autoRepay, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
               </div>
             </div>
           </div>
@@ -3400,8 +3505,8 @@
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-semibold text-neutral-800">{item.name}</div>
-                      <div className="text-xs text-neutral-500">{item.ticker || '—'} · Colateral {fmt(item.value * rate, currency)} ({(item.share * 100).toFixed(1)}%)</div>
-                      <div className="text-xs text-neutral-500">LTV tope {item.policyPct.toFixed(0)}% · Cap {fmt(item.maxBorrowForAsset * rate, currency)}</div>
+                      <div className="text-xs text-neutral-500">{item.ticker || '—'} · Colateral {fmt(item.value * rate, currency)} ({formatPercent(item.share, { minimumFractionDigits: 1, maximumFractionDigits: 1 })})</div>
+                      <div className="text-xs text-neutral-500">LTV tope {formatDecimal(item.policyPct, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}% · Cap {fmt(item.maxBorrowForAsset * rate, currency)}</div>
                     </div>
                     <span className={`rounded-full px-2 py-1 text-xs font-semibold ${toneBadge[item.tone]}`}>{badgeLabel}</span>
                   </div>
