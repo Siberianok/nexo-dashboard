@@ -1032,9 +1032,134 @@
           };
         });
       };
+      const sanitizeCashflowPlan = (rawPlan, fallbackRepay = null) => {
+        const base = {
+          payments: [],
+          earns: [],
+          manual: [],
+          scenarioShocks: { base: 0, bear: -0.25, bull: 0.15 },
+          activeScenario: 'base',
+        };
+        const safe = { ...base, ...(rawPlan || {}) };
+        const ensureISO = (value, fallback) => {
+          if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+          return fallback;
+        };
+        const toPos = (value) => {
+          const n = Number(value);
+          return Number.isFinite(n) ? Math.max(0, n) : 0;
+        };
+        const payments = Array.isArray(safe.payments)
+          ? safe.payments.map((item, idx) => ({
+              id: item.id ?? idx + 1,
+              label: item.label || `Pago ${idx + 1}`,
+              date: ensureISO(item.date, fallbackRepay || todayISO()),
+              principal: toPos(item.principal),
+              interest: toPos(item.interest),
+            }))
+          : [];
+        const earns = Array.isArray(safe.earns)
+          ? safe.earns.map((item, idx) => {
+              const freq = ['daily', 'weekly', 'monthly'].includes(item.frequency) ? item.frequency : 'monthly';
+              return {
+                id: item.id ?? idx + 1,
+                label: item.label || `Flujo ${idx + 1}`,
+                platform: item.platform || '',
+                token: item.token || '',
+                amount: toPos(item.amount),
+                frequency: freq,
+                startDate: ensureISO(item.startDate, todayISO()),
+                endDate: ensureISO(item.endDate, fallbackRepay || ensureISO(item.startDate, todayISO())),
+                defiLlamaId: typeof item.defiLlamaId === 'string' ? item.defiLlamaId : '',
+              };
+            })
+          : [];
+        const manual = Array.isArray(safe.manual)
+          ? safe.manual.map((item, idx) => {
+              const direction = item.direction === 'inflow' ? 'inflow' : 'outflow';
+              const collateralImpact = ['increase', 'decrease', 'none'].includes(item.collateralImpact)
+                ? item.collateralImpact
+                : 'none';
+              return {
+                id: item.id ?? idx + 1,
+                label: item.label || `Evento ${idx + 1}`,
+                date: ensureISO(item.date, todayISO()),
+                amount: toPos(item.amount),
+                direction,
+                collateralImpact,
+              };
+            })
+          : [];
+        const scenarioKeys = Object.keys(base.scenarioShocks);
+        const scenarioShocks = { ...base.scenarioShocks };
+        Object.keys(safe.scenarioShocks || {}).forEach((key) => {
+          const num = Number(safe.scenarioShocks[key]);
+          if (Number.isFinite(num)) {
+            scenarioShocks[key] = num;
+            if (!scenarioKeys.includes(key)) scenarioKeys.push(key);
+          }
+        });
+        const activeScenario = scenarioKeys.includes(safe.activeScenario) ? safe.activeScenario : 'base';
+        return { payments, earns, manual, scenarioShocks, activeScenario };
+      };
+      const sanitizeBenchmarkConfig = (rawConfig) => {
+        const base = {
+          rateMatrix: [
+            { id: 'loan-default', platform: 'Plataforma CeFi', product: 'Préstamo estándar', type: 'APR', value: 0.12 },
+            { id: 'yield-default', platform: 'Rendimiento', product: 'Estrategia base', type: 'APY', value: 0.10 },
+          ],
+          strategies: [
+            {
+              id: 'strategy-1',
+              label: 'Carry base',
+              lenderRateId: 'loan-default',
+              yieldRateId: 'yield-default',
+              apr: 0.12,
+              apy: 0.10,
+              feesIn: 0,
+              feesOut: 0,
+              amountOverride: null,
+              riskCeFiLender: true,
+              riskDeFiYield: false,
+              riskNewProtocol: false,
+              defiLlamaId: '',
+            },
+          ],
+        };
+        const safe = { ...base, ...(rawConfig || {}) };
+        const matrix = Array.isArray(safe.rateMatrix)
+          ? safe.rateMatrix.map((item, idx) => ({
+              id: item.id ?? `rate-${idx + 1}`,
+              platform: item.platform || 'Plataforma',
+              product: item.product || 'Producto',
+              type: item.type === 'APY' ? 'APY' : 'APR',
+              value: Number(item.value) || 0,
+            }))
+          : base.rateMatrix;
+        const strategies = Array.isArray(safe.strategies)
+          ? safe.strategies.map((item, idx) => ({
+              id: item.id ?? `strategy-${idx + 1}`,
+              label: item.label || `Estrategia ${idx + 1}`,
+              lenderRateId: item.lenderRateId || matrix[0]?.id || 'loan-default',
+              yieldRateId: item.yieldRateId || matrix[1]?.id || 'yield-default',
+              apr: Number(item.apr) || 0,
+              apy: Number(item.apy) || 0,
+              feesIn: Number(item.feesIn) || 0,
+              feesOut: Number(item.feesOut) || 0,
+              amountOverride: item.amountOverride == null || item.amountOverride === '' ? null : Math.max(0, Number(item.amountOverride) || 0),
+              riskCeFiLender: item.riskCeFiLender !== false,
+              riskDeFiYield: item.riskDeFiYield === true,
+              riskNewProtocol: item.riskNewProtocol === true,
+              defiLlamaId: typeof item.defiLlamaId === 'string' ? item.defiLlamaId : '',
+            }))
+          : base.strategies;
+        return { rateMatrix: matrix, strategies };
+      };
       const storageKeys = useMemo(() => ({
         assets: `spm_${id}_assets_v1`,
         params: `spm_${id}_params_v2`,
+        cashflow: `spm_${id}_cashflow_v1`,
+        benchmark: `spm_${id}_benchmark_v1`,
       }), [id]);
       const baseAssets = useMemo(() => sanitizeAssets(platformDefaultAssets), [platformDefaultAssets, ltvByTicker, defaultLtv]);
       const baseExchangeRates = useMemo(() => {
@@ -1079,6 +1204,14 @@
         merged.exchangeRates = sanitizeExchangeRates(merged.exchangeRates, merged.usdToArs);
         return merged;
       }, [platformDefaultParams, loyaltyModelFallback, loyaltyModels, baseExchangeRates]);
+      const baseCashflowPlan = useMemo(
+        () => sanitizeCashflowPlan(previewSnapshot?.cashflow, (previewSnapshot?.repayDate || previewSnapshot?.cashflow?.payments?.[0]?.date || todayISO())),
+        [previewSnapshot]
+      );
+      const baseBenchmarkConfig = useMemo(
+        () => sanitizeBenchmarkConfig(previewSnapshot?.benchmark),
+        [previewSnapshot]
+      );
       const sanitizeParams = (raw) => {
         const merged = { ...baseParams, ...(raw || {}) };
         if (loyaltyModels.length && !loyaltyModels.some((m) => m.id === merged.loyaltyModel)) {
@@ -1106,6 +1239,14 @@
 
         if (previewParams) {
           setParams(sanitizeParams(previewParams));
+        }
+
+        if (previewSnapshot?.cashflow) {
+          setCashflowPlan(sanitizeCashflowPlan(previewSnapshot.cashflow, previewSnapshot.repayDate || previewSnapshot.cashflow?.payments?.[0]?.date || repayDate));
+        }
+
+        if (previewSnapshot?.benchmark) {
+          setBenchmarkConfig(sanitizeBenchmarkConfig(previewSnapshot.benchmark));
         }
 
         if (Number.isFinite(previewLoanAmount)) {
@@ -1147,6 +1288,28 @@
           }
         } catch {}
         return baseParams;
+      });
+
+      const [cashflowPlan, setCashflowPlan] = useState(() => {
+        if (typeof window === 'undefined') return baseCashflowPlan;
+        try {
+          const saved = localStorage.getItem(storageKeys.cashflow);
+          if (saved) {
+            return sanitizeCashflowPlan(JSON.parse(saved), previewSnapshot?.repayDate || todayISO());
+          }
+        } catch {}
+        return baseCashflowPlan;
+      });
+
+      const [benchmarkConfig, setBenchmarkConfig] = useState(() => {
+        if (typeof window === 'undefined') return baseBenchmarkConfig;
+        try {
+          const saved = localStorage.getItem(storageKeys.benchmark);
+          if (saved) {
+            return sanitizeBenchmarkConfig(JSON.parse(saved));
+          }
+        } catch {}
+        return baseBenchmarkConfig;
       });
 
       useEffect(() => {
@@ -1204,6 +1367,56 @@
       const [lastPriceTs, setLastPriceTs] = useState(null);
       const [liveError, setLiveError] = useState(null);
 
+      const updateCashflowPlan = (updater) => {
+        setCashflowPlan((prev) => {
+          const base = typeof updater === 'function' ? updater(prev) : { ...prev, ...(updater || {}) };
+          return sanitizeCashflowPlan(base, repayDate);
+        });
+      };
+
+      const updateBenchmarkConfig = (updater) => {
+        setBenchmarkConfig((prev) => {
+          const base = typeof updater === 'function' ? updater(prev) : { ...prev, ...(updater || {}) };
+          return sanitizeBenchmarkConfig(base);
+        });
+      };
+
+      useEffect(() => {
+        setCashflowPlan(() => {
+          if (typeof window === 'undefined') return baseCashflowPlan;
+          try {
+            const saved = localStorage.getItem(storageKeys.cashflow);
+            if (saved) {
+              return sanitizeCashflowPlan(JSON.parse(saved), repayDate);
+            }
+          } catch {}
+          return baseCashflowPlan;
+        });
+      }, [storageKeys.cashflow, baseCashflowPlan, repayDate]);
+
+      useEffect(() => {
+        setBenchmarkConfig(() => {
+          if (typeof window === 'undefined') return baseBenchmarkConfig;
+          try {
+            const saved = localStorage.getItem(storageKeys.benchmark);
+            if (saved) {
+              return sanitizeBenchmarkConfig(JSON.parse(saved));
+            }
+          } catch {}
+          return baseBenchmarkConfig;
+        });
+      }, [storageKeys.benchmark, baseBenchmarkConfig]);
+
+      useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try { localStorage.setItem(storageKeys.cashflow, JSON.stringify(cashflowPlan)); } catch {}
+      }, [cashflowPlan, storageKeys.cashflow]);
+
+      useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try { localStorage.setItem(storageKeys.benchmark, JSON.stringify(benchmarkConfig)); } catch {}
+      }, [benchmarkConfig, storageKeys.benchmark]);
+
       const currency = selectedCurrency;
       const rate = params.exchangeRates?.[currency] ?? 1;
       const pct = (x) => (x == null ? "—" : (x * 100).toFixed(1) + "%");
@@ -1216,6 +1429,7 @@
       const tickersKey = useMemo(() => assets.filter(a=>a.priceAuto!==false).map(a=>sanitizeTicker(a.ticker)).sort().join(','), [assets]);
 
       const inFlight = useRef(false);
+      const importInputRef = useRef(null);
       async function fetchLivePricesNow() {
         try {
           if (inFlight.current) return; inFlight.current = true;
@@ -1373,8 +1587,24 @@
       const netInterestPeriod = interestCalc.total - totalEarnDuringPeriod;
       const netAnnualRate = loanAmount > 0 && daysUntilRepay > 0 ? (Math.pow(1 + netInterestPeriod / loanAmount, 365 / daysUntilRepay) - 1) : 0;
 
+      const cashflowDerived = useMemo(() =>
+        computeCashflowProjections(cashflowPlan, {
+          loanAmount,
+          apr: chosenAPR,
+          repayDate,
+          totalCollateralValue: totals.totalCollateralValue,
+          targetLtv,
+          marginCallLtv,
+          autoRepayLtv,
+          scenarioShocks: cashflowPlan?.scenarioShocks,
+        }),
+      [cashflowPlan, loanAmount, chosenAPR, repayDate, totals.totalCollateralValue, targetLtv, marginCallLtv, autoRepayLtv]);
+
       const overallLTVIfBorrow = useMemo(() => (totals.totalCollateralValue > 0 ? loanAmount / totals.totalCollateralValue : 0), [loanAmount, totals.totalCollateralValue]);
-      const ltvTone = overallLTVIfBorrow <= ltvHealthyThreshold ? "ok" : (overallLTVIfBorrow <= ltvWarnThreshold ? "warn" : "danger");
+      const ltvGaugeValue = Number.isFinite(cashflowDerived?.ltvForGauge) ? cashflowDerived.ltvForGauge : overallLTVIfBorrow;
+      const ltvScenarioLabel = cashflowDerived?.scenarioLabel;
+      const cashflowAlerts = cashflowDerived?.alerts ?? [];
+      const ltvTone = ltvGaugeValue <= ltvHealthyThreshold ? "ok" : (ltvGaugeValue <= ltvWarnThreshold ? "warn" : "danger");
       const binanceCollateralDelta = Number(params.binanceCollateralDelta) || 0;
       const binanceRepaySim = Math.max(0, Number(params.binanceRepaySim) || 0);
       const binanceCollateralAfterAdjust = Math.max(0, totals.totalCollateralValue + binanceCollateralDelta);
@@ -1590,11 +1820,24 @@
               </Card>
 
               <Card title="Salud del préstamo">
-                <LTVGauge value={overallLTVIfBorrow} zones={ltvGaugeZones} markers={ltvGaugeMarkers} />
+                <LTVGauge value={ltvGaugeValue} zones={ltvGaugeZones} markers={ltvGaugeMarkers} />
+                <div className="mt-2 text-center text-xs text-neutral-500">
+                  {ltvScenarioLabel ? `Escenario activo: ${ltvScenarioLabel}` : 'Escenario base sin shocks.'}
+                </div>
+                {cashflowAlerts.length > 0 && (
+                  <div className="mt-3 space-y-2 text-xs">
+                    {cashflowAlerts.slice(0, 2).map((alert, idx) => (
+                      <div key={`ltv-alert-${idx}`} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
+                        {alert}
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="mt-4 space-y-2">
                   {isBinance ? (
                     <>
-                      <Line label="LTV actual" value={`${(overallLTVIfBorrow*100).toFixed(2)}%`} tone={ltvTone} />
+                      <Line label="LTV proyectado (cashflow)" value={`${Number.isFinite(ltvGaugeValue) ? (ltvGaugeValue*100).toFixed(2) : '∞'}%`} tone={ltvTone} />
+                      <Line label="LTV actual" value={`${(overallLTVIfBorrow*100).toFixed(2)}%`} muted />
                       <Line label="LTV simulado" value={`${(binanceLtvAfterAdjust*100).toFixed(2)}%`} tone={binanceLtvTone} />
                       <Line label="Rango saludable" value={`≤ ${toPct(ltvHealthyThreshold, 0)}`} muted />
                       <Line label="Riesgo medio" value={binanceCautionLabel} muted />
@@ -1606,7 +1849,8 @@
                     </>
                   ) : (
                     <>
-                      <Line label="LTV actual" value={`${(overallLTVIfBorrow*100).toFixed(1)}%`} tone={ltvTone} />
+                      <Line label="LTV proyectado (cashflow)" value={`${Number.isFinite(ltvGaugeValue) ? (ltvGaugeValue*100).toFixed(1) : '∞'}%`} tone={ltvTone} />
+                      <Line label="LTV actual" value={`${(overallLTVIfBorrow*100).toFixed(1)}%`} muted />
                       <Line label="Objetivo Low-Cost" value={`${(targetLtv*100).toFixed(0)}%`} muted />
                       <Line label="Margin call" value={`${(marginCallLtv*100).toFixed(0)}%`} muted />
                       <Line label="Auto-repay" value={`${(autoRepayLtv*100).toFixed(0)}%`} muted />
@@ -1804,18 +2048,84 @@
               <Card title="Exportar / Plantilla">
                 <p className="text-sm text-neutral-700 mb-3">Guardamos tus datos en <code>localStorage</code>. Podés exportar un JSON con todo o resetear la demo.</p>
                 <div className="flex flex-wrap gap-3">
+                  <input
+                    ref={importInputRef}
+                    type="file"
+                    accept="application/json"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      file.text().then((text) => {
+                        try {
+                          const parsed = JSON.parse(text);
+                          if (parsed.assets) setAssets(sanitizeAssets(parsed.assets));
+                          if (parsed.params) setParams(sanitizeParams(parsed.params));
+                          if (parsed.cashflowPlan) setCashflowPlan(sanitizeCashflowPlan(parsed.cashflowPlan, repayDate));
+                          if (parsed.benchmarkConfig) setBenchmarkConfig(sanitizeBenchmarkConfig(parsed.benchmarkConfig));
+                        } catch (err) {
+                          alert(`No se pudo importar el archivo: ${err?.message || err}`);
+                        }
+                      }).finally(() => {
+                        if (importInputRef.current) importInputRef.current.value = '';
+                      });
+                    }}
+                  />
                   <button className="nx-btn text-sm" onClick={() => {
-                    const blob = new Blob([ JSON.stringify({ assets, params }, null, 2) ], { type: "application/json" });
+                    const blob = new Blob([ JSON.stringify({ assets, params, cashflowPlan, benchmarkConfig }, null, 2) ], { type: "application/json" });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement("a");
                     a.href = url; a.download = `${exportPrefix}_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
                   }}>Exportar JSON</button>
 
+                  <button className="nx-btn nx-btn-ghost text-sm" onClick={() => importInputRef.current?.click()}>Importar JSON</button>
+
                   <button className="nx-btn nx-btn-ghost text-sm" onClick={() => { if (confirm("¿Restablecer parámetros por defecto?")) { localStorage.removeItem(storageKeys.params); setParams({ ...baseParams }); } }}>Reset parámetros</button>
                   <button className="nx-btn nx-btn-ghost text-sm" onClick={() => { if (confirm("¿Restablecer activos por defecto?")) { localStorage.removeItem(storageKeys.assets); setAssets(sanitizeAssets(platformDefaultAssets)); } }}>Reset activos</button>
+                  <button className="nx-btn nx-btn-ghost text-sm" onClick={() => { if (confirm("¿Limpiar plan de cashflow y benchmark?")) { localStorage.removeItem(storageKeys.cashflow); localStorage.removeItem(storageKeys.benchmark); setCashflowPlan(baseCashflowPlan); setBenchmarkConfig(baseBenchmarkConfig); } }}>Reset planners</button>
                 </div>
                 <div className="mt-4 text-xs text-neutral-500"><p>{disclaimers.finePrint || '* Este simulador es orientativo. Verifica términos/tasas vigentes en la plataforma oficial.'}</p></div>
               </Card>
+            </section>
+
+            <section className="mb-10 grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <CashflowPlanner
+                plan={cashflowPlan}
+                derived={cashflowDerived}
+                onPlanChange={updateCashflowPlan}
+                currency={currency}
+                rate={rate}
+                fmt={fmt}
+                loanAmount={loanAmount}
+                chosenAPR={chosenAPR}
+                interestCalc={interestCalc}
+                daysUntilRepay={daysUntilRepay}
+                repayDate={repayDate}
+                totals={totals}
+                targetLtv={targetLtv}
+                marginCallLtv={marginCallLtv}
+                autoRepayLtv={autoRepayLtv}
+                scenarioDefaults={cashflowPlan?.scenarioShocks}
+                focusRingClass={focusRingClass}
+                netMonthly={netMonthly}
+                earnMonthly={earnMonthly}
+                earnEligible={earnEligible}
+                minBalancePerks={minBalancePerks}
+              />
+
+              <BenchmarkCeFiDeFi
+                config={benchmarkConfig}
+                onChange={updateBenchmarkConfig}
+                fmt={fmt}
+                currency={currency}
+                rate={rate}
+                loanAmount={loanAmount}
+                chosenAPR={chosenAPR}
+                daysUntilRepay={daysUntilRepay}
+                scenarioName={ltvScenarioLabel}
+                cashflowNet={cashflowDerived?.netBalanceFinal}
+                defaultMatrix={baseBenchmarkConfig?.rateMatrix}
+              />
             </section>
 
             <section className="mb-10 grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1857,9 +2167,725 @@
               </Card>
             </section>
 
-            <footer className="text-xs text-neutral-500">© {new Date().getFullYear()} – Demo técnica. Estilos y métricas se adaptan según la plataforma elegida.</footer>
+      <footer className="text-xs text-neutral-500">© {new Date().getFullYear()} – Demo técnica. Estilos y métricas se adaptan según la plataforma elegida.</footer>
+      </div>
+    </div>
+  );
+}
+
+    function CashflowPlanner({
+      plan,
+      derived,
+      onPlanChange,
+      currency,
+      rate,
+      fmt,
+      loanAmount,
+      chosenAPR,
+      interestCalc,
+      daysUntilRepay,
+      repayDate,
+      totals,
+      targetLtv,
+      marginCallLtv,
+      autoRepayLtv,
+      scenarioDefaults,
+      focusRingClass,
+      netMonthly,
+      earnMonthly,
+      earnEligible,
+      minBalancePerks,
+    }) {
+      const safePlan = plan || {};
+      const baseScenarios = { base: 0, bear: -0.25, bull: 0.15, ...(scenarioDefaults || {}) };
+      const combinedShocks = { ...baseScenarios, ...(safePlan.scenarioShocks || {}), ...(derived?.scenarioShocks || {}) };
+      const scenarioKeys = Object.keys(combinedShocks);
+      const activeScenario = scenarioKeys.includes(safePlan.activeScenario)
+        ? safePlan.activeScenario
+        : (derived?.activeScenario && scenarioKeys.includes(derived.activeScenario) ? derived.activeScenario : scenarioKeys[0]);
+      const timeline = derived?.timeline || [];
+      const chartData = derived?.chartData || [];
+      const fundingGaps = derived?.fundingGaps || [];
+      const alerts = derived?.alerts || [];
+      const netFinal = derived?.netBalanceFinal ?? loanAmount;
+      const minNet = derived?.minNetBalance ?? netFinal;
+      const outstanding = derived?.lastOutstanding ?? 0;
+
+      const scenarioLabels = { base: 'Base', bear: 'Bajista', bull: 'Alcista' };
+
+      const setScenarioShock = (key, valuePct) => {
+        const pct = Number(valuePct);
+        if (!Number.isFinite(pct)) return;
+        onPlanChange((prev) => ({
+          ...prev,
+          scenarioShocks: { ...(prev?.scenarioShocks || {}), [key]: pct / 100 },
+        }));
+      };
+
+      const setActiveScenario = (value) => {
+        if (!scenarioKeys.includes(value)) return;
+        onPlanChange({ activeScenario: value });
+      };
+
+      const updateListItem = (listName, id, patch) => {
+        onPlanChange((prev) => ({
+          ...prev,
+          [listName]: (prev?.[listName] || []).map((item) => (item.id === id ? { ...item, ...patch } : item)),
+        }));
+      };
+
+      const removeListItem = (listName, id) => {
+        onPlanChange((prev) => ({
+          ...prev,
+          [listName]: (prev?.[listName] || []).filter((item) => item.id !== id),
+        }));
+      };
+
+      const addPayment = () => {
+        const nextId = Math.max(0, ...((safePlan.payments || []).map((p) => Number(p.id) || 0))) + 1;
+        onPlanChange((prev) => ({
+          ...prev,
+          payments: [...(prev?.payments || []), {
+            id: nextId,
+            date: repayDate,
+            principal: loanAmount,
+            interest: interestCalc?.total || 0,
+            label: `Pago ${nextId}`,
+          }],
+        }));
+      };
+
+      const addEarn = () => {
+        const nextId = Math.max(0, ...((safePlan.earns || []).map((p) => Number(p.id) || 0))) + 1;
+        onPlanChange((prev) => ({
+          ...prev,
+          earns: [...(prev?.earns || []), {
+            id: nextId,
+            startDate: todayISO(),
+            endDate: repayDate,
+            frequency: 'monthly',
+            amount: Math.max(0, earnMonthly || netMonthly || 0),
+            platform: '',
+            token: '',
+            label: `Earn ${nextId}`,
+          }],
+        }));
+      };
+
+      const addManual = () => {
+        const nextId = Math.max(0, ...((safePlan.manual || []).map((p) => Number(p.id) || 0))) + 1;
+        onPlanChange((prev) => ({
+          ...prev,
+          manual: [...(prev?.manual || []), {
+            id: nextId,
+            date: todayISO(),
+            amount: 1000,
+            direction: 'outflow',
+            collateralImpact: 'increase',
+            label: `Evento ${nextId}`,
+          }],
+        }));
+      };
+
+      const formatMoney = (value) => fmt(value * rate, currency);
+
+      const summaryTiles = [
+        { label: 'Balance final proyectado', value: formatMoney(netFinal), tone: netFinal >= 0 ? 'text-emerald-600' : 'text-rose-600' },
+        { label: 'Mínimo del período', value: formatMoney(minNet), tone: minNet >= 0 ? 'text-neutral-700' : 'text-rose-600' },
+        { label: 'Capital pendiente', value: formatMoney(outstanding), tone: 'text-neutral-700' },
+        { label: 'Earn mensual', value: formatMoney(earnMonthly), tone: 'text-neutral-700', hint: earnEligible ? 'Earn activo' : 'Earn inactivo' },
+      ];
+
+      return (
+        <Card title="Planificador de cashflow">
+          <div className="space-y-6 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {summaryTiles.map((tile) => (
+                <div key={tile.label} className="rounded-2xl border border-neutral-200 bg-white px-4 py-3">
+                  <div className="text-xs text-neutral-500 uppercase">{tile.label}</div>
+                  <div className={`text-lg font-semibold ${tile.tone}`}>{tile.value}</div>
+                  {tile.hint && <div className="text-[11px] text-neutral-500">{tile.hint}</div>}
+                </div>
+              ))}
+            </div>
+
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-neutral-700">Curva de saldo neto</h4>
+              <TrendChart data={chartData} currency={currency} rate={rate} />
+            </div>
+
+            <div className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-neutral-700">Escenarios de estrés</div>
+                  <p className="text-xs text-neutral-500">Define shocks de precio (%) y selecciona cuál alimenta el velocímetro de LTV.</p>
+                </div>
+                <select value={activeScenario} onChange={(e) => setActiveScenario(e.target.value)} className={`rounded-full border border-neutral-300 px-3 py-1.5 text-sm font-semibold focus:outline-none focus:ring-2 ${focusRingClass}`}>
+                  {scenarioKeys.map((key) => (
+                    <option key={key} value={key}>{scenarioLabels[key] || key}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                {scenarioKeys.map((key) => (
+                  <div key={`scenario-${key}`} className={`rounded-2xl border ${activeScenario === key ? 'border-blue-400 bg-blue-50/40' : 'border-neutral-200 bg-neutral-50/60'} p-3 space-y-2`}>
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-neutral-700">{scenarioLabels[key] || key}</span>
+                      <input type="number" step="0.5" value={((combinedShocks[key] ?? 0) * 100).toFixed(1)} onChange={(e) => setScenarioShock(key, e.target.value)} className={`w-20 rounded-full border border-neutral-300 px-2 py-1 text-right focus:outline-none focus:ring-2 ${focusRingClass}`} />
+                    </div>
+                    <div className="text-[11px] text-neutral-500">Shock sobre colateral</div>
+                    <div className="text-[11px] text-neutral-600">LTV final: {derived?.scenarioSummaries?.[key]?.last != null && Number.isFinite(derived.scenarioSummaries[key].last) ? `${(derived.scenarioSummaries[key].last * 100).toFixed(1)}%` : '—'}</div>
+                    <div className="text-[11px] text-neutral-600">Saldo: {derived?.scenarioSummaries?.[key]?.net != null ? formatMoney(derived.scenarioSummaries[key].net) : formatMoney(netFinal)}</div>
+                  </div>
+                ))}
+              </div>
+              {alerts.length > 0 && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 space-y-1">
+                  {alerts.map((msg, idx) => <div key={`cf-alert-${idx}`}>{msg}</div>)}
+                </div>
+              )}
+            </div>
+
+            {fundingGaps.length > 0 && (
+              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+                <div className="font-semibold mb-1">Gaps de liquidez detectados</div>
+                <ul className="list-disc pl-5 space-y-1">
+                  {fundingGaps.map((gap, idx) => (
+                    <li key={`gap-${idx}`}>Día {gap.day} ({gap.date}) · saldo neto {formatMoney(gap.net)}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-neutral-700">Pagos programados</h4>
+                <button className="nx-btn nx-btn-sm" onClick={addPayment}>Agregar pago</button>
+              </div>
+              <div className="space-y-3">
+                {(safePlan.payments || []).length === 0 && (
+                  <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-500">No hay pagos definidos. Añade uno para proyectar obligaciones.</div>
+                )}
+                {(safePlan.payments || []).map((item) => (
+                  <div key={item.id} className="grid grid-cols-1 md:grid-cols-5 gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-xs">
+                    <div>
+                      <div className="text-[11px] uppercase text-neutral-400">Fecha</div>
+                      <input type="date" value={item.date || ''} onChange={(e) => updateListItem('payments', item.id, { date: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
+                    </div>
+                    <div>
+                      <div className="text-[11px] uppercase text-neutral-400">Capital</div>
+                      <input type="number" min="0" value={item.principal ?? 0} onChange={(e) => updateListItem('payments', item.id, { principal: Number(e.target.value) })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 text-right focus:outline-none focus:ring-2 ${focusRingClass}`} />
+                    </div>
+                    <div>
+                      <div className="text-[11px] uppercase text-neutral-400">Interés</div>
+                      <input type="number" min="0" value={item.interest ?? 0} onChange={(e) => updateListItem('payments', item.id, { interest: Number(e.target.value) })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 text-right focus:outline-none focus:ring-2 ${focusRingClass}`} />
+                    </div>
+                    <div className="md:col-span-1">
+                      <div className="text-[11px] uppercase text-neutral-400">Nota</div>
+                      <input type="text" value={item.label || ''} onChange={(e) => updateListItem('payments', item.id, { label: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
+                    </div>
+                    <div className="flex items-end justify-end">
+                      <button className="text-rose-600 hover:underline" onClick={() => removeListItem('payments', item.id)}>Eliminar</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-neutral-700">Flujos de Earn / staking</h4>
+                <button className="nx-btn nx-btn-sm" onClick={addEarn}>Agregar flujo</button>
+              </div>
+              <div className="space-y-3">
+                {(safePlan.earns || []).length === 0 && (
+                  <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-500">Suma tus estrategias de rendimiento para cubrir el costo del préstamo.</div>
+                )}
+                {(safePlan.earns || []).map((item) => (
+                  <div key={item.id} className="grid grid-cols-1 md:grid-cols-6 gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-xs">
+                    <div>
+                      <div className="text-[11px] uppercase text-neutral-400">Inicio</div>
+                      <input type="date" value={item.startDate || ''} onChange={(e) => updateListItem('earns', item.id, { startDate: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
+                    </div>
+                    <div>
+                      <div className="text-[11px] uppercase text-neutral-400">Fin</div>
+                      <input type="date" value={item.endDate || ''} onChange={(e) => updateListItem('earns', item.id, { endDate: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
+                    </div>
+                    <div>
+                      <div className="text-[11px] uppercase text-neutral-400">Frecuencia</div>
+                      <select value={item.frequency || 'monthly'} onChange={(e) => updateListItem('earns', item.id, { frequency: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`}>
+                        <option value="daily">Diario</option>
+                        <option value="weekly">Semanal</option>
+                        <option value="monthly">Mensual</option>
+                      </select>
+                    </div>
+                    <div>
+                      <div className="text-[11px] uppercase text-neutral-400">Monto</div>
+                      <input type="number" min="0" value={item.amount ?? 0} onChange={(e) => updateListItem('earns', item.id, { amount: Number(e.target.value) })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 text-right focus:outline-none focus:ring-2 ${focusRingClass}`} />
+                    </div>
+                    <div>
+                      <div className="text-[11px] uppercase text-neutral-400">Origen</div>
+                      <input type="text" value={item.platform || ''} onChange={(e) => updateListItem('earns', item.id, { platform: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
+                    </div>
+                    <div className="flex items-end justify-between gap-2">
+                      <input type="text" value={item.token || ''} placeholder="Token" onChange={(e) => updateListItem('earns', item.id, { token: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
+                      <button className="text-rose-600 hover:underline" onClick={() => removeListItem('earns', item.id)}>Eliminar</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-neutral-700">Eventos manuales</h4>
+                <button className="nx-btn nx-btn-sm" onClick={addManual}>Agregar evento</button>
+              </div>
+              <div className="space-y-3">
+                {(safePlan.manual || []).length === 0 && (
+                  <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-500">Registra recargas de colateral o retiros planificados.</div>
+                )}
+                {(safePlan.manual || []).map((item) => (
+                  <div key={item.id} className="grid grid-cols-1 md:grid-cols-5 gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-xs">
+                    <div>
+                      <div className="text-[11px] uppercase text-neutral-400">Fecha</div>
+                      <input type="date" value={item.date || ''} onChange={(e) => updateListItem('manual', item.id, { date: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
+                    </div>
+                    <div>
+                      <div className="text-[11px] uppercase text-neutral-400">Monto</div>
+                      <input type="number" min="0" value={item.amount ?? 0} onChange={(e) => updateListItem('manual', item.id, { amount: Number(e.target.value) })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 text-right focus:outline-none focus:ring-2 ${focusRingClass}`} />
+                    </div>
+                    <div>
+                      <div className="text-[11px] uppercase text-neutral-400">Dirección</div>
+                      <select value={item.direction || 'outflow'} onChange={(e) => updateListItem('manual', item.id, { direction: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`}>
+                        <option value="outflow">Salida</option>
+                        <option value="inflow">Entrada</option>
+                      </select>
+                    </div>
+                    <div>
+                      <div className="text-[11px] uppercase text-neutral-400">Colateral</div>
+                      <select value={item.collateralImpact || 'increase'} onChange={(e) => updateListItem('manual', item.id, { collateralImpact: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`}>
+                        <option value="increase">Aumenta</option>
+                        <option value="decrease">Disminuye</option>
+                        <option value="none">Sin cambio</option>
+                      </select>
+                    </div>
+                    <div className="flex items-end justify-between gap-2">
+                      <input type="text" value={item.label || ''} placeholder="Descripción" onChange={(e) => updateListItem('manual', item.id, { label: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
+                      <button className="text-rose-600 hover:underline" onClick={() => removeListItem('manual', item.id)}>Eliminar</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-neutral-200 bg-neutral-50/70 px-4 py-3 text-[11px] text-neutral-600 space-y-1">
+              <div>APR: {(chosenAPR * 100).toFixed(2)}% · Interés total estimado: {formatMoney(interestCalc?.total || 0)} · Plazo restante: {daysUntilRepay} días</div>
+              <div>Colateral: {formatMoney(totals.totalCollateralValue || 0)} · Objetivo LTV: {(targetLtv * 100).toFixed(0)}% · Margin call: {(marginCallLtv * 100).toFixed(0)}% · Auto-repay: {(autoRepayLtv * 100).toFixed(0)}%</div>
+            </div>
           </div>
-        </div>
+        </Card>
+      );
+    }
+
+    function computeCashflowProjections(plan, context = {}) {
+      const {
+        loanAmount = 0,
+        apr = 0,
+        repayDate,
+        totalCollateralValue = 0,
+        targetLtv = 0.2,
+        marginCallLtv = 0.7,
+        autoRepayLtv = 0.85,
+        scenarioShocks = {},
+      } = context;
+      const safePlan = plan || {};
+      const baseScenarios = { base: 0, bear: -0.25, bull: 0.15, ...(safePlan.scenarioShocks || {}), ...(scenarioShocks || {}) };
+      const scenarioKeys = Object.keys(baseScenarios);
+      const activeScenario = scenarioKeys.includes(safePlan.activeScenario) ? safePlan.activeScenario : scenarioKeys[0];
+      const msInDay = 24 * 60 * 60 * 1000;
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const parseDate = (value, fallback) => {
+        if (value instanceof Date && !Number.isNaN(value.getTime())) {
+          const d = new Date(value.getTime()); d.setHours(0, 0, 0, 0); return d;
+        }
+        if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+          const d = new Date(value); if (!Number.isNaN(d.getTime())) { d.setHours(0,0,0,0); return d; }
+        }
+        return fallback ? new Date(fallback.getTime()) : new Date(today.getTime());
+      };
+      const endDate = parseDate(repayDate, today);
+      const events = [];
+      const pushEvent = (event) => {
+        const date = parseDate(event.date, today);
+        events.push({ ...event, date });
+      };
+      pushEvent({ id: 'loan', type: 'loan', date: today, amount: loanAmount, label: 'Desembolso' });
+
+      (safePlan.payments || []).forEach((item, idx) => {
+        const principal = Number(item.principal) || 0;
+        const interest = Number(item.interest) || 0;
+        const total = principal + interest;
+        if (total === 0) return;
+        pushEvent({
+          id: `payment-${item.id ?? idx}`,
+          type: 'payment',
+          date: item.date || endDate,
+          label: item.label || `Pago ${idx + 1}`,
+          amount: -total,
+          principalImpact: principal,
+          interestPortion: interest,
+        });
+      });
+
+      const freqToDays = { daily: 1, weekly: 7, monthly: 30 };
+      (safePlan.earns || []).forEach((item, idx) => {
+        const step = freqToDays[item.frequency] || 30;
+        const amount = Number(item.amount) || 0;
+        if (!(amount > 0) || step <= 0) return;
+        let current = parseDate(item.startDate, today);
+        const limit = parseDate(item.endDate, endDate);
+        let count = 0;
+        while (current.getTime() <= limit.getTime() && count < 120) {
+          pushEvent({ id: `earn-${item.id ?? idx}-${count}`, type: 'earn', date: current, label: item.label || `Earn ${idx + 1}`, amount });
+          current = new Date(current.getTime() + step * msInDay);
+          count += 1;
+        }
+      });
+
+      (safePlan.manual || []).forEach((item, idx) => {
+        const amount = Number(item.amount) || 0;
+        if (!(amount > 0)) return;
+        const direction = item.direction === 'inflow' ? 1 : -1;
+        const impact = item.collateralImpact;
+        const collateralDelta = impact === 'increase' ? amount : impact === 'decrease' ? -amount : 0;
+        pushEvent({
+          id: `manual-${item.id ?? idx}`,
+          type: 'manual',
+          date: item.date || today,
+          label: item.label || `Evento ${idx + 1}`,
+          amount: amount * direction,
+          collateralDelta,
+        });
+      });
+
+      events.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+      let outstanding = loanAmount;
+      let collateral = Math.max(0, totalCollateralValue);
+      let cumulativeCash = 0;
+      let accruedInterest = 0;
+      let totalEarn = 0;
+      let totalCost = 0;
+      let minNet = Number.POSITIVE_INFINITY;
+      const timeline = [];
+      const alerts = [];
+      const fundingGaps = [];
+      const scenarioSummaries = {};
+      scenarioKeys.forEach((key) => { scenarioSummaries[key] = { last: 0, net: loanAmount, max: 0 }; });
+
+      let lastDate = today;
+      const addSnapshot = (event) => {
+        const day = Math.max(0, Math.round((event.date.getTime() - today.getTime()) / msInDay));
+        const scenarioStats = {};
+        scenarioKeys.forEach((key) => {
+          const shock = Number(baseScenarios[key]) || 0;
+          const adjustedCollateral = collateral * (1 + shock);
+          const ltv = adjustedCollateral > 0 ? outstanding / adjustedCollateral : (outstanding > 0 ? Number.POSITIVE_INFINITY : 0);
+          scenarioStats[key] = ltv;
+          scenarioSummaries[key].last = ltv;
+          scenarioSummaries[key].net = cumulativeCash - accruedInterest;
+          scenarioSummaries[key].max = Math.max(scenarioSummaries[key].max || 0, Number.isFinite(ltv) ? ltv : 0);
+          if (ltv >= autoRepayLtv) {
+            alerts.push(`Escenario ${key} supera auto-liquidación (${(autoRepayLtv * 100).toFixed(0)}%) en día ${day}.`);
+          } else if (ltv >= marginCallLtv) {
+            alerts.push(`Escenario ${key} supera margin call (${(marginCallLtv * 100).toFixed(0)}%) en día ${day}.`);
+          }
+        });
+        const netBalance = cumulativeCash - accruedInterest;
+        minNet = Math.min(minNet, netBalance);
+        if (netBalance < 0) {
+          const existingGap = fundingGaps.find((gap) => gap.day === day);
+          if (!existingGap) fundingGaps.push({ day, date: event.date.toISOString().slice(0, 10), net: netBalance });
+        }
+        timeline.push({
+          id: event.id,
+          type: event.type,
+          label: event.label,
+          date: event.date.toISOString().slice(0, 10),
+          day,
+          amount: event.amount,
+          interestAccrued: accruedInterest,
+          cashCumulative: cumulativeCash,
+          netBalance,
+          outstanding,
+          scenarioStats,
+          totalCost,
+          totalEarn,
+        });
+        lastDate = event.date;
+      };
+
+      events.forEach((event) => {
+        const deltaDays = Math.max(0, Math.round((event.date.getTime() - lastDate.getTime()) / msInDay));
+        if (deltaDays > 0 && outstanding > 0) {
+          const interest = outstanding * (Math.pow(1 + apr / 365, deltaDays) - 1);
+          accruedInterest += interest;
+          totalCost += interest;
+        }
+        cumulativeCash += event.amount || 0;
+        if ((event.amount || 0) >= 0) totalEarn += event.amount || 0; else totalCost += Math.abs(event.amount || 0);
+        if (event.principalImpact) {
+          outstanding = Math.max(0, outstanding - Number(event.principalImpact));
+        }
+        if (event.interestPortion) {
+          const payInterest = Math.min(accruedInterest, Number(event.interestPortion) || 0);
+          accruedInterest = Math.max(0, accruedInterest - payInterest);
+        }
+        if (event.collateralDelta) {
+          collateral = Math.max(0, collateral + Number(event.collateralDelta));
+        }
+        addSnapshot(event);
+      });
+
+      if (endDate.getTime() > lastDate.getTime() && outstanding > 0) {
+        const deltaDays = Math.max(0, Math.round((endDate.getTime() - lastDate.getTime()) / msInDay));
+        if (deltaDays > 0) {
+          const interest = outstanding * (Math.pow(1 + apr / 365, deltaDays) - 1);
+          accruedInterest += interest;
+          totalCost += interest;
+        }
+        addSnapshot({ id: 'carry', type: 'carry', label: 'Interés acumulado', date: endDate, amount: 0 });
+      }
+
+      if (outstanding > 0 || accruedInterest > 0) {
+        const payoff = -(outstanding + accruedInterest);
+        cumulativeCash += payoff;
+        totalCost += Math.abs(payoff);
+        outstanding = 0;
+        accruedInterest = 0;
+        addSnapshot({ id: 'closure', type: 'closure', label: 'Pago final proyectado', date: endDate, amount: payoff });
+      }
+
+      const chartData = timeline.map((item) => ({ day: item.day, cost: item.totalCost, earn: item.totalEarn, balance: item.netBalance }));
+      const uniqueAlerts = [...new Set(alerts)];
+      const scenarioLabel = { base: 'Escenario base', bear: 'Escenario bajista', bull: 'Escenario alcista' }[activeScenario] || activeScenario;
+
+      return {
+        timeline,
+        chartData,
+        alerts: uniqueAlerts,
+        fundingGaps,
+        netBalanceFinal: timeline.length ? timeline[timeline.length - 1].netBalance : loanAmount,
+        minNetBalance: Number.isFinite(minNet) ? minNet : loanAmount,
+        lastOutstanding: outstanding,
+        scenarioSummaries,
+        scenarioShocks: baseScenarios,
+        activeScenario,
+        ltvForGauge: timeline.length ? timeline[timeline.length - 1].scenarioStats[activeScenario] : (totalCollateralValue > 0 ? loanAmount / totalCollateralValue : 0),
+        scenarioLabel,
+      };
+    }
+
+    function BenchmarkCeFiDeFi({
+      config,
+      onChange,
+      fmt,
+      currency,
+      rate,
+      loanAmount,
+      chosenAPR,
+      daysUntilRepay,
+      scenarioName,
+      cashflowNet,
+      defaultMatrix,
+    }) {
+      const safeConfig = config || {};
+      const matrix = safeConfig.rateMatrix || [];
+      const strategies = safeConfig.strategies || [];
+      const termDays = Math.max(1, daysUntilRepay || 0);
+      const baseAmount = loanAmount || 0;
+
+      const updateRate = (id, patch) => onChange((prev) => ({
+        ...prev,
+        rateMatrix: (prev?.rateMatrix || []).map((item) => (item.id === id ? { ...item, ...patch } : item)),
+      }));
+
+      const removeRate = (id) => onChange((prev) => ({
+        ...prev,
+        rateMatrix: (prev?.rateMatrix || []).filter((item) => item.id !== id),
+      }));
+
+      const addRate = () => {
+        const nextId = `rate-${Math.max(0, ...matrix.map((item) => Number(String(item.id).replace(/\D/g, '')) || 0)) + 1}`;
+        onChange((prev) => ({
+          ...prev,
+          rateMatrix: [...(prev?.rateMatrix || []), { id: nextId, platform: 'Plataforma', product: 'Producto', type: 'APR', value: chosenAPR || 0 }],
+        }));
+      };
+
+      const updateStrategy = (id, patch) => onChange((prev) => ({
+        ...prev,
+        strategies: (prev?.strategies || []).map((item) => (item.id === id ? { ...item, ...patch } : item)),
+      }));
+
+      const removeStrategy = (id) => onChange((prev) => ({
+        ...prev,
+        strategies: (prev?.strategies || []).filter((item) => item.id !== id),
+      }));
+
+      const addStrategy = () => {
+        const nextId = `strategy-${Math.max(0, ...strategies.map((item) => Number(String(item.id).replace(/\D/g, '')) || 0)) + 1}`;
+        const loanRate = matrix[0]?.id || defaultMatrix?.[0]?.id || 'loan-default';
+        const yieldRate = matrix[1]?.id || defaultMatrix?.[1]?.id || 'yield-default';
+        onChange((prev) => ({
+          ...prev,
+          strategies: [...(prev?.strategies || []), {
+            id: nextId,
+            label: `Estrategia ${nextId}`,
+            lenderRateId: loanRate,
+            yieldRateId: yieldRate,
+            apr: matrix.find((r) => r.id === loanRate)?.value ?? chosenAPR ?? 0,
+            apy: matrix.find((r) => r.id === yieldRate)?.value ?? 0,
+            feesIn: 0,
+            feesOut: 0,
+            riskCeFiLender: true,
+            riskDeFiYield: false,
+            riskNewProtocol: false,
+          }],
+        }));
+      };
+
+      const findRate = (id) => matrix.find((item) => item.id === id);
+
+      const computeResult = (strategy) => {
+        const amount = strategy.amountOverride != null ? Number(strategy.amountOverride) || 0 : baseAmount;
+        const apr = Number.isFinite(strategy.apr) ? strategy.apr : (findRate(strategy.lenderRateId)?.value || 0);
+        const apy = Number.isFinite(strategy.apy) ? strategy.apy : (findRate(strategy.yieldRateId)?.value || 0);
+        const fees = (Number(strategy.feesIn) || 0) + (Number(strategy.feesOut) || 0);
+        const interestPaid = amount > 0 ? amount * (Math.pow(1 + apr / 365, termDays) - 1) : 0;
+        const interestEarned = amount > 0 ? amount * (Math.pow(1 + apy / 365, termDays) - 1) : 0;
+        const spread = interestEarned - interestPaid - fees;
+        const netPct = amount > 0 ? Math.max(-0.99, spread / amount) : 0;
+        const annualized = termDays > 0 ? (Math.pow(1 + netPct, 365 / termDays) - 1) : 0;
+        const riskPenalty = (strategy.riskDeFiYield ? 0.02 : 0) + (strategy.riskNewProtocol ? 0.03 : 0) + (strategy.riskCeFiLender ? 0 : 0.01);
+        return {
+          spread,
+          annualized,
+          adjustedAnnual: annualized - riskPenalty,
+          amount,
+          apr,
+          apy,
+          fees,
+          interestPaid,
+          interestEarned,
+        };
+      };
+
+      const results = strategies.map((strategy) => ({ strategy, metrics: computeResult(strategy) }));
+      const ranked = [...results].sort((a, b) => (b.metrics.adjustedAnnual || 0) - (a.metrics.adjustedAnnual || 0));
+
+      const formatMoney = (value) => fmt(value * rate, currency);
+
+      return (
+        <Card title="Benchmark CeFi vs. CeFi/DeFi">
+          <div className="space-y-6 text-xs">
+            <div className="rounded-2xl border border-neutral-200 bg-neutral-50/70 px-4 py-3 space-y-1 text-neutral-600">
+              <div>Monto base: {formatMoney(baseAmount)} · APR préstamo: {(chosenAPR * 100).toFixed(2)}% · Plazo: {termDays} días</div>
+              <div>Escenario cashflow: {scenarioName || 'Base'} · Saldo neto proyectado: {cashflowNet != null ? formatMoney(cashflowNet) : '—'}</div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-neutral-700">Matriz de tasas</h4>
+                <button className="nx-btn nx-btn-sm" onClick={addRate}>Agregar tasa</button>
+              </div>
+              <div className="space-y-2">
+                {matrix.length === 0 && <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-neutral-500">Define al menos una tasa APR/APY para combinar estrategias.</div>}
+                {matrix.map((item) => (
+                  <div key={item.id} className="grid grid-cols-1 md:grid-cols-5 gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-3">
+                    <input type="text" value={item.platform || ''} onChange={(e) => updateRate(item.id, { platform: e.target.value })} className="rounded-full border border-neutral-300 px-2 py-1" placeholder="Plataforma" />
+                    <input type="text" value={item.product || ''} onChange={(e) => updateRate(item.id, { product: e.target.value })} className="rounded-full border border-neutral-300 px-2 py-1" placeholder="Producto" />
+                    <select value={item.type || 'APR'} onChange={(e) => updateRate(item.id, { type: e.target.value })} className="rounded-full border border-neutral-300 px-2 py-1">
+                      <option value="APR">APR</option>
+                      <option value="APY">APY</option>
+                    </select>
+                    <input type="number" step="0.01" value={item.value ?? 0} onChange={(e) => updateRate(item.id, { value: Number(e.target.value) })} className="rounded-full border border-neutral-300 px-2 py-1 text-right" />
+                    <div className="flex items-end justify-end">
+                      <button className="text-rose-600 hover:underline" onClick={() => removeRate(item.id)}>Eliminar</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-neutral-700">Estrategias</h4>
+                <button className="nx-btn nx-btn-sm" onClick={addStrategy}>Agregar estrategia</button>
+              </div>
+              <div className="space-y-3">
+                {strategies.length === 0 && <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-neutral-500">Crea combinaciones préstamo → rendimiento para medir el spread neto.</div>}
+                {strategies.map((strategy) => {
+                  const metrics = computeResult(strategy);
+                  const position = ranked.findIndex((item) => item.strategy.id === strategy.id) + 1;
+                  return (
+                    <div key={strategy.id} className="grid grid-cols-1 md:grid-cols-6 gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-3">
+                      <div className="md:col-span-2 space-y-1">
+                        <input type="text" value={strategy.label || ''} onChange={(e) => updateStrategy(strategy.id, { label: e.target.value })} className="w-full rounded-full border border-neutral-300 px-2 py-1" placeholder="Nombre de la estrategia" />
+                        <select value={strategy.lenderRateId || ''} onChange={(e) => updateStrategy(strategy.id, { lenderRateId: e.target.value })} className="w-full rounded-full border border-neutral-300 px-2 py-1">
+                          <option value="">Sin tasa</option>
+                          {matrix.map((item) => <option key={`lend-${item.id}`} value={item.id}>{item.platform} · {item.product}</option>)}
+                        </select>
+                        <input type="number" step="0.01" value={strategy.apr ?? metrics.apr} onChange={(e) => updateStrategy(strategy.id, { apr: Number(e.target.value) })} className="w-full rounded-full border border-neutral-300 px-2 py-1 text-right" />
+                      </div>
+                      <div className="space-y-1">
+                        <select value={strategy.yieldRateId || ''} onChange={(e) => updateStrategy(strategy.id, { yieldRateId: e.target.value })} className="w-full rounded-full border border-neutral-300 px-2 py-1">
+                          <option value="">Sin tasa</option>
+                          {matrix.map((item) => <option key={`yield-${item.id}`} value={item.id}>{item.platform} · {item.product}</option>)}
+                        </select>
+                        <input type="number" step="0.01" value={strategy.apy ?? metrics.apy} onChange={(e) => updateStrategy(strategy.id, { apy: Number(e.target.value) })} className="w-full rounded-full border border-neutral-300 px-2 py-1 text-right" />
+                        <input type="number" step="100" placeholder="Monto personalizado" value={strategy.amountOverride ?? ''} onChange={(e) => updateStrategy(strategy.id, { amountOverride: e.target.value === '' ? null : Number(e.target.value) })} className="w-full rounded-full border border-neutral-300 px-2 py-1 text-right" />
+                      </div>
+                      <div className="space-y-1">
+                        <input type="number" step="0.01" value={strategy.feesIn ?? 0} onChange={(e) => updateStrategy(strategy.id, { feesIn: Number(e.target.value) })} className="w-full rounded-full border border-neutral-300 px-2 py-1 text-right" placeholder="Fee entrada" />
+                        <input type="number" step="0.01" value={strategy.feesOut ?? 0} onChange={(e) => updateStrategy(strategy.id, { feesOut: Number(e.target.value) })} className="w-full rounded-full border border-neutral-300 px-2 py-1 text-right" placeholder="Fee salida" />
+                        <div className="text-[11px] text-neutral-500">Spread: {formatMoney(metrics.spread)}</div>
+                      </div>
+                      <div className="space-y-1 text-[11px] text-neutral-600">
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={strategy.riskCeFiLender !== false} onChange={(e) => updateStrategy(strategy.id, { riskCeFiLender: e.target.checked })} /> Custodia CeFi</label>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={strategy.riskDeFiYield === true} onChange={(e) => updateStrategy(strategy.id, { riskDeFiYield: e.target.checked })} /> Yield DeFi</label>
+                        <label className="flex items-center gap-2"><input type="checkbox" checked={strategy.riskNewProtocol === true} onChange={(e) => updateStrategy(strategy.id, { riskNewProtocol: e.target.checked })} /> Smart contract nuevo</label>
+                      </div>
+                      <div className="space-y-1">
+                        <div className={`text-sm font-semibold ${metrics.spread >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatMoney(metrics.spread)}</div>
+                        <div className="text-[11px] text-neutral-500">Anualizado: {(metrics.annualized * 100).toFixed(2)}%</div>
+                        <div className="text-[11px] text-neutral-500">Ajustado riesgo: {(metrics.adjustedAnnual * 100).toFixed(2)}%</div>
+                      </div>
+                      <div className="flex items-end justify-between gap-2">
+                        <div className="text-sm font-semibold text-neutral-700">#{position || '–'}</div>
+                        <button className="text-rose-600 hover:underline" onClick={() => removeStrategy(strategy.id)}>Eliminar</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {ranked.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                {ranked.slice(0, 3).map((item, idx) => (
+                  <div key={`rank-${item.strategy.id}`} className="rounded-2xl border border-neutral-200 bg-white px-4 py-3">
+                    <div className="text-[11px] uppercase text-neutral-400">Top {idx + 1}</div>
+                    <div className="text-sm font-semibold text-neutral-700">{item.strategy.label || item.strategy.id}</div>
+                    <div className="text-[11px] text-neutral-500">Spread ajustado {(item.metrics.adjustedAnnual * 100).toFixed(2)}%</div>
+                    <div className="text-[11px] text-neutral-500">Spread neto {formatMoney(item.metrics.spread)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
       );
     }
 
@@ -1900,9 +2926,9 @@
       );
     }
     function Th({ children }) { return (<th className="px-3 py-2 text-center align-middle text-xs font-semibold">{children}</th>); }
-    function Td({ children, align = "left" }) {
+    function Td({ children, align = "left", ...rest }) {
       const alignClass = align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left";
-      return (<td className={`px-3 py-2 align-middle ${alignClass}`}>{children}</td>);
+      return (<td {...rest} className={`px-3 py-2 align-middle ${alignClass}`}>{children}</td>);
     }
     function Pill({ label, value, tone = "neutral" }) {
       const tones = {
