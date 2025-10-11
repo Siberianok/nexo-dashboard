@@ -492,7 +492,7 @@
       });
 
       const platform = PLATFORM_CONFIGS[platformId] ?? PLATFORM_CONFIGS[initialPlatformId];
-      const { 
+      const {
         id,
         name: platformName,
         tagline,
@@ -504,6 +504,7 @@
         apr: aprConfig = {},
         loyalty,
         ltvHealth,
+        previewSnapshot,
         defaultAssets: platformDefaultAssets = [],
         defaultParams: platformDefaultParams = {},
         exportPrefix = "simulador_prestamos",
@@ -1013,6 +1014,12 @@
       useEffect(() => {
         document.title = `Simulador de Préstamos / ${displayPlatformName}`;
       }, [displayPlatformName]);
+
+      useEffect(() => {
+        if (typeof document === 'undefined') return;
+        document.body.classList.remove(...PLATFORM_THEME_CLASSES);
+        document.body.classList.add(themeClass);
+      }, [themeClass]);
 
       return (
         <div className="min-h-screen w-full text-neutral-900">
