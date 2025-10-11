@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Simulador de Préstamos</title>
+  <title>Simulador de Préstamos / Plataforma</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -479,7 +479,7 @@
       });
 
       const platform = PLATFORM_CONFIGS[platformId] ?? PLATFORM_CONFIGS[initialPlatformId];
-      const {
+      const { 
         id,
         name: platformName,
         tagline,
@@ -938,13 +938,19 @@
 
       const loyaltyCardTitle = loyalty ? `Requisitos ${loyalty.tokenTicker ? `${loyalty.tokenTicker.toUpperCase()} & ` : ''}Colateral` : "Colateral & métricas";
 
+      const displayPlatformName = platformName || platformId;
+
+      useEffect(() => {
+        document.title = `Simulador de Préstamos / ${displayPlatformName}`;
+      }, [displayPlatformName]);
+
       return (
         <div className="min-h-screen w-full text-neutral-900">
           <div className={`${headerClass} text-white`}>
             <div className="mx-auto max-w-7xl px-4 py-6">
               <header className="flex flex-wrap items-end justify-between gap-4">
                 <div>
-                  <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Simulador de Préstamos</h1>
+                  <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{`Simulador de Préstamos / ${displayPlatformName}`}</h1>
                   <p className={`${accentClass}`}>{platformTagline}</p>
                 </div>
                 <div className="flex items-center gap-4">
