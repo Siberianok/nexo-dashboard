@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Nexo Loan Dashboard — HTML (portable)</title>
+  <title>Simulador de Préstamos Mejor</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -11,8 +11,9 @@
   <style>
     html,body{height:100%}
     body{font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"}
-    /* Paleta y estilos inspirados en Nexo */
+    /* Paleta y estilos base */
     .nx-gradient{background:linear-gradient(135deg,#0b1e4b 0%,#1b44a6 50%,#2052c1 100%)}
+    .bn-gradient{background:linear-gradient(135deg,#1f2937 0%,#f59e0b 45%,#f97316 100%)}
     .nx-gradient-soft{background:linear-gradient(180deg,#eef3ff 0%, #f6f9ff 100%)}
     .nx-card{border:1px solid #dfe6ff; box-shadow:0 12px 30px rgba(16,35,90,.08); border-radius:1.5rem}
     .nx-kpi{border:1px solid #e6eaf5}
@@ -88,109 +89,465 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <script type="text/babel">
-    // NEXO LOAN DASHBOARD – HTML portable (sin build, con CDN)
+    // Simulador de Préstamos Mejor – HTML portable (sin build, con CDN)
     const { useState, useEffect, useMemo, useRef } = React;
+
+    const PLATFORM_CONFIGS = {
+      nexo: {
+        id: "nexo",
+        name: "Nexo",
+        tagline: "Datos en vivo y cálculos de Earn (flexible) y crédito.",
+        classes: {
+          header: "nx-gradient",
+          accent: "text-blue-100/90",
+        },
+        coingeckoIds: {
+          BTC: "bitcoin",
+          ETH: "ethereum",
+          NEXO: "nexo",
+          USDT: "tether",
+          USDC: "usd-coin",
+          ADA: "cardano",
+          ALGO: "algorand",
+          XRP: "ripple",
+          BNB: "binancecoin",
+          SOL: "solana",
+        },
+        ltvByTicker: {
+          BTC: 0.50,
+          ETH: 0.50,
+          NEXO: 0.15,
+          XRP: 0.30,
+          BNB: 0.30,
+          USDC: 0.50,
+          USDT: 0.50,
+          ADA: 0.50,
+          ALGO: 0.30,
+          SOL: 0.30,
+        },
+        earnAprTop: {
+          BTC: 0.06,
+          ETH: 0.07,
+          USDC: 0.12,
+          USDT: 0.12,
+          NEXO: 0.04,
+          XRP: 0.07,
+          BNB: 0.07,
+          SOL: 0.07,
+          ADA: 0.02,
+          ALGO: 0.02,
+        },
+        policies: {
+          targetLtv: 0.20,
+          marginCallLtv: 0.70,
+          autoRepayLtv: 0.8333333333,
+          minBalancePerks: 5000,
+          defaultLtv: 0.25,
+        },
+        apr: {
+          base: 0.189,
+          standard: {
+            Base: 0.189,
+            Silver: 0.179,
+            Gold: 0.139,
+            Platinum: 0.109,
+          },
+          discounted: {
+            Base: 0.189,
+            Silver: 0.179,
+            Gold: 0.059,
+            Platinum: 0.029,
+          },
+          earlyRuleDays: 45,
+          earlyAPR: 0.189,
+          lowCostEligibleTiers: ["Gold", "Platinum"],
+          baseTier: "Base",
+        },
+        loyalty: {
+          tokenTicker: "NEXO",
+          baseLabel: "Base",
+          belowMinimumLabel: "Sin perks",
+          tierThresholds: [
+            { label: "Platinum", minRatio: 0.10 },
+            { label: "Gold", minRatio: 0.05 },
+            { label: "Silver", minRatio: 0.01 },
+          ],
+          models: [
+            { id: "vsRest", label: "vs resto (oficial)" },
+            { id: "vsTotal", label: "vs total" },
+          ],
+          kpiLabel: "Loyalty Tier",
+          ratioLabel: "ratio NEXO",
+        },
+        defaultAssets: [
+          { id: 1, name: "Bitcoin", ticker: "BTC", qty: 0, price: 0, priceAuto: true, useAsCollateral: true },
+          { id: 2, name: "Ethereum", ticker: "ETH", qty: 0, price: 0, priceAuto: true, useAsCollateral: true },
+          { id: 3, name: "NEXO Token", ticker: "NEXO", qty: 0, price: 0, priceAuto: true, useAsCollateral: true },
+          { id: 4, name: "Tether", ticker: "USDT", qty: 0, price: 1, priceAuto: true, useAsCollateral: true },
+          { id: 5, name: "USD Coin", ticker: "USDC", qty: 0, price: 1, priceAuto: true, useAsCollateral: true },
+          { id: 6, name: "Cardano", ticker: "ADA", qty: 0, price: 0, priceAuto: true, useAsCollateral: false },
+          { id: 7, name: "Algorand", ticker: "ALGO", qty: 0, price: 0, priceAuto: true, useAsCollateral: false },
+        ],
+        defaultParams: {
+          usdToArs: 1000,
+          loyaltyModel: "vsRest",
+          liveQuotes: true,
+          refreshSec: 60,
+          earnOptIn: true,
+          earnOnCollateral: true,
+        },
+        previewSnapshot: {
+          loanAmount: 15000,
+          repayInDays: 120,
+          showArs: false,
+          params: {
+            usdToArs: 1050,
+            loyaltyModel: "vsRest",
+            liveQuotes: false,
+            earnOptIn: true,
+            earnOnCollateral: true,
+            refreshSec: 60,
+          },
+          assets: [
+            { id: 1, name: "Bitcoin", ticker: "BTC", qty: 0.6, price: 42000, priceAuto: false, useAsCollateral: true },
+            { id: 2, name: "Ethereum", ticker: "ETH", qty: 8, price: 2100, priceAuto: false, useAsCollateral: true },
+            { id: 3, name: "NEXO Token", ticker: "NEXO", qty: 25000, price: 1, priceAuto: false, useAsCollateral: true },
+            { id: 4, name: "Tether", ticker: "USDT", qty: 6000, price: 1, priceAuto: false, useAsCollateral: true },
+            { id: 5, name: "USD Coin", ticker: "USDC", qty: 4000, price: 1, priceAuto: false, useAsCollateral: true },
+            { id: 6, name: "Cardano", ticker: "ADA", qty: 5000, price: 0.38, priceAuto: false, useAsCollateral: false },
+            { id: 7, name: "Algorand", ticker: "ALGO", qty: 8000, price: 0.15, priceAuto: false, useAsCollateral: false },
+          ],
+        },
+        exportPrefix: "nexo_dashboard",
+        disclaimers: {
+          finePrint: "* Este simulador es orientativo. Verifica términos/tasas vigentes en Nexo.",
+        },
+      },
+      binance: {
+        id: "binance",
+        name: "Binance",
+        tagline: "Datos en vivo y cálculos de Earn (flexible) y crédito.",
+        classes: {
+          header: "bn-gradient",
+          accent: "text-amber-100/90",
+        },
+        coingeckoIds: {
+          BTC: "bitcoin",
+          ETH: "ethereum",
+          BNB: "binancecoin",
+          USDT: "tether",
+          USDC: "usd-coin",
+          BUSD: "binance-usd",
+          ADA: "cardano",
+          XRP: "ripple",
+          SOL: "solana",
+        },
+        ltvByTicker: {
+          BTC: 0.65,
+          ETH: 0.60,
+          BNB: 0.65,
+          USDT: 0.80,
+          USDC: 0.80,
+          BUSD: 0.85,
+          ADA: 0.45,
+          XRP: 0.50,
+          SOL: 0.50,
+        },
+        earnAprTop: {
+          BTC: 0.03,
+          ETH: 0.03,
+          BNB: 0.05,
+          USDT: 0.06,
+          USDC: 0.06,
+          BUSD: 0.06,
+          ADA: 0.02,
+          XRP: 0.02,
+          SOL: 0.03,
+        },
+        policies: {
+          targetLtv: 0.50,
+          marginCallLtv: 0.80,
+          autoRepayLtv: 0.90,
+          minBalancePerks: 0,
+          defaultLtv: 0.30,
+        },
+        apr: {
+          base: 0.18,
+          standard: {
+            "Estándar": 0.18,
+            "VIP 1": 0.16,
+            "VIP 2": 0.14,
+            "VIP 3": 0.12,
+          },
+          discounted: {
+            "Estándar": 0.18,
+            "VIP 1": 0.15,
+            "VIP 2": 0.12,
+            "VIP 3": 0.10,
+          },
+          earlyRuleDays: 30,
+          earlyAPR: 0.18,
+          lowCostEligibleTiers: ["VIP 2", "VIP 3"],
+          baseTier: "Estándar",
+        },
+        loyalty: {
+          tokenTicker: "BNB",
+          baseLabel: "Estándar",
+          belowMinimumLabel: "Estándar",
+          tierThresholds: [
+            { label: "VIP 3", minRatio: 0.05 },
+            { label: "VIP 2", minRatio: 0.03 },
+            { label: "VIP 1", minRatio: 0.01 },
+          ],
+          models: [
+            { id: "vsTotal", label: "vs total (BNB holdings)" },
+          ],
+          kpiLabel: "Nivel VIP",
+          ratioLabel: "ratio BNB",
+        },
+        defaultAssets: [
+          { id: 1, name: "Bitcoin", ticker: "BTC", qty: 0, price: 0, priceAuto: true, useAsCollateral: true },
+          { id: 2, name: "Ethereum", ticker: "ETH", qty: 0, price: 0, priceAuto: true, useAsCollateral: true },
+          { id: 3, name: "BNB", ticker: "BNB", qty: 0, price: 0, priceAuto: true, useAsCollateral: true },
+          { id: 4, name: "Tether", ticker: "USDT", qty: 0, price: 1, priceAuto: true, useAsCollateral: true },
+          { id: 5, name: "USD Coin", ticker: "USDC", qty: 0, price: 1, priceAuto: true, useAsCollateral: true },
+          { id: 6, name: "BUSD", ticker: "BUSD", qty: 0, price: 1, priceAuto: true, useAsCollateral: true },
+          { id: 7, name: "Cardano", ticker: "ADA", qty: 0, price: 0, priceAuto: true, useAsCollateral: false },
+          { id: 8, name: "XRP", ticker: "XRP", qty: 0, price: 0, priceAuto: true, useAsCollateral: false },
+        ],
+        defaultParams: {
+          usdToArs: 1000,
+          loyaltyModel: "vsTotal",
+          liveQuotes: true,
+          refreshSec: 60,
+          earnOptIn: true,
+          earnOnCollateral: true,
+        },
+        previewSnapshot: {
+          loanAmount: 12000,
+          repayInDays: 90,
+          showArs: false,
+          params: {
+            usdToArs: 1050,
+            loyaltyModel: "vsTotal",
+            liveQuotes: false,
+            earnOptIn: true,
+            earnOnCollateral: true,
+            refreshSec: 60,
+          },
+          assets: [
+            { id: 1, name: "Bitcoin", ticker: "BTC", qty: 0.8, price: 42000, priceAuto: false, useAsCollateral: true },
+            { id: 2, name: "Ethereum", ticker: "ETH", qty: 6, price: 2000, priceAuto: false, useAsCollateral: true },
+            { id: 3, name: "BNB", ticker: "BNB", qty: 150, price: 230, priceAuto: false, useAsCollateral: true },
+            { id: 4, name: "USD Coin", ticker: "USDC", qty: 2000, price: 1, priceAuto: false, useAsCollateral: true },
+            { id: 5, name: "BUSD", ticker: "BUSD", qty: 1000, price: 1, priceAuto: false, useAsCollateral: true },
+            { id: 6, name: "Cardano", ticker: "ADA", qty: 4000, price: 0.4, priceAuto: false, useAsCollateral: false },
+            { id: 7, name: "XRP", ticker: "XRP", qty: 5000, price: 0.5, priceAuto: false, useAsCollateral: false },
+          ],
+        },
+        exportPrefix: "binance_dashboard",
+        disclaimers: {
+          finePrint: "* Este simulador es orientativo. Verifica términos/tasas vigentes en Binance.",
+        },
+      },
+    };
+
+    const PLATFORM_IDS = Object.keys(PLATFORM_CONFIGS);
+    const GLOBAL_COINGECKO_IDS = Object.values(PLATFORM_CONFIGS).reduce((acc, cfg) => ({ ...acc, ...(cfg.coingeckoIds || {}) }), {});
 
     const fmt = (n, currency = "USD", show = true) =>
       show ? n.toLocaleString(undefined, { style: "currency", currency }) : n.toLocaleString();
 
     const todayISO = () => new Date().toISOString().slice(0, 10);
 
-    const COINGECKO_IDS = {
-      BTC: "bitcoin",
-      ETH: "ethereum",
-      NEXO: "nexo",
-      USDT: "tether",
-      USDC: "usd-coin",
-      ADA: "cardano",
-      ALGO: "algorand",
-      XRP: "ripple",
-      BNB: "binancecoin",
-    };
-    const tickerToId = (t) => COINGECKO_IDS[t?.toUpperCase()];
-
-    // LTV por activo (no editable). Fuente pública Nexo, 10-oct-2025.
-    const LTV_BY_TICKER = {
-      BTC: 0.50,
-      ETH: 0.50,
-      NEXO: 0.15,
-      XRP: 0.30,
-      BNB: 0.30,
-      USDC: 0.50,
-      USDT: 0.50,
-      ADA: 0.50,
-      ALGO: 0.30,
-    };
-
-    // Tasas "hasta" para Flexible Savings (no editables). Público en nexo.com (pueden variar por tier/país).
-    const EARN_APR_TOP = {
-      BTC: 0.06,
-      ETH: 0.07,
-      USDC: 0.12,
-      USDT: 0.12,
-      NEXO: 0.04,
-      XRP: 0.07,
-      BNB: 0.07,
-      SOL: 0.07,
-      ADA: 0.02,
-      ALGO: 0.02,
-    };
-
-    // *** POLÍTICAS FIJAS DE NEXO (no editables) ***
-    const TARGET_LTV = 0.20;                 // Low-Cost bajo 20% LTV
-    const MIN_BALANCE_PERKS = 5000;          // Balance mínimo perks/earn
-    const APR = {                            // APR por categoría y promo ≤20%
-      base: 0.189,
-      silver: 0.179,
-      gold: 0.139,
-      platinum: 0.109,
-      goldDisc: 0.059,   // low-cost ≤20%
-      platDisc: 0.029,   // low-cost ≤20%
-      earlyRuleDays: 45,
-      earlyAPR: 0.189,
-    };
-
-    const defaultAssets = [
-      { id: 1, name: "Bitcoin", ticker: "BTC", qty: 0, price: 0, priceAuto: true, useAsCollateral: true, ltv: LTV_BY_TICKER.BTC },
-      { id: 2, name: "Ethereum", ticker: "ETH", qty: 0, price: 0, priceAuto: true, useAsCollateral: true, ltv: LTV_BY_TICKER.ETH },
-      { id: 3, name: "NEXO Token", ticker: "NEXO", qty: 0, price: 0, priceAuto: true, useAsCollateral: true, ltv: LTV_BY_TICKER.NEXO },
-      { id: 4, name: "Tether", ticker: "USDT", qty: 0, price: 1, priceAuto: true, useAsCollateral: true, ltv: LTV_BY_TICKER.USDT },
-      { id: 5, name: "USD Coin", ticker: "USDC", qty: 0, price: 1, priceAuto: true, useAsCollateral: true, ltv: LTV_BY_TICKER.USDC },
-      { id: 6, name: "Cardano", ticker: "ADA", qty: 0, price: 0, priceAuto: true, useAsCollateral: false, ltv: LTV_BY_TICKER.ADA },
-      { id: 7, name: "Algorand", ticker: "ALGO", qty: 0, price: 0, priceAuto: true, useAsCollateral: false, ltv: LTV_BY_TICKER.ALGO },
-    ];
-
-    // Parámetros SOLO de entorno (sí editables)
-    const defaultParams = {
-      usdToArs: 1000,
-      loyaltyModel: "vsRest",
-      liveQuotes: true,
-      refreshSec: 60,
-      earnOptIn: true,
-      earnOnCollateral: true,
-    };
-
-    function NexoDashboard() {
-      const [assets, setAssets] = useState(() => {
+    function SimuladorPrestamosMejor() {
+      const initialPlatformId = PLATFORM_IDS[0];
+      const [platformId, setPlatformId] = useState(() => {
+        if (typeof window === 'undefined') return initialPlatformId;
         try {
-          const saved = typeof window !== 'undefined' ? localStorage.getItem("nexo_assets_v1") : null;
-          const base = saved ? JSON.parse(saved) : defaultAssets;
-          return base.map((a) => ({
-            ...a,
-            ticker: (a.ticker || "").toUpperCase(),
-            priceAuto: a.priceAuto === false ? false : true,
-            ltv: LTV_BY_TICKER[(a.ticker||"").toUpperCase()] ?? a.ltv ?? 0,
-          }));
-        } catch { return defaultAssets; }
+          const stored = localStorage.getItem('spm_platform');
+          return PLATFORM_IDS.includes(stored) ? stored : initialPlatformId;
+        } catch {
+          return initialPlatformId;
+        }
+      });
+
+      const platform = PLATFORM_CONFIGS[platformId] ?? PLATFORM_CONFIGS[initialPlatformId];
+      const {
+        id,
+        name: platformName,
+        tagline,
+        classes = {},
+        coingeckoIds = {},
+        ltvByTicker = {},
+        earnAprTop = {},
+        policies = {},
+        apr: aprConfig = {},
+        loyalty,
+        defaultAssets: platformDefaultAssets = [],
+        defaultParams: platformDefaultParams = {},
+        exportPrefix = "simulador_prestamos",
+        disclaimers = {},
+        previewSnapshot,
+      } = platform;
+
+      const headerClass = classes.header || "nx-gradient";
+      const accentClass = classes.accent || "text-blue-100/90";
+      const platformTagline = tagline || "Datos en vivo y cálculos de Earn (flexible) y crédito.";
+      const targetLtv = policies.targetLtv ?? 0.20;
+      const marginCallLtv = policies.marginCallLtv ?? 0.70;
+      const autoRepayLtv = policies.autoRepayLtv ?? 0.85;
+      const minBalancePerks = policies.minBalancePerks ?? 0;
+      const defaultLtv = policies.defaultLtv ?? 0.25;
+      const loyaltyModels = loyalty?.models ?? [];
+      const loyaltyModelFallback = platformDefaultParams?.loyaltyModel ?? loyaltyModels[0]?.id ?? "vsRest";
+
+      const sanitizeTicker = (t) => (t || "").toUpperCase();
+      const toNumber = (value) => {
+        const n = Number(value);
+        return Number.isFinite(n) ? n : 0;
+      };
+      const sanitizeAssets = (list) => {
+        return (Array.isArray(list) ? list : []).map((item, idx) => {
+          const ticker = sanitizeTicker(item.ticker);
+          return {
+            id: item.id ?? idx + 1,
+            name: item.name ?? `Activo ${idx + 1}`,
+            ticker,
+            qty: toNumber(item.qty),
+            price: toNumber(item.price),
+            priceAuto: item.priceAuto === false ? false : true,
+            useAsCollateral: item.useAsCollateral === false ? false : true,
+            ltv: ltvByTicker[ticker] ?? item.ltv ?? defaultLtv,
+          };
+        });
+      };
+      const storageKeys = useMemo(() => ({
+        assets: `spm_${id}_assets_v1`,
+        params: `spm_${id}_params_v1`,
+      }), [id]);
+      const baseAssets = useMemo(() => sanitizeAssets(platformDefaultAssets), [platformDefaultAssets, ltvByTicker, defaultLtv]);
+      const baseParams = useMemo(() => {
+        const fallback = {
+          usdToArs: 1000,
+          loyaltyModel: loyaltyModelFallback,
+          liveQuotes: true,
+          refreshSec: 60,
+          earnOptIn: true,
+          earnOnCollateral: true,
+        };
+        const merged = { ...fallback, ...platformDefaultParams };
+        if (loyaltyModels.length && !loyaltyModels.some((m) => m.id === merged.loyaltyModel)) {
+          merged.loyaltyModel = loyaltyModelFallback;
+        }
+        return merged;
+      }, [platformDefaultParams, loyaltyModelFallback, loyaltyModels]);
+      const sanitizeParams = (raw) => {
+        const merged = { ...baseParams, ...(raw || {}) };
+        if (loyaltyModels.length && !loyaltyModels.some((m) => m.id === merged.loyaltyModel)) {
+          merged.loyaltyModel = loyaltyModelFallback;
+        }
+        return merged;
+      };
+
+      const applyPreviewSnapshot = () => {
+        if (!previewSnapshot) return;
+        const {
+          assets: previewAssets,
+          params: previewParams,
+          loanAmount: previewLoanAmount,
+          repayDate: previewRepayDate,
+          repayInDays,
+          showArs: previewShowArs,
+        } = previewSnapshot;
+
+        if (Array.isArray(previewAssets)) {
+          setAssets(sanitizeAssets(previewAssets));
+        }
+
+        if (previewParams) {
+          setParams(sanitizeParams(previewParams));
+        }
+
+        if (Number.isFinite(previewLoanAmount)) {
+          setLoanAmount(Number(previewLoanAmount) || 0);
+        }
+
+        if (typeof previewShowArs === 'boolean') {
+          setShowArs(previewShowArs);
+        }
+
+        if (previewRepayDate) {
+          setRepayDate(previewRepayDate);
+        } else if (Number.isFinite(repayInDays)) {
+          const d = new Date();
+          d.setDate(d.getDate() + Math.max(0, Math.round(repayInDays)));
+          setRepayDate(d.toISOString().slice(0, 10));
+        }
+      };
+
+      const [assets, setAssets] = useState(() => {
+        if (typeof window === 'undefined') return baseAssets;
+        try {
+          const saved = localStorage.getItem(storageKeys.assets);
+          if (saved) {
+            return sanitizeAssets(JSON.parse(saved));
+          }
+        } catch {}
+        return baseAssets;
       });
 
       const [params, setParams] = useState(() => {
+        if (typeof window === 'undefined') return baseParams;
         try {
-          const saved = typeof window !== 'undefined' ? localStorage.getItem("nexo_params_v1") : null;
-          const fallback = defaultParams;
-          return saved ? { ...fallback, ...JSON.parse(saved) } : fallback;
-        } catch { return defaultParams; }
+          const saved = localStorage.getItem(storageKeys.params);
+          if (saved) {
+            return sanitizeParams(JSON.parse(saved));
+          }
+        } catch {}
+        return baseParams;
       });
+
+      useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try { localStorage.setItem('spm_platform', platformId); } catch {}
+      }, [platformId]);
+
+      useEffect(() => {
+        setAssets(() => {
+          if (typeof window === 'undefined') return baseAssets;
+          try {
+            const saved = localStorage.getItem(storageKeys.assets);
+            if (saved) {
+              return sanitizeAssets(JSON.parse(saved));
+            }
+          } catch {}
+          return baseAssets;
+        });
+      }, [storageKeys.assets, baseAssets]);
+
+      useEffect(() => {
+        setParams(() => {
+          if (typeof window === 'undefined') return baseParams;
+          try {
+            const saved = localStorage.getItem(storageKeys.params);
+            if (saved) {
+              return sanitizeParams(JSON.parse(saved));
+            }
+          } catch {}
+          return baseParams;
+        });
+      }, [storageKeys.params, baseParams]);
+
+      useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try { localStorage.setItem(storageKeys.assets, JSON.stringify(assets)); } catch {}
+      }, [assets, storageKeys.assets]);
+
+      useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try { localStorage.setItem(storageKeys.params, JSON.stringify(params)); } catch {}
+      }, [params, storageKeys.params]);
 
       const [loanAmount, setLoanAmount] = useState(0);
       const [repayDate, setRepayDate] = useState(() => {
@@ -200,14 +557,16 @@
       const [lastPriceTs, setLastPriceTs] = useState(null);
       const [liveError, setLiveError] = useState(null);
 
-      useEffect(() => { try { localStorage.setItem("nexo_assets_v1", JSON.stringify(assets)); } catch {} }, [assets]);
-      useEffect(() => { try { localStorage.setItem("nexo_params_v1", JSON.stringify(params)); } catch {} }, [params]);
-
       const currency = showArs ? "ARS" : "USD";
       const rate = showArs ? params.usdToArs : 1;
       const pct = (x) => (x == null ? "—" : (x * 100).toFixed(1) + "%");
 
-      const tickersKey = useMemo(() => assets.filter(a=>a.priceAuto!==false).map(a=>a.ticker?.toUpperCase()).sort().join(','), [assets]);
+      const tickerToId = (ticker) => {
+        const key = sanitizeTicker(ticker);
+        return coingeckoIds[key] ?? GLOBAL_COINGECKO_IDS[key];
+      };
+
+      const tickersKey = useMemo(() => assets.filter(a=>a.priceAuto!==false).map(a=>sanitizeTicker(a.ticker)).sort().join(','), [assets]);
 
       const inFlight = useRef(false);
       async function fetchLivePricesNow() {
@@ -259,61 +618,60 @@
         return () => clearInterval(t);
       }, [params.liveQuotes, params.refreshSec, tickersKey]);
 
+      const loyaltyTicker = loyalty?.tokenTicker ? sanitizeTicker(loyalty.tokenTicker) : null;
+
       const totals = useMemo(() => {
-        const withValue = assets.map(a => ({ ...a, value: (Number(a.qty) || 0) * (Number(a.price) || 0) }));
+        const withValue = assets.map((a, idx) => {
+          const ticker = sanitizeTicker(a.ticker);
+          const qty = toNumber(a.qty);
+          const price = toNumber(a.price);
+          const value = qty * price;
+          const ltv = ltvByTicker[ticker] ?? a.ltv ?? defaultLtv;
+          return { ...a, ticker, qty, price, value, ltv, useAsCollateral: a.useAsCollateral !== false };
+        });
         const total = withValue.reduce((acc, a) => acc + a.value, 0);
-        const totalNexo = withValue.filter(a => (a.ticker || "").toUpperCase() === "NEXO").reduce((acc, a) => acc + a.value, 0);
-        const rest = total - totalNexo;
-        const ratioVsRest = rest > 0 ? (totalNexo / rest) : (totalNexo > 0 ? Number.POSITIVE_INFINITY : 0);
-        const ratioVsTotal = total > 0 ? (totalNexo / total) : 0;
+        const totalLoyalty = loyaltyTicker ? withValue.filter(a => a.ticker === loyaltyTicker).reduce((acc, a) => acc + a.value, 0) : 0;
+        const rest = total - totalLoyalty;
+        const ratioVsRest = rest > 0 ? (totalLoyalty / rest) : (totalLoyalty > 0 ? Number.POSITIVE_INFINITY : 0);
+        const ratioVsTotal = total > 0 ? (totalLoyalty / total) : 0;
         const collaterals = withValue.filter(a => a.useAsCollateral);
         const totalCollateralValue = collaterals.reduce((acc, a) => acc + a.value, 0);
-        const maxBorrow = collaterals.reduce((acc, a) => acc + a.value * ((LTV_BY_TICKER[(a.ticker||"").toUpperCase()] ?? a.ltv) || 0), 0);
-        return { withValue, total, totalNexo, rest, ratioVsRest, ratioVsTotal, totalCollateralValue, maxBorrow };
-      }, [assets]);
+        const maxBorrow = collaterals.reduce((acc, a) => acc + a.value * ((ltvByTicker[a.ticker] ?? a.ltv ?? defaultLtv) || 0), 0);
+        return { withValue, total, totalLoyalty, rest, ratioVsRest, ratioVsTotal, totalCollateralValue, maxBorrow };
+      }, [assets, loyaltyTicker, ltvByTicker, defaultLtv]);
+
+      const loyaltyModelActive = params.loyaltyModel ?? loyaltyModelFallback;
 
       const loyaltyTier = useMemo(() => {
-        if (totals.total < MIN_BALANCE_PERKS) return "Sin perks";
-        const ratioUsed = params.loyaltyModel === "vsTotal" ? totals.ratioVsTotal : totals.ratioVsRest;
-        if (ratioUsed >= 0.10) return "Platinum";
-        if (ratioUsed >= 0.05) return "Gold";
-        if (ratioUsed >= 0.01) return "Silver";
-        return "Base";
-      }, [totals.total, totals.ratioVsRest, totals.ratioVsTotal, params.loyaltyModel]);
+        if (!loyalty) return aprConfig.baseTier ?? loyalty?.baseLabel ?? "—";
+        if (totals.total < minBalancePerks) return loyalty.belowMinimumLabel ?? loyalty.baseLabel ?? "Sin perks";
+        const ratioUsed = loyaltyModelActive === "vsTotal" ? totals.ratioVsTotal : totals.ratioVsRest;
+        for (const tier of loyalty.tierThresholds ?? []) {
+          if (ratioUsed >= tier.minRatio) return tier.label;
+        }
+        return loyalty.baseLabel ?? (aprConfig.baseTier ?? "Base");
+      }, [loyalty, totals.total, minBalancePerks, loyaltyModelActive, totals.ratioVsTotal, totals.ratioVsRest, aprConfig.baseTier]);
 
-      const recommendedLoanAtTarget = useMemo(() => TARGET_LTV * totals.totalCollateralValue, [totals.totalCollateralValue]);
+      const aprStandardTable = aprConfig.standard ?? {};
+      const aprDiscountTable = aprConfig.discounted ?? aprStandardTable;
+      const aprBaseTier = aprConfig.baseTier ?? (loyalty?.baseLabel ?? "Base");
+      const aprBase = aprConfig.base ?? aprStandardTable[aprBaseTier] ?? aprStandardTable[loyalty?.baseLabel] ?? 0.20;
+      const lowCostEligibleTiers = aprConfig.lowCostEligibleTiers ?? loyalty?.lowCostEligibleTiers ?? [];
+      const earlyRuleDays = aprConfig.earlyRuleDays ?? 45;
+      const earlyAPR = aprConfig.earlyAPR ?? aprBase;
+
+      const recommendedLoanAtTarget = useMemo(() => targetLtv * totals.totalCollateralValue, [targetLtv, totals.totalCollateralValue]);
       const capLowCost = useMemo(() => Math.min(recommendedLoanAtTarget, totals.maxBorrow), [recommendedLoanAtTarget, totals.maxBorrow]);
       const lowCostHeadroom = useMemo(() => Math.max(0, capLowCost - loanAmount), [capLowCost, loanAmount]);
 
-      const marginCallLTV = 0.70; // soporte Nexo
-      const autoRepayLTV = 0.8333333333; // 83.33%
-
-      const dropTo70 = useMemo(() => {
-        if (totals.totalCollateralValue <= 0) return null;
-        const denom = marginCallLTV * totals.totalCollateralValue; if (denom <= 0) return null;
-        const d = 1 - (loanAmount / denom); return Math.max(0, Math.min(1, d));
-      }, [loanAmount, totals.totalCollateralValue]);
-
-      const dropTo83 = useMemo(() => {
-        if (totals.totalCollateralValue <= 0) return null;
-        const denom = autoRepayLTV * totals.totalCollateralValue; if (denom <= 0) return null;
-        const d = 1 - (loanAmount / denom); return Math.max(0, Math.min(1, d));
-      }, [loanAmount, totals.totalCollateralValue]);
-
       const chosenAPR = useMemo(() => {
-        const withinTarget = loanAmount <= recommendedLoanAtTarget && totals.total >= MIN_BALANCE_PERKS;
-        if (totals.total < MIN_BALANCE_PERKS) return APR.base;
-        if (withinTarget) {
-          if (loyaltyTier === "Platinum") return APR.platDisc;
-          if (loyaltyTier === "Gold") return APR.goldDisc;
-          if (loyaltyTier === "Silver") return APR.silver;
-          return APR.base;
-        }
-        if (loyaltyTier === "Platinum") return APR.platinum;
-        if (loyaltyTier === "Gold") return APR.gold;
-        if (loyaltyTier === "Silver") return APR.silver;
-        return APR.base;
-      }, [loanAmount, recommendedLoanAtTarget, totals.total, loyaltyTier]);
+        const table = loanAmount <= recommendedLoanAtTarget ? aprDiscountTable : aprStandardTable;
+        const aprFromTier = table?.[loyaltyTier];
+        if (typeof aprFromTier === 'number') return aprFromTier;
+        if (aprBaseTier && typeof table?.[aprBaseTier] === 'number') return table[aprBaseTier];
+        if (loyalty?.baseLabel && typeof table?.[loyalty.baseLabel] === 'number') return table[loyalty.baseLabel];
+        return aprBase;
+      }, [loanAmount, recommendedLoanAtTarget, aprDiscountTable, aprStandardTable, loyaltyTier, aprBaseTier, aprBase, loyalty?.baseLabel]);
 
       const daysUntilRepay = useMemo(() => {
         const a = new Date(); const b = new Date(repayDate);
@@ -323,24 +681,24 @@
 
       const interestCalc = useMemo(() => {
         const P = loanAmount; const d = daysUntilRepay; const r = chosenAPR;
-        const earlyDays = Math.max(0, APR.earlyRuleDays - d);
+        const earlyDays = Math.max(0, earlyRuleDays - d);
         const main = P * (Math.pow(1 + r / 365, d) - 1);
-        const early = d < APR.earlyRuleDays ? P * (Math.pow(1 + APR.earlyAPR / 365, earlyDays) - 1) : 0;
+        const early = d < earlyRuleDays ? P * (Math.pow(1 + earlyAPR / 365, earlyDays) - 1) : 0;
         const total = main + early; return { main, early, total, repayTotal: P + total };
-      }, [loanAmount, daysUntilRepay, chosenAPR]);
+      }, [loanAmount, daysUntilRepay, chosenAPR, earlyRuleDays, earlyAPR]);
 
       const monthlyLoanCost = useMemo(() => loanAmount * (Math.pow(1 + chosenAPR / 365, 30) - 1), [loanAmount, chosenAPR]);
 
-      const earnEligible = totals.total >= MIN_BALANCE_PERKS && params.earnOptIn;
+      const earnEligible = totals.total >= minBalancePerks && params.earnOptIn;
       const earnMonthly = useMemo(() => {
         if (!earnEligible) return 0;
         const days = 30;
         return totals.withValue.reduce((acc, a) => {
           if (!params.earnOnCollateral && a.useAsCollateral) return acc;
-          const apr = EARN_APR_TOP[(a.ticker||"").toUpperCase()] ?? 0;
+          const apr = earnAprTop[sanitizeTicker(a.ticker)] ?? 0;
           return acc + a.value * (Math.pow(1 + apr/365, days) - 1);
         }, 0);
-      }, [earnEligible, params.earnOnCollateral, totals.withValue]);
+      }, [earnEligible, params.earnOnCollateral, totals.withValue, earnAprTop]);
 
       const netMonthly = useMemo(() => earnMonthly - monthlyLoanCost, [earnMonthly, monthlyLoanCost]);
 
@@ -355,7 +713,7 @@
           if (earnEligible) {
             earn = totals.withValue.reduce((acc, asset) => {
               if (!params.earnOnCollateral && asset.useAsCollateral) return acc;
-              const apr = EARN_APR_TOP[(asset.ticker || "").toUpperCase()] ?? 0;
+              const apr = earnAprTop[sanitizeTicker(asset.ticker)] ?? 0;
               return acc + asset.value * (Math.pow(1 + apr / 365, day) - 1);
             }, 0);
           }
@@ -363,10 +721,10 @@
           arr.push({ day, cost: interest, earn, balance });
         }
         return arr;
-      }, [chosenAPR, daysUntilRepay, earnEligible, loanAmount, params.earnOnCollateral, totals.withValue]);
+      }, [chosenAPR, daysUntilRepay, earnEligible, loanAmount, params.earnOnCollateral, totals.withValue, earnAprTop]);
 
       const overallLTVIfBorrow = useMemo(() => (totals.totalCollateralValue > 0 ? loanAmount / totals.totalCollateralValue : 0), [loanAmount, totals.totalCollateralValue]);
-      const ltvTone = overallLTVIfBorrow <= TARGET_LTV ? "ok" : (overallLTVIfBorrow <= marginCallLTV ? "warn" : "danger");
+      const ltvTone = overallLTVIfBorrow <= targetLtv ? "ok" : (overallLTVIfBorrow <= marginCallLtv ? "warn" : "danger");
 
       const collateralBreakdown = useMemo(() => {
         const totalCollateral = totals.totalCollateralValue || 0;
@@ -374,16 +732,16 @@
         return totals.withValue
           .filter((asset) => asset.useAsCollateral && asset.value > 0)
           .map((asset) => {
-            const ticker = (asset.ticker || "").toUpperCase();
-            const policyLTV = LTV_BY_TICKER[ticker] ?? asset.ltv ?? 0;
+            const ticker = sanitizeTicker(asset.ticker);
+            const policyLTV = ltvByTicker[ticker] ?? asset.ltv ?? defaultLtv;
             const maxBorrowForAsset = asset.value * policyLTV;
             const share = asset.value / totalCollateral;
             const allocatedLoan = loanAmount * share;
             const usageVsCap = maxBorrowForAsset > 0 ? allocatedLoan / maxBorrowForAsset : 0;
             let tone = "ok";
-            if (usageVsCap > 0.85 || overallLTVIfBorrow >= autoRepayLTV) {
+            if (usageVsCap > 0.85 || overallLTVIfBorrow >= autoRepayLtv) {
               tone = "danger";
-            } else if (usageVsCap > 0.6 || overallLTVIfBorrow >= marginCallLTV) {
+            } else if (usageVsCap > 0.6 || overallLTVIfBorrow >= marginCallLtv) {
               tone = "warn";
             }
             return {
@@ -401,48 +759,71 @@
             };
           })
           .sort((a, b) => b.value - a.value);
-      }, [autoRepayLTV, loanAmount, marginCallLTV, overallLTVIfBorrow, totals.totalCollateralValue, totals.withValue]);
+      }, [autoRepayLtv, loanAmount, marginCallLtv, overallLTVIfBorrow, totals.totalCollateralValue, totals.withValue, ltvByTicker, defaultLtv]);
 
       const extraCollateralForTarget = useMemo(() => {
-        const neededCollateral = loanAmount / TARGET_LTV;
+        if (targetLtv <= 0) return 0;
+        const neededCollateral = loanAmount / targetLtv;
         return Math.max(0, neededCollateral - totals.totalCollateralValue);
-      }, [loanAmount, totals.totalCollateralValue]);
+      }, [loanAmount, targetLtv, totals.totalCollateralValue]);
 
-      const nexoReqs = useMemo(() => {
-        const denom = params.loyaltyModel === "vsTotal" ? totals.total : totals.rest;
-        const silverReq = 0.01 * denom; const goldReq = 0.05 * denom; const platReq = 0.10 * denom;
-        const missingSilver = Math.max(0, silverReq - totals.totalNexo);
-        const missingGold = Math.max(0, goldReq - totals.totalNexo);
-        const missingPlat = Math.max(0, platReq - totals.totalNexo);
-        return { silverReq, goldReq, platReq, missingSilver, missingGold, missingPlat, denom };
-      }, [totals.total, totals.rest, totals.totalNexo, params.loyaltyModel]);
+      const loyaltyReqs = useMemo(() => {
+        if (!loyalty) return null;
+        const denom = loyaltyModelActive === "vsTotal" ? totals.total : totals.rest;
+        const tiers = (loyalty.tierThresholds ?? []).map((tier) => {
+          const required = denom * tier.minRatio;
+          const missing = Math.max(0, required - totals.totalLoyalty);
+          return { ...tier, required, missing };
+        });
+        return { denom, tiers };
+      }, [loyalty, loyaltyModelActive, totals.total, totals.rest, totals.totalLoyalty]);
 
       const meetsLowCost = useMemo(() => {
         const withinTarget = loanAmount <= recommendedLoanAtTarget;
-        const hasTier = ["Gold", "Platinum"].includes(loyaltyTier);
-        return totals.total >= MIN_BALANCE_PERKS && withinTarget && hasTier;
-      }, [loanAmount, recommendedLoanAtTarget, loyaltyTier, totals.total]);
+        if (lowCostEligibleTiers.length === 0) {
+          return totals.total >= minBalancePerks && withinTarget;
+        }
+        const hasTier = lowCostEligibleTiers.includes(loyaltyTier);
+        return totals.total >= minBalancePerks && withinTarget && hasTier;
+      }, [loanAmount, recommendedLoanAtTarget, loyaltyTier, totals.total, lowCostEligibleTiers, minBalancePerks]);
 
       const handleAssetChange = (id, patch) => setAssets(prev => prev.map(a => (a.id === id ? { ...a, ...patch } : a)));
 
       const addRow = () => {
         const nextId = Math.max(0, ...assets.map(a => a.id)) + 1;
-        setAssets(prev => ([...prev, { id: nextId, name: "Nuevo", ticker: "TKN", qty: 0, price: 0, priceAuto: true, useAsCollateral: false, ltv: LTV_BY_TICKER.TKN ?? 0.25 }]));
+        setAssets(prev => ([...prev, { id: nextId, name: "Nuevo", ticker: "TKN", qty: 0, price: 0, priceAuto: true, useAsCollateral: false, ltv: defaultLtv }]));
       };
       const removeRow = (id) => setAssets(prev => prev.filter(a => a.id !== id));
 
+      const loyaltyCardTitle = loyalty ? `Requisitos ${loyalty.tokenTicker ? `${loyalty.tokenTicker.toUpperCase()} & ` : ''}Colateral` : "Colateral & métricas";
+
       return (
         <div className="min-h-screen w-full text-neutral-900">
-          <div className="nx-gradient text-white">
+          <div className={`${headerClass} text-white`}>
             <div className="mx-auto max-w-7xl px-4 py-6">
               <header className="flex flex-wrap items-end justify-between gap-4">
                 <div>
-                  <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Tablero Nexo – Simulador de Préstamos</h1>
-                  <p className="text-blue-100/90">Estilo Nexo, datos en vivo y cálculos de Earn (flexible) y crédito.</p>
+                  <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Simulador de Préstamos Mejor — {platformName}</h1>
+                  <p className={`${accentClass}`}>{platformTagline}</p>
                 </div>
-                <div className="flex items-center gap-3">
-                  <label className="text-sm font-medium mr-1">Mostrar en ARS</label>
-                  <input type="checkbox" checked={showArs} onChange={(e) => setShowArs(e.target.checked)} className="h-5 w-5" />
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium">Plataforma</label>
+                    <select value={platformId} onChange={(e) => setPlatformId(PLATFORM_IDS.includes(e.target.value) ? e.target.value : initialPlatformId)} className="rounded-xl border border-white/40 bg-white/15 px-3 py-1.5 text-sm font-semibold text-white shadow-sm backdrop-blur focus:outline-none focus:ring-2 focus:ring-white/80">
+                      {PLATFORM_IDS.map((pid) => (
+                        <option key={pid} value={pid} className="text-neutral-900">{PLATFORM_CONFIGS[pid]?.name ?? pid}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {previewSnapshot ? (
+                    <button type="button" onClick={applyPreviewSnapshot} className="nx-btn nx-btn-ghost text-sm whitespace-nowrap">
+                      Cargar vista previa
+                    </button>
+                  ) : null}
+                  <label className="flex items-center gap-2 text-sm font-medium">
+                    <span>Mostrar en ARS</span>
+                    <input type="checkbox" checked={showArs} onChange={(e) => setShowArs(e.target.checked)} className="h-5 w-5" />
+                  </label>
                 </div>
               </header>
             </div>
@@ -451,14 +832,14 @@
           <div className="mx-auto max-w-7xl px-4 py-6">
             <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
               <KPI title="Balance total" value={fmt(totals.total * rate, currency)} variant="button" />
-              <KPI title="Loyalty Tier" value={loyaltyTier} subtle={totals.total < MIN_BALANCE_PERKS ? "(balance < mínimo)" : undefined} variant="button" />
+              <KPI title={loyalty ? (loyalty.kpiLabel || "Loyalty Tier") : "Programa"} value={loyalty ? loyaltyTier : "—"} subtle={loyalty && totals.total < minBalancePerks ? "(balance < mínimo)" : undefined} variant="button" />
               <KPI title="APR crédito" value={`${(chosenAPR * 100).toFixed(2)}%`} subtle={meetsLowCost ? "Low-Cost activo" : undefined} variant="button" />
               <KPI title="Cap. Low-Cost (≤20% LTV)" value={fmt(capLowCost * rate, currency)} subtle="potencial" variant="button" />
               <KPI title="Tope por LTVs" value={fmt(totals.maxBorrow * rate, currency)} variant="button" />
               <KPI title="Préstamo recomendado (≤20%)" value={fmt(recommendedLoanAtTarget * rate, currency)} variant="button" />
               <KPI title="Interés hasta repago" value={fmt(interestCalc.total * rate, currency)} subtle={`${useMemo(()=>{const a=new Date(); const b=new Date(repayDate); return Math.ceil(Math.max(0,b-a)/86400000);},[repayDate])} días`} variant="button" />
               <KPI title="Total a devolver" value={fmt(interestCalc.repayTotal * rate, currency)} variant="button" />
-              <KPI title="Earn mensual (hasta)" value={fmt(earnMonthly * rate, currency)} subtle={earnEligible?`Savings ≥ $${MIN_BALANCE_PERKS}`:"no elegible"} variant="button" />
+              <KPI title="Earn mensual (hasta)" value={fmt(earnMonthly * rate, currency)} subtle={earnEligible ? (minBalancePerks > 0 ? `Savings ≥ $${minBalancePerks}` : undefined) : "no elegible"} variant="button" />
               <KPI title="Neto mensual (Earn − crédito)" value={fmt(netMonthly * rate, currency)} tone={netMonthly>=0?"ok":"danger"} variant="button" />
             </section>
 
@@ -481,12 +862,12 @@
               </Card>
 
               <Card title="Salud del préstamo">
-                <LTVGauge value={overallLTVIfBorrow} target={TARGET_LTV} marginCall={marginCallLTV} autoRepay={autoRepayLTV} />
+                <LTVGauge value={overallLTVIfBorrow} target={targetLtv} marginCall={marginCallLtv} autoRepay={autoRepayLtv} />
                 <div className="mt-4 space-y-2">
                   <Line label="LTV actual" value={`${(overallLTVIfBorrow*100).toFixed(1)}%`} tone={ltvTone} />
-                  <Line label="Objetivo Low-Cost" value={`${(TARGET_LTV*100).toFixed(0)}%`} muted />
-                  <Line label="Margin call" value={`${(marginCallLTV*100).toFixed(0)}%`} muted />
-                  <Line label="Auto-repay" value={`${(autoRepayLTV*100).toFixed(0)}%`} muted />
+                  <Line label="Objetivo Low-Cost" value={`${(targetLtv*100).toFixed(0)}%`} muted />
+                  <Line label="Margin call" value={`${(marginCallLtv*100).toFixed(0)}%`} muted />
+                  <Line label="Auto-repay" value={`${(autoRepayLtv*100).toFixed(0)}%`} muted />
                   <Line label="Cap Low-Cost" value={fmt(capLowCost * rate, currency)} tone={lowCostHeadroom > 0 ? "ok" : "danger"} />
                 </div>
               </Card>
@@ -517,25 +898,29 @@
                       <input type="checkbox" className="h-5 w-5" checked={!!params.earnOnCollateral} onChange={(e)=> setParams({ ...params, earnOnCollateral: e.target.checked })} />
                       Incluir colateral en Earn
                     </label>
-                    <span className="text-xs text-neutral-500">* Elegible si balance ≥ ${MIN_BALANCE_PERKS}.</span>
+                    {minBalancePerks > 0 && <span className="text-xs text-neutral-500">* Elegible si balance ≥ ${minBalancePerks}.</span>}
                   </div>
 
                   <div className="col-span-2 text-xs text-neutral-500">
-                    * LTV, APR por tier y ≤20% LTV son políticas fijas de Nexo. Aquí solo ajustás entorno (cambio, frecuencia, toggles).
+                    * LTV, APR por nivel y descuentos Low-Cost provienen de la plataforma elegida. Aquí solo ajustás parámetros de entorno (cambio, frecuencia, toggles).
                   </div>
                 </div>
               </Card>
 
-              <Card title="Requisitos NEXO & Colateral">
+              <Card title={loyaltyCardTitle}>
                 <div className="grid grid-cols-1 gap-3">
-                  <Line label={`Requerido Silver (1% ${params.loyaltyModel === 'vsTotal' ? 'vs total' : 'vs resto'})`} value={fmt(nexoReqs.silverReq * rate, currency)} />
-                  <Line label="Faltante Silver" value={fmt(nexoReqs.missingSilver * rate, currency)} muted={nexoReqs.missingSilver <= 0} />
-                  <Line label={`Requerido Gold (5% ${params.loyaltyModel === 'vsTotal' ? 'vs total' : 'vs resto'})`} value={fmt(nexoReqs.goldReq * rate, currency)} />
-                  <Line label="Faltante Gold" value={fmt(nexoReqs.missingGold * rate, currency)} muted={nexoReqs.missingGold <= 0} />
-                  <Line label={`Requerido Platinum (10% ${params.loyaltyModel === 'vsTotal' ? 'vs total' : 'vs resto'})`} value={fmt(nexoReqs.platReq * rate, currency)} />
-                  <Line label="Faltante Platinum" value={fmt(nexoReqs.missingPlat * rate, currency)} muted={nexoReqs.missingPlat <= 0} />
+                  {loyalty && loyaltyReqs?.tiers?.length ? (
+                    loyaltyReqs.tiers.map((tier) => (
+                      <React.Fragment key={tier.label}>
+                        <Line label={`Requerido ${tier.label} (${(tier.minRatio * 100).toFixed(1)}% ${loyaltyModelActive === 'vsTotal' ? 'vs total' : 'vs resto'})`} value={fmt(tier.required * rate, currency)} />
+                        <Line label={`Faltante ${tier.label}`} value={fmt(tier.missing * rate, currency)} muted={tier.missing <= 0} />
+                      </React.Fragment>
+                    ))
+                  ) : (
+                    <p className="text-sm text-neutral-500">Esta plataforma no tiene un programa de niveles ligado a un token específico.</p>
+                  )}
                   <div className="h-px bg-neutral-200 my-1" />
-                  <Line label="Colateral extra para ≤20% (fijo)" value={fmt(extraCollateralForTarget * rate, currency)} tone={extraCollateralForTarget <= 0 ? "ok" : "warn"} />
+                  <Line label={`Colateral extra para ≤${(targetLtv * 100).toFixed(0)}%`} value={fmt(extraCollateralForTarget * rate, currency)} tone={extraCollateralForTarget <= 0 ? "ok" : "warn"} />
                 </div>
               </Card>
             </section>
@@ -545,7 +930,7 @@
                 <h2 className="text-xl font-semibold">Activos y colateral</h2>
                 <div className="flex items-center gap-2">
                   <button onClick={addRow} className="nx-btn text-sm">Añadir activo</button>
-                  <button onClick={() => { localStorage.removeItem("nexo_assets_v1"); setAssets(defaultAssets); }} className="nx-btn nx-btn-ghost text-sm">Reset</button>
+                  <button onClick={() => { localStorage.removeItem(storageKeys.assets); setAssets(sanitizeAssets(platformDefaultAssets)); }} className="nx-btn nx-btn-ghost text-sm">Reset</button>
                 </div>
               </div>
 
@@ -572,7 +957,7 @@
                           <input value={a.name} onChange={(e) => handleAssetChange(a.id, { name: e.target.value })} className="w-full rounded-xl border border-neutral-300 px-2 py-1 text-center" />
                         </Td>
                         <Td align="center">
-                          <input value={a.ticker} onChange={(e) => { const newT = e.target.value.toUpperCase(); const newL = LTV_BY_TICKER[newT]; handleAssetChange(a.id, { ticker: newT, ltv: (newL ?? a.ltv) }); if (a.priceAuto !== false) { fetchPricesForTickers([newT]); } }} className="w-24 rounded-xl border border-neutral-300 px-2 py-1 text-center" />
+                          <input value={a.ticker} onChange={(e) => { const newT = sanitizeTicker(e.target.value); const newL = ltvByTicker[newT] ?? defaultLtv; handleAssetChange(a.id, { ticker: newT, ltv: newL }); if (a.priceAuto !== false) { fetchPricesForTickers([newT]); } }} className="w-24 rounded-xl border border-neutral-300 px-2 py-1 text-center" />
                         </Td>
                         <Td align="center">
                           <input type="number" min={0} step="any" value={a.qty} onChange={(e) => { const v = e.target.valueAsNumber; handleAssetChange(a.id, { qty: Number.isFinite(v) ? v : 0 }); }} placeholder="0.00" className="w-full rounded-xl border border-neutral-300 px-2 py-1 text-center" />
@@ -587,11 +972,11 @@
                         <Td align="center">
                           <input type="checkbox" title="Si está activo, este activo cuenta como colateral para LTV y Tope por LTVs" checked={a.useAsCollateral} onChange={(e) => handleAssetChange(a.id, { useAsCollateral: e.target.checked })} className="h-5 w-5" />
                         </Td>
-                        <Td align="center" title="Fuente pública Nexo">
-                          <span className="inline-block rounded-xl bg-neutral-100 px-3 py-1 font-semibold">{pct(LTV_BY_TICKER[(a.ticker||"").toUpperCase()] ?? a.ltv ?? 0)}</span>
+                        <Td align="center" title="Política de LTV fija por plataforma">
+                          <span className="inline-block rounded-xl bg-neutral-100 px-3 py-1 font-semibold">{pct(ltvByTicker[sanitizeTicker(a.ticker)] ?? a.ltv ?? 0)}</span>
                         </Td>
                         <Td align="center" title="Flexible Savings – tasa tope mostrada públicamente">
-                          <span className="inline-block rounded-xl bg-blue-50 text-blue-700 px-3 py-1 font-semibold">{pct(EARN_APR_TOP[(a.ticker||"").toUpperCase()] ?? 0)}</span>
+                          <span className="inline-block rounded-xl bg-blue-50 text-blue-700 px-3 py-1 font-semibold">{pct(earnAprTop[sanitizeTicker(a.ticker)] ?? 0)}</span>
                         </Td>
                         <Td align="center">
                           <button onClick={() => removeRow(a.id)} className="nx-btn nx-btn-ghost nx-btn-sm">Borrar</button>
@@ -616,9 +1001,9 @@
                   totalCollateral={totals.totalCollateralValue}
                   totalMaxBorrow={totals.maxBorrow}
                   overallLTV={overallLTVIfBorrow}
-                  target={TARGET_LTV}
-                  marginCall={marginCallLTV}
-                  autoRepay={autoRepayLTV}
+                  target={targetLtv}
+                  marginCall={marginCallLtv}
+                  autoRepay={autoRepayLtv}
                   capLowCost={capLowCost}
                   lowCostHeadroom={lowCostHeadroom}
                 />
@@ -626,22 +1011,32 @@
 
               <Card title="Diagnóstico & Sugerencias">
                 <ul className="list-disc pl-5 space-y-2 text-sm">
+                  {loyalty ? (
+                    <li>
+                      Tu {loyalty.ratioLabel ?? `ratio ${loyalty.tokenTicker?.toUpperCase() || ''}`} es <b>{(totals.ratioVsRest * 100).toFixed(2)}% vs resto</b> / <b>{(totals.ratioVsTotal * 100).toFixed(2)}% vs total</b>. Modelo activo: <b>{loyaltyModelActive === "vsTotal" ? "vs total" : "vs resto"}</b>. Nivel actual: <b>{loyaltyTier}</b>.
+                      {totals.total < minBalancePerks && (<span className="text-neutral-600"> (El balance total no supera el mínimo de perks).</span>)}
+                    </li>
+                  ) : (
+                    <li>Esta plataforma no requiere ratio de token para acceder a mejores tasas: el enfoque es puramente por colateral.</li>
+                  )}
+                  {loyalty && loyaltyReqs?.tiers?.length ? (
+                    <li>
+                      {loyaltyReqs.tiers.map((tier, idx) => (
+                        <span key={tier.label}>{idx > 0 ? ' · ' : ''}Para <b>{tier.label}</b> faltan {fmt(tier.missing * rate, currency)}</span>
+                      ))}
+                    </li>
+                  ) : null}
                   <li>
-                    Tu ratio NEXO es <b>{(totals.ratioVsRest * 100).toFixed(2)}% vs resto</b> / <b>{(totals.ratioVsTotal * 100).toFixed(2)}% vs total</b>. Modelo activo: <b>{params.loyaltyModel === "vsTotal" ? "vs total" : "vs resto (oficial)"}</b>. Tier actual: <b>{loyaltyTier}</b>.
-                    {totals.total < MIN_BALANCE_PERKS && (<span className="text-neutral-600"> (El balance total no supera el mínimo de perks).</span>)}
+                    Con tu colateral actual, el tope por LTVs es {fmt(totals.maxBorrow * rate, currency)}. El cap Low-Cost (≤{(targetLtv * 100).toFixed(0)}%) permite pedir hasta {fmt(capLowCost * rate, currency)} y deja {fmt(lowCostHeadroom * rate, currency)} de margen.
                   </li>
-                  <li>Para alcanzar <b>Gold</b> faltan {fmt(nexoReqs.missingGold * rate, currency)}; para <b>Platinum</b> faltan {fmt(nexoReqs.missingPlat * rate, currency)}.</li>
                   <li>
-                    Con tu colateral actual, el tope por LTVs es {fmt(totals.maxBorrow * rate, currency)}. El cap Low-Cost ({(TARGET_LTV * 100).toFixed(0)}%) te permite pedir hasta {fmt(capLowCost * rate, currency)} y aún quedan {fmt(lowCostHeadroom * rate, currency)} de margen.
-                  </li>
-                  <li>
-                    Para pedir {fmt(loanAmount * rate, currency)} y mantener ≤{(TARGET_LTV * 100).toFixed(0)}% LTV se requieren {fmt(extraCollateralForTarget * rate, currency)} adicionales en colateral.
+                    Para solicitar {fmt(loanAmount * rate, currency)} y mantener ≤{(targetLtv * 100).toFixed(0)}% LTV se requieren {fmt(extraCollateralForTarget * rate, currency)} adicionales en colateral.
                   </li>
                   <li>
                     APR estimado: <b>{(chosenAPR * 100).toFixed(2)}%</b>. Interés hasta repago ({daysUntilRepay} días): {fmt(interestCalc.total * rate, currency)}.{interestCalc.early > 0 && <span> Incluye interés por "early rule".</span>}
                   </li>
                   <li>
-                    Earn (flex) mensual estimado {earnEligible?"(tope)":"(no elegible)"}: <b>{fmt(earnMonthly * rate, currency)}</b>. Neto mensual: <b className={netMonthly>=0?"text-emerald-700":"text-rose-700"}>{fmt(netMonthly * rate, currency)}</b>.
+                    Earn (flex) mensual estimado {earnEligible ? (minBalancePerks > 0 ? "(tope)" : "") : (minBalancePerks > 0 ? "(requiere balance mínimo)" : "(no elegible)")}: <b>{fmt(earnMonthly * rate, currency)}</b>. Neto mensual: <b className={netMonthly>=0?"text-emerald-700":"text-rose-700"}>{fmt(netMonthly * rate, currency)}</b>.
                   </li>
                 </ul>
               </Card>
@@ -653,17 +1048,17 @@
                     const blob = new Blob([ JSON.stringify({ assets, params }, null, 2) ], { type: "application/json" });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement("a");
-                    a.href = url; a.download = `nexo_dashboard_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
+                    a.href = url; a.download = `${exportPrefix}_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
                   }}>Exportar JSON</button>
 
-                  <button className="nx-btn nx-btn-ghost text-sm" onClick={() => { if (confirm("¿Restablecer parámetros por defecto?")) setParams(defaultParams); }}>Reset parámetros</button>
-                  <button className="nx-btn nx-btn-ghost text-sm" onClick={() => { if (confirm("¿Restablecer activos por defecto?")) setAssets(defaultAssets); }}>Reset activos</button>
+                  <button className="nx-btn nx-btn-ghost text-sm" onClick={() => { if (confirm("¿Restablecer parámetros por defecto?")) { localStorage.removeItem(storageKeys.params); setParams({ ...baseParams }); } }}>Reset parámetros</button>
+                  <button className="nx-btn nx-btn-ghost text-sm" onClick={() => { if (confirm("¿Restablecer activos por defecto?")) { localStorage.removeItem(storageKeys.assets); setAssets(sanitizeAssets(platformDefaultAssets)); } }}>Reset activos</button>
                 </div>
-                <div className="mt-4 text-xs text-neutral-500"><p>* Este simulador es orientativo. Verifica términos/tasas vigentes en Nexo.</p></div>
+                <div className="mt-4 text-xs text-neutral-500"><p>{disclaimers.finePrint || '* Este simulador es orientativo. Verifica términos/tasas vigentes en la plataforma oficial.'}</p></div>
               </Card>
             </section>
 
-            <footer className="text-xs text-neutral-500">© {new Date().getFullYear()} – Demo técnica. Estética tipo Nexo: fondo azul claro, tarjetas limpias, KPIs con estilo “botón”.</footer>
+            <footer className="text-xs text-neutral-500">© {new Date().getFullYear()} – Demo técnica. Estilos y métricas se adaptan según la plataforma elegida.</footer>
           </div>
         </div>
       );
@@ -987,44 +1382,24 @@
     function approxEq(a, b, eps = 1e-6) { return Math.abs(a - b) <= eps; }
     function runDevTests() {
       try {
-        const assets1 = [{ qty: 1000, price: 1, ticker: 'NEXO', useAsCollateral: true, ltv: 0.15 }];
-        const total1 = assets1[0].qty * assets1[0].price;
-        const ratioVsRest1 = Number.POSITIVE_INFINITY; const params1 = { minBalanceUSD: 5000, loyaltyModel: 'vsRest' };
-        const tier1 = (total1 < params1.minBalanceUSD) ? 'Sin perks' : (ratioVsRest1 >= 0.10 ? 'Platinum' : 'Base');
-        console.assert(tier1 === 'Sin perks', 'Test1: debería ser Sin perks');
-
-        const total2 = 6000; const ratioVsRest2 = Number.POSITIVE_INFINITY;
-        const tier2 = (total2 < 5000) ? 'Sin perks' : (ratioVsRest2 >= 0.10 ? 'Platinum' : 'Base');
-        console.assert(tier2 === 'Platinum', 'Test2: debería ser Platinum');
-
-        const ratioVsTotal3 = 1.0; const tier3 = (6000 < 5000) ? 'Sin perks' : (ratioVsTotal3 >= 0.10 ? 'Platinum' : 'Base');
-        console.assert(tier3 === 'Platinum', 'Test3: Platinum en vsTotal con 100% NEXO');
-
-        const colateral = 10000; const target = 0.2; const recomendado = target * colateral; console.assert(approxEq(recomendado, 2000), 'Test4: préstamo recomendado 2000');
-
-        const maxBorrow = 5000 * 0.5 + 2000 * 0.25; console.assert(approxEq(maxBorrow, 3000), 'Test5: maxBorrow=3000');
-
-        const vBtc = 10000, ltvBtc = 0.5; const vUsdc = 5000, ltvUsdc = 0.5; const maxBorrowMix = vBtc * ltvBtc + vUsdc * ltvUsdc; console.assert(approxEq(maxBorrowMix, 7500), 'Test6: mix con LTV oficiales');
-
-        console.assert(COINGECKO_IDS['BTC']==='bitcoin' && COINGECKO_IDS['NEXO']==='nexo', 'Test7: map tickers');
-
-        const assets8 = [ { qty: 1, price: 10000, ltv: 0.5, useAsCollateral: true }, { qty: 1000, price: 1, ltv: 0.5, useAsCollateral: false }, ];
-        const withValue8 = assets8.map(a=>({ ...a, value: a.qty*a.price }));
-        const maxBorrow8 = withValue8.filter(a=>a.useAsCollateral).reduce((acc,a)=>acc + a.value*(a.ltv||0), 0);
-        console.assert(approxEq(maxBorrow8, 5000), 'Test8: solo cuenta el colateral');
-
-        const clamp = (v)=> Math.max(0, Math.min(1, v)); console.assert(clamp(-0.1)===0 && clamp(1.2)===1 && clamp(0.5)===0.5, 'Test9: clamp LTV');
-
-        // Nuevos: LTV fijos mapeados
-        console.assert(approxEq(LTV_BY_TICKER.BTC,0.5) && approxEq(LTV_BY_TICKER.USDC,0.5), 'Test10: LTV oficiales BTC/USDC');
-        console.assert((EARN_APR_TOP.USDC ?? 0) >= 0.10, 'Test11: Earn USDC tope ≥10%');
+        const nexo = PLATFORM_CONFIGS.nexo;
+        const binance = PLATFORM_CONFIGS.binance;
+        console.assert(approxEq((nexo.policies?.targetLtv ?? 0), 0.20), 'Test1: Target LTV Nexo 20%');
+        console.assert(approxEq((nexo.ltvByTicker?.BTC ?? 0), 0.50), 'Test2: LTV BTC Nexo 50%');
+        console.assert((binance.earnAprTop?.BNB ?? 0) >= 0.05, 'Test3: Earn BNB Binance ≥5%');
+        console.assert(GLOBAL_COINGECKO_IDS.BTC === 'bitcoin', 'Test4: CoinGecko BTC');
+        console.assert(PLATFORM_IDS.includes('nexo') && PLATFORM_IDS.includes('binance'), 'Test5: plataformas registradas');
+        const lowCostNexo = nexo.apr?.lowCostEligibleTiers || [];
+        console.assert(lowCostNexo.includes('Gold') && lowCostNexo.includes('Platinum'), 'Test6: Low-Cost tiers Nexo');
+        const defaultTicker = (nexo.defaultAssets?.[0]?.ticker || '').toUpperCase();
+        console.assert(defaultTicker === 'BTC', 'Test7: default asset BTC');
         console.log('%cSanity tests OK', 'color:green');
       } catch (e) { console.error('Sanity tests failed', e); }
     }
     if (typeof window !== 'undefined') { try { runDevTests(); } catch (_) {} }
 
     const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<NexoDashboard />);
+    root.render(<SimuladorPrestamosMejor />);
   </script>
 </body>
 </html>
