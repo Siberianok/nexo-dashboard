@@ -3,27 +3,93 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Simulador de Préstamos Mejor</title>
+  <title>Simulador de Préstamos / Plataforma</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     html,body{height:100%}
-    body{font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"}
+    body{
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background:var(--theme-surface-soft, linear-gradient(180deg,#eef3ff 0%, #f6f9ff 100%));
+      transition:background .3s ease;
+    }
+    :root{
+      --theme-surface-soft:linear-gradient(180deg,#eef3ff 0%, #f6f9ff 100%);
+      --theme-card-border:#dfe6ff;
+      --theme-card-shadow:0 12px 30px rgba(16,35,90,.08);
+      --theme-kpi-border:#e6eaf5;
+      --theme-kpi-bg:linear-gradient(155deg,#1c3fa0 0%,#2f5de0 45%,#4c8fff 100%);
+      --theme-kpi-shadow:0 16px 30px rgba(8,20,66,0.35);
+      --theme-kpi-hover-shadow:0 22px 36px rgba(12,28,84,0.42);
+      --theme-kpi-active-shadow:0 10px 18px rgba(10,24,70,0.3);
+      --theme-btn-bg:linear-gradient(155deg,#2451d5 0%,#3368f0 45%,#4a8cff 100%);
+      --theme-btn-text:#fff;
+      --theme-btn-border:rgba(255,255,255,0.22);
+      --theme-btn-shadow:0 14px 28px rgba(15,33,90,0.32);
+      --theme-btn-hover-shadow:0 20px 34px rgba(12,30,88,0.4);
+      --theme-btn-active-shadow:0 10px 20px rgba(10,26,70,0.25);
+      --theme-ghost-bg:linear-gradient(150deg,#ffffff 0%,#f1f5ff 100%);
+      --theme-ghost-text:#1e2f67;
+      --theme-ghost-border:rgba(30,64,175,0.16);
+      --theme-ghost-shadow:0 10px 22px rgba(15,30,70,0.12);
+      --theme-ghost-hover-shadow:0 16px 26px rgba(15,30,70,0.18);
+    }
+    .theme-nexo{
+      --theme-surface-soft:linear-gradient(180deg,#eef3ff 0%, #f6f9ff 100%);
+      --theme-card-border:#dfe6ff;
+      --theme-card-shadow:0 12px 30px rgba(16,35,90,.08);
+      --theme-kpi-border:#e6eaf5;
+      --theme-kpi-bg:linear-gradient(155deg,#1c3fa0 0%,#2f5de0 45%,#4c8fff 100%);
+      --theme-kpi-shadow:0 16px 30px rgba(8,20,66,0.35);
+      --theme-kpi-hover-shadow:0 22px 36px rgba(12,28,84,0.42);
+      --theme-kpi-active-shadow:0 10px 18px rgba(10,24,70,0.3);
+      --theme-btn-bg:linear-gradient(155deg,#2451d5 0%,#3368f0 45%,#4a8cff 100%);
+      --theme-btn-text:#fff;
+      --theme-btn-border:rgba(255,255,255,0.22);
+      --theme-btn-shadow:0 14px 28px rgba(15,33,90,0.32);
+      --theme-btn-hover-shadow:0 20px 34px rgba(12,30,88,0.4);
+      --theme-btn-active-shadow:0 10px 20px rgba(10,26,70,0.25);
+      --theme-ghost-bg:linear-gradient(150deg,#ffffff 0%,#f1f5ff 100%);
+      --theme-ghost-text:#1e2f67;
+      --theme-ghost-border:rgba(30,64,175,0.16);
+      --theme-ghost-shadow:0 10px 22px rgba(15,30,70,0.12);
+      --theme-ghost-hover-shadow:0 16px 26px rgba(15,30,70,0.18);
+    }
+    .theme-binance{
+      --theme-surface-soft:linear-gradient(180deg,#fff6e6 0%,#ffedcc 100%);
+      --theme-card-border:rgba(251,191,36,0.35);
+      --theme-card-shadow:0 12px 30px rgba(146,64,14,0.15);
+      --theme-kpi-border:rgba(253,224,71,0.45);
+      --theme-kpi-bg:linear-gradient(155deg,#d97706 0%,#f59e0b 45%,#fbbf24 100%);
+      --theme-kpi-shadow:0 16px 30px rgba(146,64,14,0.32);
+      --theme-kpi-hover-shadow:0 22px 36px rgba(124,45,18,0.42);
+      --theme-kpi-active-shadow:0 10px 18px rgba(124,45,18,0.3);
+      --theme-btn-bg:linear-gradient(155deg,#d97706 0%,#f59e0b 45%,#fbbf24 100%);
+      --theme-btn-text:#fff7db;
+      --theme-btn-border:rgba(255,255,255,0.24);
+      --theme-btn-shadow:0 14px 28px rgba(146,64,14,0.28);
+      --theme-btn-hover-shadow:0 20px 34px rgba(124,45,18,0.35);
+      --theme-btn-active-shadow:0 10px 20px rgba(124,45,18,0.25);
+      --theme-ghost-bg:linear-gradient(150deg,#ffffff 0%,#fff7e6 100%);
+      --theme-ghost-text:#7c2d12;
+      --theme-ghost-border:rgba(217,119,6,0.3);
+      --theme-ghost-shadow:0 10px 22px rgba(146,64,14,0.16);
+      --theme-ghost-hover-shadow:0 16px 26px rgba(124,45,18,0.22);
+    }
     /* Paleta y estilos base */
     .nx-gradient{background:linear-gradient(135deg,#0b1e4b 0%,#1b44a6 50%,#2052c1 100%)}
     .bn-gradient{background:linear-gradient(135deg,#1f2937 0%,#f59e0b 45%,#f97316 100%)}
-    .nx-gradient-soft{background:linear-gradient(180deg,#eef3ff 0%, #f6f9ff 100%)}
-    .nx-card{border:1px solid #dfe6ff; box-shadow:0 12px 30px rgba(16,35,90,.08); border-radius:1.5rem}
-    .nx-kpi{border:1px solid #e6eaf5}
+    .nx-card{border:1px solid var(--theme-card-border); box-shadow:var(--theme-card-shadow); border-radius:1.5rem; transition:box-shadow .3s ease,border-color .3s ease;}
+    .nx-kpi{border:1px solid var(--theme-kpi-border); transition:border-color .3s ease;}
     .nx-kpi-btn{
       position:relative;
       border-radius:1.25rem;
-      background:linear-gradient(155deg,#1c3fa0 0%,#2f5de0 45%,#4c8fff 100%);
+      background:var(--theme-kpi-bg);
       color:#fff;
       border:1px solid rgba(255,255,255,0.22);
-      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),0 16px 30px rgba(8,20,66,0.35);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),var(--theme-kpi-shadow);
       transition:transform .25s ease, box-shadow .25s ease, filter .25s ease;
     }
     .nx-kpi-btn::after{
@@ -37,11 +103,11 @@
     .nx-kpi-btn:hover{
       transform:translateY(-3px);
       filter:brightness(1.02);
-      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),0 22px 36px rgba(12,28,84,0.42);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),var(--theme-kpi-hover-shadow);
     }
     .nx-kpi-btn:active{
       transform:translateY(1px);
-      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),0 10px 18px rgba(10,24,70,0.3);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),var(--theme-kpi-active-shadow);
     }
     .nx-btn{
       position:relative;
@@ -49,38 +115,42 @@
       align-items:center;
       justify-content:center;
       gap:.4rem;
-      background:linear-gradient(155deg,#2451d5 0%,#3368f0 45%,#4a8cff 100%);
-      color:#fff;
+      background:var(--theme-btn-bg);
+      color:var(--theme-btn-text);
       border-radius:1rem;
       padding:.55rem 1.35rem;
       font-weight:600;
-      border:1px solid rgba(255,255,255,0.22);
-      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),0 14px 28px rgba(15,33,90,0.32);
+      border:1px solid var(--theme-btn-border);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),var(--theme-btn-shadow);
       transition:transform .22s ease, box-shadow .22s ease, filter .22s ease;
     }
     .nx-btn:hover{
       transform:translateY(-2px);
       filter:brightness(1.03);
-      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),0 20px 34px rgba(12,30,88,0.4);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),var(--theme-btn-hover-shadow);
     }
     .nx-btn:active{
       transform:translateY(1px);
-      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),0 10px 20px rgba(10,26,70,0.25);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),var(--theme-btn-active-shadow);
     }
     .nx-btn-ghost{
-      background:linear-gradient(150deg,#ffffff 0%,#f1f5ff 100%);
-      color:#1e2f67;
-      border:1px solid rgba(30,64,175,0.16);
-      box-shadow:inset 0 1px 0 rgba(255,255,255,0.8),0 10px 22px rgba(15,30,70,0.12);
+      background:var(--theme-ghost-bg);
+      color:var(--theme-ghost-text);
+      border:1px solid var(--theme-ghost-border);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.8),var(--theme-ghost-shadow);
+      transition:transform .22s ease, box-shadow .22s ease, filter .22s ease;
     }
     .nx-btn-ghost:hover{
       filter:brightness(1.02);
-      box-shadow:inset 0 1px 0 rgba(255,255,255,0.8),0 16px 26px rgba(15,30,70,0.18);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.8),var(--theme-ghost-hover-shadow);
+    }
+    .nx-btn-ghost:active{
+      transform:translateY(1px);
     }
     .nx-btn-sm{padding:.35rem .95rem; font-size:.8rem; border-radius:.9rem;}
   </style>
 </head>
-<body class="nx-gradient-soft">
+<body class="theme-nexo">
   <div id="root"></div>
 
   <!-- React 18 UMD + ReactDOM + Babel (para compilar JSX en el navegador) -->
@@ -89,8 +159,35 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <script type="text/babel">
-    // Simulador de Préstamos Mejor – HTML portable (sin build, con CDN)
+    // Simulador de Préstamos – HTML portable (sin build, con CDN)
+    const DEFAULT_EXCHANGE_RATES = {
+      USD: 1,
+      ARS: 1000,
+      EUR: 0.92,
+      GBP: 0.79,
+      CAD: 1.36,
+      AUD: 1.53,
+      CHF: 0.89,
+      JPY: 157,
+      BRL: 5.0,
+      MXN: 17.2,
+    };
+
+    const SUPPORTED_CURRENCIES = [
+      { code: "USD", label: "USD — Dólar estadounidense" },
+      { code: "ARS", label: "ARS — Peso argentino" },
+      { code: "EUR", label: "EUR — Euro" },
+      { code: "GBP", label: "GBP — Libra esterlina" },
+      { code: "CAD", label: "CAD — Dólar canadiense" },
+      { code: "AUD", label: "AUD — Dólar australiano" },
+      { code: "CHF", label: "CHF — Franco suizo" },
+      { code: "JPY", label: "JPY — Yen japonés" },
+      { code: "BRL", label: "BRL — Real brasileño" },
+      { code: "MXN", label: "MXN — Peso mexicano" },
+    ];
     const { useState, useEffect, useMemo, useRef } = React;
+
+    const LIVE_REFRESH_SECONDS = 5;
 
     const PLATFORM_CONFIGS = {
       nexo: {
@@ -100,6 +197,8 @@
         classes: {
           header: "nx-gradient",
           accent: "text-blue-100/90",
+          body: "theme-nexo",
+          focusRing: "focus:ring-blue-700",
         },
         coingeckoIds: {
           BTC: "bitcoin",
@@ -189,24 +288,24 @@
           { id: 7, name: "Algorand", ticker: "ALGO", qty: 0, price: 0, priceAuto: true, useAsCollateral: false },
         ],
         defaultParams: {
-          usdToArs: 1000,
+          exchangeRates: { ...DEFAULT_EXCHANGE_RATES },
           loyaltyModel: "vsRest",
           liveQuotes: true,
-          refreshSec: 60,
+          refreshSec: LIVE_REFRESH_SECONDS,
           earnOptIn: true,
           earnOnCollateral: true,
         },
         previewSnapshot: {
           loanAmount: 15000,
           repayInDays: 120,
-          showArs: false,
+          currency: "USD",
           params: {
-            usdToArs: 1050,
+            exchangeRates: { ...DEFAULT_EXCHANGE_RATES, ARS: 1050 },
             loyaltyModel: "vsRest",
-            liveQuotes: false,
+            liveQuotes: true,
             earnOptIn: true,
             earnOnCollateral: true,
-            refreshSec: 60,
+            refreshSec: LIVE_REFRESH_SECONDS,
           },
           assets: [
             { id: 1, name: "Bitcoin", ticker: "BTC", qty: 0.6, price: 42000, priceAuto: false, useAsCollateral: true },
@@ -230,6 +329,8 @@
         classes: {
           header: "bn-gradient",
           accent: "text-amber-100/90",
+          body: "theme-binance",
+          focusRing: "focus:ring-amber-500",
         },
         coingeckoIds: {
           BTC: "bitcoin",
@@ -327,10 +428,10 @@
           { id: 8, name: "XRP", ticker: "XRP", qty: 0, price: 0, priceAuto: true, useAsCollateral: false },
         ],
         defaultParams: {
-          usdToArs: 1000,
+          exchangeRates: { ...DEFAULT_EXCHANGE_RATES },
           loyaltyModel: "vsTotal",
           liveQuotes: true,
-          refreshSec: 60,
+          refreshSec: LIVE_REFRESH_SECONDS,
           earnOptIn: true,
           earnOnCollateral: true,
           binanceCollateralDelta: 0,
@@ -339,14 +440,14 @@
         previewSnapshot: {
           loanAmount: 12000,
           repayInDays: 90,
-          showArs: false,
+          currency: "USD",
           params: {
-            usdToArs: 1050,
+            exchangeRates: { ...DEFAULT_EXCHANGE_RATES, ARS: 1050 },
             loyaltyModel: "vsTotal",
-            liveQuotes: false,
+            liveQuotes: true,
             earnOptIn: true,
             earnOnCollateral: true,
-            refreshSec: 60,
+            refreshSec: LIVE_REFRESH_SECONDS,
           },
           assets: [
             { id: 1, name: "Bitcoin", ticker: "BTC", qty: 0.8, price: 42000, priceAuto: false, useAsCollateral: true },
@@ -365,6 +466,11 @@
       },
     };
 
+    const PLATFORM_THEME_CLASSES = Array.from(new Set([
+      "theme-nexo",
+      ...Object.values(PLATFORM_CONFIGS).map((cfg) => cfg?.classes?.body).filter(Boolean),
+    ]));
+
     const PLATFORM_IDS = Object.keys(PLATFORM_CONFIGS);
     const GLOBAL_COINGECKO_IDS = Object.values(PLATFORM_CONFIGS).reduce((acc, cfg) => ({ ...acc, ...(cfg.coingeckoIds || {}) }), {});
 
@@ -373,7 +479,7 @@
 
     const todayISO = () => new Date().toISOString().slice(0, 10);
 
-    function SimuladorPrestamosMejor() {
+    function SimuladorPrestamos() {
       const initialPlatformId = PLATFORM_IDS[0];
       const [platformId, setPlatformId] = useState(() => {
         if (typeof window === 'undefined') return initialPlatformId;
@@ -386,7 +492,7 @@
       });
 
       const platform = PLATFORM_CONFIGS[platformId] ?? PLATFORM_CONFIGS[initialPlatformId];
-      const {
+      const { 
         id,
         name: platformName,
         tagline,
@@ -402,9 +508,10 @@
         defaultParams: platformDefaultParams = {},
         exportPrefix = "simulador_prestamos",
         disclaimers = {},
-        previewSnapshot,
       } = platform;
 
+      const themeClass = classes.body || "theme-nexo";
+      const focusRingClass = classes.focusRing || "focus:ring-blue-700";
       const headerClass = classes.header || "nx-gradient";
       const accentClass = classes.accent || "text-blue-100/90";
       const platformTagline = tagline || "Datos en vivo y cálculos de Earn (flexible) y crédito.";
@@ -473,15 +580,39 @@
       };
       const storageKeys = useMemo(() => ({
         assets: `spm_${id}_assets_v1`,
-        params: `spm_${id}_params_v1`,
+        params: `spm_${id}_params_v2`,
       }), [id]);
       const baseAssets = useMemo(() => sanitizeAssets(platformDefaultAssets), [platformDefaultAssets, ltvByTicker, defaultLtv]);
+      const baseExchangeRates = useMemo(() => {
+        const merged = { ...DEFAULT_EXCHANGE_RATES, ...(platformDefaultParams?.exchangeRates || {}) };
+        merged.USD = 1;
+        return merged;
+      }, [platformDefaultParams]);
+      const sanitizeExchangeRates = (rawRates, legacyUsdToArs) => {
+        const next = { ...baseExchangeRates };
+        const source = rawRates && typeof rawRates === 'object' ? rawRates : {};
+        const legacy = Number.isFinite(legacyUsdToArs) ? legacyUsdToArs : null;
+        for (const { code } of SUPPORTED_CURRENCIES) {
+          if (code === 'USD') { next.USD = 1; continue; }
+          const candidate = source[code];
+          const value = Number(candidate);
+          if (Number.isFinite(value) && value > 0) {
+            next[code] = value;
+          } else if (code === 'ARS' && legacy != null && legacy > 0) {
+            next[code] = legacy;
+          } else if (!Number.isFinite(Number(next[code])) || next[code] <= 0) {
+            next[code] = DEFAULT_EXCHANGE_RATES[code] ?? 1;
+          }
+        }
+        next.USD = 1;
+        return next;
+      };
       const baseParams = useMemo(() => {
         const fallback = {
-          usdToArs: 1000,
+          exchangeRates: { ...baseExchangeRates },
           loyaltyModel: loyaltyModelFallback,
           liveQuotes: true,
-          refreshSec: 60,
+          refreshSec: LIVE_REFRESH_SECONDS,
           earnOptIn: true,
           earnOnCollateral: true,
           binanceCollateralDelta: 0,
@@ -491,8 +622,9 @@
         if (loyaltyModels.length && !loyaltyModels.some((m) => m.id === merged.loyaltyModel)) {
           merged.loyaltyModel = loyaltyModelFallback;
         }
+        merged.exchangeRates = sanitizeExchangeRates(merged.exchangeRates, merged.usdToArs);
         return merged;
-      }, [platformDefaultParams, loyaltyModelFallback, loyaltyModels]);
+      }, [platformDefaultParams, loyaltyModelFallback, loyaltyModels, baseExchangeRates]);
       const sanitizeParams = (raw) => {
         const merged = { ...baseParams, ...(raw || {}) };
         if (loyaltyModels.length && !loyaltyModels.some((m) => m.id === merged.loyaltyModel)) {
@@ -511,7 +643,7 @@
           loanAmount: previewLoanAmount,
           repayDate: previewRepayDate,
           repayInDays,
-          showArs: previewShowArs,
+          currency: previewCurrency,
         } = previewSnapshot;
 
         if (Array.isArray(previewAssets)) {
@@ -526,8 +658,10 @@
           setLoanAmount(Number(previewLoanAmount) || 0);
         }
 
-        if (typeof previewShowArs === 'boolean') {
-          setShowArs(previewShowArs);
+        if (typeof previewCurrency === 'string' && previewCurrency) {
+          setSelectedCurrency(previewCurrency);
+        } else if (typeof previewSnapshot?.showArs === 'boolean') {
+          setSelectedCurrency(previewSnapshot.showArs ? 'ARS' : 'USD');
         }
 
         if (previewRepayDate) {
@@ -606,12 +740,18 @@
       const [repayDate, setRepayDate] = useState(() => {
         const d = new Date(); d.setDate(d.getDate() + 60); return d.toISOString().slice(0, 10);
       });
-      const [showArs, setShowArs] = useState(false);
+      const [selectedCurrency, setSelectedCurrency] = useState(() => {
+        if (previewSnapshot?.currency) return previewSnapshot.currency;
+        if (typeof previewSnapshot?.showArs === 'boolean') {
+          return previewSnapshot.showArs ? 'ARS' : 'USD';
+        }
+        return 'USD';
+      });
       const [lastPriceTs, setLastPriceTs] = useState(null);
       const [liveError, setLiveError] = useState(null);
 
-      const currency = showArs ? "ARS" : "USD";
-      const rate = showArs ? params.usdToArs : 1;
+      const currency = selectedCurrency;
+      const rate = params.exchangeRates?.[currency] ?? 1;
       const pct = (x) => (x == null ? "—" : (x * 100).toFixed(1) + "%");
 
       const tickerToId = (ticker) => {
@@ -666,7 +806,7 @@
       useEffect(() => {
         if (!params.liveQuotes) return;
         fetchLivePricesNow();
-        const sec = Math.max(10, Number(params.refreshSec || 60));
+        const sec = Math.max(LIVE_REFRESH_SECONDS, Number(params.refreshSec || LIVE_REFRESH_SECONDS));
         const t = setInterval(fetchLivePricesNow, sec * 1000);
         return () => clearInterval(t);
       }, [params.liveQuotes, params.refreshSec, tickersKey]);
@@ -868,13 +1008,19 @@
 
       const loyaltyCardTitle = loyalty ? `Requisitos ${loyalty.tokenTicker ? `${loyalty.tokenTicker.toUpperCase()} & ` : ''}Colateral` : "Colateral & métricas";
 
+      const displayPlatformName = platformName || platformId;
+
+      useEffect(() => {
+        document.title = `Simulador de Préstamos / ${displayPlatformName}`;
+      }, [displayPlatformName]);
+
       return (
         <div className="min-h-screen w-full text-neutral-900">
           <div className={`${headerClass} text-white`}>
             <div className="mx-auto max-w-7xl px-4 py-6">
               <header className="flex flex-wrap items-end justify-between gap-4">
                 <div>
-                  <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Simulador de Préstamos Mejor — {platformName}</h1>
+                  <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{`Simulador de Préstamos / ${displayPlatformName}`}</h1>
                   <p className={`${accentClass}`}>{platformTagline}</p>
                 </div>
                 <div className="flex items-center gap-4">
@@ -886,15 +1032,26 @@
                       ))}
                     </select>
                   </div>
-                  {previewSnapshot ? (
-                    <button type="button" onClick={applyPreviewSnapshot} className="nx-btn nx-btn-ghost text-sm whitespace-nowrap">
-                      Cargar vista previa
-                    </button>
-                  ) : null}
-                  <label className="flex items-center gap-2 text-sm font-medium">
-                    <span>Mostrar en ARS</span>
-                    <input type="checkbox" checked={showArs} onChange={(e) => setShowArs(e.target.checked)} className="h-5 w-5" />
-                  </label>
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <label htmlFor="currency-select">Mostrar en</label>
+                    <select
+                      id="currency-select"
+                      value={currency}
+                      onChange={(e) => setSelectedCurrency(e.target.value)}
+                      className="rounded-xl border border-white/40 bg-white/15 px-3 py-1.5 text-sm font-semibold text-white shadow-sm backdrop-blur focus:outline-none focus:ring-2 focus:ring-white/80"
+                    >
+                      {SUPPORTED_CURRENCIES.map((option) => (
+                        <option
+                          key={option.code}
+                          value={option.code}
+                          className="text-neutral-900"
+                          title={option.label}
+                        >
+                          {option.code}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </header>
             </div>
@@ -934,10 +1091,22 @@
               <Card title="Préstamo & Repago">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 justify-items-center">
                   <Field label={`Monto a pedir (${currency})`} align="center" className="w-full max-w-xs">
-                    <input type="number" className="w-full rounded-full border border-neutral-300 px-5 py-3 text-center text-lg font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-700" value={(loanAmount * rate).toString()} onChange={(e)=> setLoanAmount(Number(e.target.value) / rate)} min={0} />
+                    <input
+                      type="number"
+                      className={`w-full rounded-full border border-neutral-300 px-5 py-3 text-center text-lg font-semibold shadow-sm focus:outline-none focus:ring-2 ${focusRingClass}`}
+                      value={(loanAmount * rate).toString()}
+                      onChange={(e)=> setLoanAmount(Number(e.target.value) / rate)}
+                      min={0}
+                    />
                   </Field>
                   <Field label="Fecha de repago" align="center" className="w-full max-w-xs">
-                    <input type="date" className="w-full rounded-full border border-neutral-300 px-5 py-3 text-center text-lg font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-700" value={repayDate} min={todayISO()} onChange={(e)=> setRepayDate(e.target.value)} />
+                    <input
+                      type="date"
+                      className={`w-full rounded-full border border-neutral-300 px-5 py-3 text-center text-lg font-semibold shadow-sm focus:outline-none focus:ring-2 ${focusRingClass}`}
+                      value={repayDate}
+                      min={todayISO()}
+                      onChange={(e)=> setRepayDate(e.target.value)}
+                    />
                   </Field>
                 </div>
                 <div className="mt-6 space-y-3">
@@ -989,16 +1158,24 @@
 
               <Card title="Parámetros (solo entorno)">
                 <div className="grid grid-cols-2 gap-3">
-                  <NumberParam label="USD→ARS" value={params.usdToArs} onChange={(v)=> setParams({ ...params, usdToArs: v })} />
+                  {SUPPORTED_CURRENCIES.filter((option) => option.code !== 'USD').map((option) => (
+                    <NumberParam
+                      key={option.code}
+                      label={`USD→${option.code}`}
+                      value={params.exchangeRates?.[option.code] ?? baseExchangeRates[option.code] ?? DEFAULT_EXCHANGE_RATES[option.code] ?? 1}
+                      onChange={(v) => setParams({
+                        ...params,
+                        exchangeRates: { ...params.exchangeRates, [option.code]: v },
+                      })}
+                    />
+                  ))}
 
                   <div className="col-span-2 rounded-2xl border border-neutral-200 p-3 flex flex-wrap items-center gap-3">
-                    <label className="flex items-center gap-2 text-sm font-medium">
-                      <input type="checkbox" className="h-5 w-5" checked={!!params.liveQuotes} onChange={(e)=> setParams({ ...params, liveQuotes: e.target.checked })} />
-                      Precios en vivo (CoinGecko)
-                    </label>
-                    <div className="w-48">
-                      <NumberParam label="Frecuencia (s)" value={params.refreshSec ?? 60} onChange={(v)=> setParams({ ...params, refreshSec: v })} />
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">Activo</span>
+                      <span>Precios en tiempo real (CoinGecko)</span>
                     </div>
+                    <span className="text-xs text-neutral-500">Actualización en tiempo real cada {LIVE_REFRESH_SECONDS} segundos.</span>
                     <button onClick={fetchLivePricesNow} className="nx-btn text-sm">Actualizar ahora</button>
                     <span className="text-xs text-neutral-500">{lastPriceTs ? `Últ. actualización: ${new Date(lastPriceTs).toLocaleTimeString()}` : '— sin actualizar —'}</span>
                     {liveError && <span className="text-xs text-rose-600">Error: {liveError}</span>}
@@ -1216,10 +1393,10 @@
         </label>
       );
     }
-    function NumberParam({ label, value, onChange, step = 1 }) {
+    function NumberParam({ label, value, onChange, step = 1, ringClass = "focus:ring-blue-700" }) {
       return (
         <Field label={label}>
-          <input type="number" value={value} step={step} onChange={(e) => onChange(Number(e.target.value))} className="w-full rounded-2xl border border-neutral-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-700 text-right" />
+          <input type="number" value={value} step={step} onChange={(e) => onChange(Number(e.target.value))} className={`w-full rounded-2xl border border-neutral-300 px-3 py-2 focus:outline-none focus:ring-2 ${ringClass} text-right`} />
         </Field>
       );
     }
@@ -1611,7 +1788,7 @@
     if (typeof window !== 'undefined') { try { runDevTests(); } catch (_) {} }
 
     const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<SimuladorPrestamosMejor />);
+    root.render(<SimuladorPrestamos />);
   </script>
 </body>
 </html>
