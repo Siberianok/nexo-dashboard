@@ -730,48 +730,58 @@
 
     function LTVGauge({ value, target, marginCall, autoRepay }) {
       const clamp = (v) => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
-      const size = 220;
+      const size = 300;
       const center = size / 2;
       const radius = center - 18;
-      const viewHeight = center + 32;
-      const angleFor = (pct) => Math.PI - clamp(pct) * Math.PI;
-      const pointFor = (pct) => {
+      const ring = 34;
+      const startAngle = (Math.PI * 5) / 4; // 225°
+      const sweepAngle = (Math.PI * 3) / 2; // 270°
+      const angleFor = (pct) => startAngle - clamp(pct) * sweepAngle;
+      const polarPoint = (pct, r = radius) => {
         const angle = angleFor(pct);
         return {
-          x: center + radius * Math.cos(angle),
-          y: center - radius * Math.sin(angle),
+          angle,
+          x: center + r * Math.cos(angle),
+          y: center + r * Math.sin(angle),
         };
       };
-      const describeArc = (from, to) => {
-        const start = pointFor(from);
-        const end = pointFor(to);
-        const largeArc = (to - from) > 0.5 ? 1 : 0;
-        return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArc} 0 ${end.x} ${end.y}`;
+      const describeArc = (from, to, r = radius) => {
+        const start = polarPoint(from, r);
+        const end = polarPoint(to, r);
+        const delta = (to - from) * sweepAngle;
+        const largeArc = Math.abs(delta) > Math.PI ? 1 : 0;
+        const sweepFlag = delta <= 0 ? 1 : 0;
+        return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} ${sweepFlag} ${end.x} ${end.y}`;
       };
       const zones = [
         { label: 'Óptimo', max: target, color: '#22c55e', legend: `≤${Math.round(target * 100)}%` },
         { label: 'Estable', max: marginCall, color: '#facc15', legend: `≤${Math.round(marginCall * 100)}%` },
         { label: 'A riesgo', max: autoRepay, color: '#fb923c', legend: `≤${Math.round(autoRepay * 100)}%` },
-        { label: 'Crítico', max: 1, color: '#f87171', legend: '> límite' },
+        { label: 'Crítico', max: 1, color: '#ef4444', legend: '> límite' },
       ];
-      const pad = 0.01;
+      const gap = 0.005;
       const segments = zones.reduce((acc, zone) => {
-        const from = acc.length ? acc[acc.length - 1].rawTo : 0;
+        const prev = acc[acc.length - 1];
+        const from = prev ? prev.rawTo : 0;
         const capped = Math.min(zone.max, 1);
         if (capped <= from) return acc;
-        const seg = {
-          from: Math.max(0, from + (from === 0 ? 0 : pad)),
-          to: Math.max(Math.min(1, capped - pad), from + 0.001),
-          rawTo: capped,
-          color: zone.color,
-          label: zone.label,
-          legend: zone.legend,
-        };
-        return [...acc, seg];
+        const to = Math.max(Math.min(1, capped), from + 0.002);
+        acc.push({ from, to, rawTo: capped, color: zone.color, label: zone.label, legend: zone.legend });
+        return acc;
       }, []);
-      const trackPath = describeArc(0, 1);
       const valuePct = clamp(value);
-      const needle = pointFor(valuePct);
+      const pointerAngle = angleFor(valuePct);
+      const pointerTip = polarPoint(valuePct, radius - ring * 0.25);
+      const pointerBaseRadius = 22;
+      const baseLeft = {
+        x: center + pointerBaseRadius * Math.cos(pointerAngle + Math.PI / 2),
+        y: center + pointerBaseRadius * Math.sin(pointerAngle + Math.PI / 2),
+      };
+      const baseRight = {
+        x: center + pointerBaseRadius * Math.cos(pointerAngle - Math.PI / 2),
+        y: center + pointerBaseRadius * Math.sin(pointerAngle - Math.PI / 2),
+      };
+      const pointerPath = `M ${baseLeft.x} ${baseLeft.y} L ${pointerTip.x} ${pointerTip.y} L ${baseRight.x} ${baseRight.y} Z`;
       const status = valuePct <= target
         ? 'Óptimo'
         : valuePct <= marginCall
@@ -779,40 +789,111 @@
           : valuePct <= autoRepay
             ? 'A riesgo'
             : 'Crítico';
-      const statusColor = valuePct <= target
-        ? 'text-emerald-500'
+      const statusTone = valuePct <= target
+        ? { text: 'text-emerald-500', bg: 'bg-emerald-100/70', dot: '#22c55e' }
         : valuePct <= marginCall
-          ? 'text-amber-500'
+          ? { text: 'text-amber-500', bg: 'bg-amber-100/70', dot: '#facc15' }
           : valuePct <= autoRepay
-            ? 'text-orange-500'
-            : 'text-rose-500';
+            ? { text: 'text-orange-500', bg: 'bg-orange-100/70', dot: '#fb923c' }
+            : { text: 'text-rose-500', bg: 'bg-rose-100/70', dot: '#ef4444' };
+      const thresholds = [
+        { pct: target, label: `${Math.round(target * 100)}%` },
+        { pct: marginCall, label: `${Math.round(marginCall * 100)}%` },
+        { pct: autoRepay, label: `${Math.round(autoRepay * 100)}%` },
+      ].filter((t, idx, arr) => t.pct > 0 && t.pct <= 1 && arr.findIndex((tt) => tt.pct === t.pct) === idx);
+      const tickOuter = radius + 6;
+      const tickInner = radius - ring + 4;
       return (
         <div className="flex flex-col items-center">
-          <svg viewBox={`0 0 ${size} ${viewHeight}`} className="w-full max-w-[300px]">
+          <svg viewBox={`0 0 ${size} ${size}`} className="w-full max-w-[340px]">
             <defs>
-              <linearGradient id="gaugeTrack" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="rgba(148,163,184,0.25)" />
-                <stop offset="100%" stopColor="rgba(148,163,184,0.05)" />
+              <radialGradient id="gaugeDepth" cx="50%" cy="50%" r="60%">
+                <stop offset="0%" stopColor="#ffffff" stopOpacity="0.98" />
+                <stop offset="100%" stopColor="#e2e8f0" stopOpacity="0.55" />
+              </radialGradient>
+              <linearGradient id="gaugeRing" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="rgba(15,23,42,0.12)" />
+                <stop offset="100%" stopColor="rgba(15,23,42,0.02)" />
               </linearGradient>
+              <filter id="pointerShadow" x="-40%" y="-40%" width="180%" height="180%">
+                <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="rgba(15,23,42,0.35)" />
+              </filter>
+              <filter id="ringShadow" x="-30%" y="-30%" width="160%" height="160%">
+                <feDropShadow dx="0" dy="8" stdDeviation="12" floodColor="rgba(15,23,42,0.18)" floodOpacity="0.5" />
+              </filter>
             </defs>
-            <path d={trackPath} stroke="url(#gaugeTrack)" strokeWidth="20" fill="none" strokeLinecap="round" />
-            {segments.map((seg, idx) => (
-              <path
-                key={idx}
-                d={describeArc(seg.from, seg.to)}
-                stroke={seg.color}
-                strokeWidth="20"
-                fill="none"
-                strokeLinecap="butt"
-              />
-            ))}
-            <line x1={center} y1={center} x2={needle.x} y2={needle.y} stroke="#0f172a" strokeWidth="4" strokeLinecap="round" />
-            <circle cx={center} cy={center} r="10" fill="#1d3abf" stroke="#f8fafc" strokeWidth="3" />
-            <text x={center} y={center + 28} textAnchor="middle" className="fill-slate-500" style={{ fontWeight: 600, fontSize: '11px', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Salud</text>
-            <text x={center} y={center + 46} textAnchor="middle" className="fill-slate-600" style={{ fontWeight: 700, fontSize: '20px' }}>{`${(valuePct * 100).toFixed(1)}%`}</text>
-            <text x={center} y={center + 66} textAnchor="middle" className={`fill-current ${statusColor}`} style={{ fontWeight: 700, fontSize: '13px' }}>{status}</text>
+            <g filter="url(#ringShadow)">
+              <circle cx={center} cy={center} r={radius + 10} fill="#f8fafc" />
+              <circle cx={center} cy={center} r={radius + 6} fill="url(#gaugeRing)" opacity="0.65" />
+              <circle cx={center} cy={center} r={radius - ring * 0.15} fill="url(#gaugeDepth)" />
+            </g>
+            {segments.map((seg, idx) => {
+              const isFirst = idx === 0;
+              const isLast = idx === segments.length - 1;
+              const from = seg.from + (isFirst ? 0 : gap);
+              const to = Math.max(from + 0.001, seg.to - (isLast ? 0 : gap));
+              return (
+                <path
+                  key={seg.label}
+                  d={describeArc(from, to, radius)}
+                  stroke={seg.color}
+                  strokeWidth={ring}
+                  strokeLinecap="round"
+                  fill="none"
+                  opacity="0.95"
+                />
+              );
+            })}
+            {thresholds.map((t) => {
+              const outer = polarPoint(t.pct, tickOuter);
+              const inner = polarPoint(t.pct, tickInner);
+              const labelAnchor = t.pct < 0.33 ? 'start' : t.pct > 0.67 ? 'end' : 'middle';
+              const labelOffset = t.pct > 0.67 ? -10 : t.pct < 0.33 ? 10 : 0;
+              const labelY = t.pct < 0.2 ? inner.y + 16 : t.pct > 0.8 ? inner.y + 16 : inner.y - 10;
+              return (
+                <g key={t.label}>
+                  <line x1={outer.x} y1={outer.y} x2={inner.x} y2={inner.y} stroke="#0f172a" strokeOpacity="0.18" strokeWidth="2" strokeLinecap="round" />
+                  <text
+                    x={inner.x + labelOffset}
+                    y={labelY}
+                    textAnchor={labelAnchor}
+                    className="fill-slate-500"
+                    style={{ fontSize: '10px', fontWeight: 600 }}
+                  >
+                    {t.label}
+                  </text>
+                </g>
+              );
+            })}
+            <g filter="url(#pointerShadow)">
+              <path d={pointerPath} fill="#0f172a" opacity="0.92" />
+            </g>
+            <circle cx={center} cy={center} r={18} fill="#1e3a8a" stroke="#f8fafc" strokeWidth="5" />
+            <circle cx={center} cy={center} r={6} fill="#f1f5f9" />
+            <text
+              x={center}
+              y={center + 6}
+              textAnchor="middle"
+              className="fill-slate-700"
+              style={{ fontWeight: 700, fontSize: '24px' }}
+            >
+              {`${(valuePct * 100).toFixed(1)}%`}
+            </text>
+            <text
+              x={center}
+              y={center + 34}
+              textAnchor="middle"
+              className="fill-slate-400"
+              style={{ fontWeight: 600, fontSize: '11px', letterSpacing: '0.16em' }}
+            >
+              Salud
+            </text>
           </svg>
-          <div className="mt-3 grid grid-cols-2 gap-3 text-[11px] font-semibold text-neutral-600">
+          <div className={`mt-4 flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${statusTone.bg} ${statusTone.text}`}>
+            <span className="inline-flex h-2.5 w-2.5 rounded-full" style={{ backgroundColor: statusTone.dot }} />
+            {status}
+          </div>
+          <div className="mt-5 grid grid-cols-2 gap-3 text-[11px] font-semibold text-neutral-600">
             {segments.map((seg) => (
               <div key={seg.label} className="flex items-center gap-2">
                 <span className="h-2.5 w-3.5 rounded-full" style={{ backgroundColor: seg.color }} />
