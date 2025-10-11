@@ -366,8 +366,8 @@
           SOL: 0.03,
         },
         policies: {
-          targetLtv: 0.50,
-          marginCallLtv: 0.80,
+          targetLtv: 0.75,
+          marginCallLtv: 0.85,
           autoRepayLtv: 0.90,
           minBalancePerks: 0,
           defaultLtv: 0.30,
@@ -406,6 +406,17 @@
           kpiLabel: "Nivel VIP",
           ratioLabel: "ratio BNB",
         },
+        ltvHealth: {
+          zones: [
+            { label: "Saludable", max: 0.75, color: "#22c55e", legend: "0-75%", tone: "ok" },
+            { label: "Riesgo medio", max: 0.85, color: "#f97316", legend: "75-85%", tone: "warn" },
+            { label: "Alto riesgo", max: 1, color: "#ef4444", legend: "≥85%", tone: "danger" },
+          ],
+          markers: [
+            { pct: 0.85, label: "Margin call" },
+            { pct: 0.90, label: "Auto-liquidación" },
+          ],
+        },
         defaultAssets: [
           { id: 1, name: "Bitcoin", ticker: "BTC", qty: 0, price: 0, priceAuto: true, useAsCollateral: true },
           { id: 2, name: "Ethereum", ticker: "ETH", qty: 0, price: 0, priceAuto: true, useAsCollateral: true },
@@ -423,6 +434,8 @@
           refreshSec: LIVE_REFRESH_SECONDS,
           earnOptIn: true,
           earnOnCollateral: true,
+          binanceCollateralDelta: 0,
+          binanceRepaySim: 0,
         },
         previewSnapshot: {
           loanAmount: 12000,
@@ -490,6 +503,7 @@
         policies = {},
         apr: aprConfig = {},
         loyalty,
+        ltvHealth,
         defaultAssets: platformDefaultAssets = [],
         defaultParams: platformDefaultParams = {},
         exportPrefix = "simulador_prestamos",
@@ -508,6 +522,41 @@
       const defaultLtv = policies.defaultLtv ?? 0.25;
       const loyaltyModels = loyalty?.models ?? [];
       const loyaltyModelFallback = platformDefaultParams?.loyaltyModel ?? loyaltyModels[0]?.id ?? "vsRest";
+      const isBinance = id === "binance";
+      const clamp01 = (v) => Math.max(0, Math.min(1, Number(v) || 0));
+      const toPct = (value, digits = 0) => Number.isFinite(value) ? `${(value * 100).toFixed(digits)}%` : "—";
+      const ltvGaugeZones = React.useMemo(() => {
+        if (ltvHealth?.zones?.length) {
+          return ltvHealth.zones
+            .map((zone, idx) => ({
+              label: zone.label ?? `Zona ${idx + 1}`,
+              max: clamp01(zone.max),
+              color: zone.color ?? (idx === 0 ? "#22c55e" : idx === 1 ? "#facc15" : "#ef4444"),
+              legend: zone.legend ?? `≤${Math.round(clamp01(zone.max) * 100)}%`,
+              tone: zone.tone ?? (idx === 0 ? "ok" : idx === (ltvHealth.zones.length - 1) ? "danger" : "warn"),
+            }))
+            .filter((zone, idx, arr) => zone.max > 0 && idx === arr.findIndex((z) => z.max === zone.max))
+            .sort((a, b) => a.max - b.max);
+        }
+        return [
+          { label: "Óptimo", max: clamp01(targetLtv), color: "#22c55e", legend: `≤${Math.round(clamp01(targetLtv) * 100)}%`, tone: "ok" },
+          { label: "Estable", max: clamp01(marginCallLtv), color: "#facc15", legend: `≤${Math.round(clamp01(marginCallLtv) * 100)}%`, tone: "warn" },
+          { label: "A riesgo", max: clamp01(autoRepayLtv), color: "#fb923c", legend: `≤${Math.round(clamp01(autoRepayLtv) * 100)}%`, tone: "danger" },
+          { label: "Crítico", max: 1, color: "#ef4444", legend: "> límite", tone: "danger" },
+        ];
+      }, [ltvHealth, targetLtv, marginCallLtv, autoRepayLtv]);
+      const ltvHealthyThreshold = clamp01(ltvGaugeZones[0]?.max ?? targetLtv);
+      const ltvWarnThreshold = clamp01((ltvGaugeZones[1]?.max ?? marginCallLtv) || ltvHealthyThreshold);
+      const ltvGaugeMarkers = React.useMemo(() => {
+        const markersSource = ltvHealth?.markers?.length ? ltvHealth.markers : [
+          { pct: targetLtv, label: `Objetivo ${Math.round(clamp01(targetLtv) * 100)}%` },
+          { pct: marginCallLtv, label: `Margin call ${Math.round(clamp01(marginCallLtv) * 100)}%` },
+          { pct: autoRepayLtv, label: `Auto-repay ${Math.round(clamp01(autoRepayLtv) * 100)}%` },
+        ];
+        return markersSource
+          .map((marker, idx) => ({ pct: clamp01(marker.pct), label: marker.label ?? `Nivel ${idx + 1}` }))
+          .filter((marker, idx, arr) => marker.pct > 0 && idx === arr.findIndex((m) => m.pct === marker.pct));
+      }, [ltvHealth, targetLtv, marginCallLtv, autoRepayLtv]);
 
       const sanitizeTicker = (t) => (t || "").toUpperCase();
       const toNumber = (value) => {
@@ -566,6 +615,8 @@
           refreshSec: LIVE_REFRESH_SECONDS,
           earnOptIn: true,
           earnOnCollateral: true,
+          binanceCollateralDelta: 0,
+          binanceRepaySim: 0,
         };
         const merged = { ...fallback, ...platformDefaultParams };
         if (loyaltyModels.length && !loyaltyModels.some((m) => m.id === merged.loyaltyModel)) {
@@ -579,7 +630,8 @@
         if (loyaltyModels.length && !loyaltyModels.some((m) => m.id === merged.loyaltyModel)) {
           merged.loyaltyModel = loyaltyModelFallback;
         }
-        merged.exchangeRates = sanitizeExchangeRates(merged.exchangeRates, merged.usdToArs);
+        merged.binanceCollateralDelta = Number(merged.binanceCollateralDelta) || 0;
+        merged.binanceRepaySim = Number(merged.binanceRepaySim) || 0;
         return merged;
       };
 
@@ -863,9 +915,27 @@
         }
         return arr;
       }, [chosenAPR, daysUntilRepay, earnEligible, loanAmount, params.earnOnCollateral, totals.withValue, earnAprTop]);
+      const totalEarnDuringPeriod = timeline.length ? timeline[timeline.length - 1].earn : 0;
+      const netInterestPeriod = interestCalc.total - totalEarnDuringPeriod;
+      const netAnnualRate = loanAmount > 0 && daysUntilRepay > 0 ? (Math.pow(1 + netInterestPeriod / loanAmount, 365 / daysUntilRepay) - 1) : 0;
 
       const overallLTVIfBorrow = useMemo(() => (totals.totalCollateralValue > 0 ? loanAmount / totals.totalCollateralValue : 0), [loanAmount, totals.totalCollateralValue]);
-      const ltvTone = overallLTVIfBorrow <= targetLtv ? "ok" : (overallLTVIfBorrow <= marginCallLtv ? "warn" : "danger");
+      const ltvTone = overallLTVIfBorrow <= ltvHealthyThreshold ? "ok" : (overallLTVIfBorrow <= ltvWarnThreshold ? "warn" : "danger");
+      const binanceCollateralDelta = Number(params.binanceCollateralDelta) || 0;
+      const binanceRepaySim = Math.max(0, Number(params.binanceRepaySim) || 0);
+      const binanceCollateralAfterAdjust = Math.max(0, totals.totalCollateralValue + binanceCollateralDelta);
+      const binanceLoanAfterRepay = Math.max(0, loanAmount - binanceRepaySim);
+      const binanceLtvAfterAdjust = binanceCollateralAfterAdjust > 0 ? binanceLoanAfterRepay / binanceCollateralAfterAdjust : 0;
+      const binanceLtvTone = binanceLtvAfterAdjust <= ltvHealthyThreshold ? "ok" : (binanceLtvAfterAdjust <= ltvWarnThreshold ? "warn" : "danger");
+      const binanceExtraCollateralNeeded = ltvHealthyThreshold > 0 ? Math.max(0, loanAmount / ltvHealthyThreshold - totals.totalCollateralValue) : 0;
+      const binanceRepayNeeded = Math.max(0, loanAmount - totals.totalCollateralValue * ltvHealthyThreshold);
+      const binanceBufferToCaution = Math.max(0, totals.totalCollateralValue * ltvWarnThreshold - loanAmount);
+      const binanceCautionLabel = ltvWarnThreshold > ltvHealthyThreshold ? `${toPct(ltvHealthyThreshold, 0)} – ${toPct(ltvWarnThreshold, 0)}` : `>${toPct(ltvHealthyThreshold, 0)}`;
+      const binanceHourlyInterest = loanAmount * (chosenAPR / 365 / 24);
+      const binanceLiquidationValue = marginCallLtv > 0 ? loanAmount / marginCallLtv : 0;
+      const binanceLiquidationBuffer = totals.totalCollateralValue - binanceLiquidationValue;
+      const binanceAdjustedLiquidationValue = marginCallLtv > 0 ? binanceLoanAfterRepay / marginCallLtv : 0;
+      const binanceAdjustedLiquidationBuffer = binanceCollateralAfterAdjust - binanceAdjustedLiquidationValue;
 
       const collateralBreakdown = useMemo(() => {
         const totalCollateral = totals.totalCollateralValue || 0;
@@ -989,16 +1059,32 @@
 
           <div className="mx-auto max-w-7xl px-4 py-6">
             <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-              <KPI title="Balance total" value={fmt(totals.total * rate, currency)} variant="button" />
-              <KPI title={loyalty ? (loyalty.kpiLabel || "Loyalty Tier") : "Programa"} value={loyalty ? loyaltyTier : "—"} subtle={loyalty && totals.total < minBalancePerks ? "(balance < mínimo)" : undefined} variant="button" />
-              <KPI title="APR crédito" value={`${(chosenAPR * 100).toFixed(2)}%`} subtle={meetsLowCost ? "Low-Cost activo" : undefined} variant="button" />
-              <KPI title="Cap. Low-Cost (≤20% LTV)" value={fmt(capLowCost * rate, currency)} subtle="potencial" variant="button" />
-              <KPI title="Tope por LTVs" value={fmt(totals.maxBorrow * rate, currency)} variant="button" />
-              <KPI title="Préstamo recomendado (≤20%)" value={fmt(recommendedLoanAtTarget * rate, currency)} variant="button" />
-              <KPI title="Interés hasta repago" value={fmt(interestCalc.total * rate, currency)} subtle={`${useMemo(()=>{const a=new Date(); const b=new Date(repayDate); return Math.ceil(Math.max(0,b-a)/86400000);},[repayDate])} días`} variant="button" />
-              <KPI title="Total a devolver" value={fmt(interestCalc.repayTotal * rate, currency)} variant="button" />
-              <KPI title="Earn mensual (hasta)" value={fmt(earnMonthly * rate, currency)} subtle={earnEligible ? (minBalancePerks > 0 ? `Savings ≥ $${minBalancePerks}` : undefined) : "no elegible"} variant="button" />
-              <KPI title="Neto mensual (Earn − crédito)" value={fmt(netMonthly * rate, currency)} tone={netMonthly>=0?"ok":"danger"} variant="button" />
+              {(isBinance ? [
+                { key: 'loan-current', title: 'Préstamo vigente', value: fmt(loanAmount * rate, currency) },
+                { key: 'loan-sim', title: 'Préstamo tras repago simulado', value: fmt(binanceLoanAfterRepay * rate, currency), subtle: binanceRepaySim > 0 ? `Repago simulado ${fmt(Math.min(binanceRepaySim, loanAmount) * rate, currency)}` : 'Sin repago' },
+                { key: 'collateral-current', title: 'Colateral actual', value: fmt(totals.totalCollateralValue * rate, currency) },
+                { key: 'collateral-adjusted', title: 'Colateral tras ajuste', value: fmt(binanceCollateralAfterAdjust * rate, currency), subtle: binanceCollateralDelta !== 0 ? `${binanceCollateralDelta > 0 ? '+' : '−'}${fmt(Math.abs(binanceCollateralDelta) * rate, currency)}` : 'Sin cambios' },
+                { key: 'ltv-current', title: 'LTV inicial', value: `${(overallLTVIfBorrow * 100).toFixed(2)}%`, tone: ltvTone, subtle: 'Con colateral actual' },
+                { key: 'ltv-sim', title: 'LTV simulado', value: `${(binanceLtvAfterAdjust * 100).toFixed(2)}%`, tone: binanceLtvTone, subtle: (binanceCollateralDelta !== 0 || binanceRepaySim > 0) ? 'Tras ajustes' : 'Sin ajustes' },
+                { key: 'apr', title: 'Tasa anual (APR)', value: `${(chosenAPR * 100).toFixed(2)}%` },
+                { key: 'apr-net', title: 'Tasa anual neta', value: `${(netAnnualRate * 100).toFixed(2)}%`, subtle: totalEarnDuringPeriod > 0 ? `Earn proyectado ${fmt(totalEarnDuringPeriod * rate, currency)}` : undefined, tone: netAnnualRate <= chosenAPR ? 'ok' : undefined },
+                { key: 'hourly-interest', title: 'Interés estimado por hora', value: fmt(binanceHourlyInterest * rate, currency), subtle: `${(chosenAPR / 365 / 24 * 100).toFixed(3)}%` },
+                { key: 'liquidation', title: `Valor colateral (${toPct(marginCallLtv, 0)} margin call)`, value: fmt(binanceLiquidationValue * rate, currency), subtle: binanceLiquidationBuffer >= 0 ? `Buffer ${fmt(binanceLiquidationBuffer * rate, currency)}` : `Déficit ${fmt(Math.abs(binanceLiquidationBuffer) * rate, currency)}`, tone: binanceLiquidationBuffer >= 0 ? 'ok' : 'danger' },
+                { key: 'repay-total', title: 'Total a devolver', value: fmt(interestCalc.repayTotal * rate, currency) },
+              ] : [
+                { key: 'balance', title: 'Balance total', value: fmt(totals.total * rate, currency) },
+                { key: 'loyalty', title: loyalty ? (loyalty.kpiLabel || 'Loyalty Tier') : 'Programa', value: loyalty ? loyaltyTier : '—', subtle: loyalty && totals.total < minBalancePerks ? '(balance < mínimo)' : undefined },
+                { key: 'apr', title: 'APR crédito', value: `${(chosenAPR * 100).toFixed(2)}%`, subtle: meetsLowCost ? 'Low-Cost activo' : undefined },
+                { key: 'cap-lowcost', title: 'Cap. Low-Cost (≤20% LTV)', value: fmt(capLowCost * rate, currency), subtle: 'potencial' },
+                { key: 'ltv-top', title: 'Tope por LTVs', value: fmt(totals.maxBorrow * rate, currency) },
+                { key: 'loan-target', title: 'Préstamo recomendado (≤20%)', value: fmt(recommendedLoanAtTarget * rate, currency) },
+                { key: 'interest-total', title: 'Interés hasta repago', value: fmt(interestCalc.total * rate, currency), subtle: `${daysUntilRepay} días` },
+                { key: 'repay-total', title: 'Total a devolver', value: fmt(interestCalc.repayTotal * rate, currency) },
+                { key: 'earn-monthly', title: 'Earn mensual (hasta)', value: fmt(earnMonthly * rate, currency), subtle: earnEligible ? (minBalancePerks > 0 ? `Savings ≥ $${minBalancePerks}` : undefined) : 'no elegible' },
+                { key: 'net-monthly', title: 'Neto mensual (Earn − crédito)', value: fmt(netMonthly * rate, currency), tone: netMonthly >= 0 ? 'ok' : 'danger' },
+              ]).map((item) => (
+                <KPI key={item.key} title={item.title} value={item.value} subtle={item.subtle} tone={item.tone} variant={item.variant || 'button'} />
+              ))}
             </section>
 
             <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -1024,21 +1110,49 @@
                   </Field>
                 </div>
                 <div className="mt-6 space-y-3">
-                  <Pill label="LTV si pides esto" value={`${(overallLTVIfBorrow*100).toFixed(2)}%`} tone={ltvTone} />
-                  <Pill label="≤20% LTV (fijo)" value={loanAmount <= recommendedLoanAtTarget ? "Sí" : "No"} tone={loanAmount <= recommendedLoanAtTarget ? "ok" : "warn"} />
-                  <Pill label="¿Califica Low-Cost?" value={meetsLowCost ? "Sí" : "No"} tone={meetsLowCost ? "ok" : "warn"} />
-                  <Pill label="Margen Low-Cost" value={fmt(lowCostHeadroom * rate, currency)} tone={lowCostHeadroom > 0 ? "ok" : "danger"} />
+                  {isBinance ? (
+                    <>
+                      <Pill label="LTV actual" value={`${(overallLTVIfBorrow*100).toFixed(2)}%`} tone={ltvTone} />
+                      <Pill label="LTV simulado" value={`${(binanceLtvAfterAdjust*100).toFixed(2)}%`} tone={binanceLtvTone} />
+                      <Pill label={`Colateral extra para ≤${toPct(ltvHealthyThreshold, 0)}`} value={fmt(binanceExtraCollateralNeeded * rate, currency)} tone={binanceExtraCollateralNeeded > 0 ? "warn" : "ok"} />
+                      <Pill label={`Repago para ≤${toPct(ltvHealthyThreshold, 0)}`} value={fmt(binanceRepayNeeded * rate, currency)} tone={binanceRepayNeeded > 0 ? "warn" : "ok"} />
+                      <Pill label={`Buffer hasta ${toPct(ltvWarnThreshold, 0)}`} value={fmt(binanceBufferToCaution * rate, currency)} tone={binanceBufferToCaution > 0 ? "ok" : "danger"} />
+                    </>
+                  ) : (
+                    <>
+                      <Pill label="LTV si pides esto" value={`${(overallLTVIfBorrow*100).toFixed(2)}%`} tone={ltvTone} />
+                      <Pill label="≤20% LTV (fijo)" value={loanAmount <= recommendedLoanAtTarget ? "Sí" : "No"} tone={loanAmount <= recommendedLoanAtTarget ? "ok" : "warn"} />
+                      <Pill label="¿Califica Low-Cost?" value={meetsLowCost ? "Sí" : "No"} tone={meetsLowCost ? "ok" : "warn"} />
+                      <Pill label="Margen Low-Cost" value={fmt(lowCostHeadroom * rate, currency)} tone={lowCostHeadroom > 0 ? "ok" : "danger"} />
+                    </>
+                  )}
                 </div>
               </Card>
 
               <Card title="Salud del préstamo">
-                <LTVGauge value={overallLTVIfBorrow} target={targetLtv} marginCall={marginCallLtv} autoRepay={autoRepayLtv} />
+                <LTVGauge value={overallLTVIfBorrow} zones={ltvGaugeZones} markers={ltvGaugeMarkers} />
                 <div className="mt-4 space-y-2">
-                  <Line label="LTV actual" value={`${(overallLTVIfBorrow*100).toFixed(1)}%`} tone={ltvTone} />
-                  <Line label="Objetivo Low-Cost" value={`${(targetLtv*100).toFixed(0)}%`} muted />
-                  <Line label="Margin call" value={`${(marginCallLtv*100).toFixed(0)}%`} muted />
-                  <Line label="Auto-repay" value={`${(autoRepayLtv*100).toFixed(0)}%`} muted />
-                  <Line label="Cap Low-Cost" value={fmt(capLowCost * rate, currency)} tone={lowCostHeadroom > 0 ? "ok" : "danger"} />
+                  {isBinance ? (
+                    <>
+                      <Line label="LTV actual" value={`${(overallLTVIfBorrow*100).toFixed(2)}%`} tone={ltvTone} />
+                      <Line label="LTV simulado" value={`${(binanceLtvAfterAdjust*100).toFixed(2)}%`} tone={binanceLtvTone} />
+                      <Line label="Rango saludable" value={`≤ ${toPct(ltvHealthyThreshold, 0)}`} muted />
+                      <Line label="Riesgo medio" value={binanceCautionLabel} muted />
+                      <Line label="Margin call" value={toPct(marginCallLtv, 0)} muted />
+                      <Line label="Auto-liquidación" value={toPct(autoRepayLtv, 0)} muted />
+                      <Line label="Colateral mínimo (margin call)" value={fmt(binanceLiquidationValue * rate, currency)} tone={binanceLiquidationBuffer >= 0 ? "ok" : "danger"} />
+                      <Line label="Buffer actual" value={binanceLiquidationBuffer >= 0 ? fmt(binanceLiquidationBuffer * rate, currency) : `Déficit ${fmt(Math.abs(binanceLiquidationBuffer) * rate, currency)}`} tone={binanceLiquidationBuffer >= 0 ? "ok" : "danger"} />
+                      <Line label="Buffer simulado" value={binanceAdjustedLiquidationBuffer >= 0 ? fmt(binanceAdjustedLiquidationBuffer * rate, currency) : `Déficit ${fmt(Math.abs(binanceAdjustedLiquidationBuffer) * rate, currency)}`} tone={binanceAdjustedLiquidationBuffer >= 0 ? "ok" : "danger"} />
+                    </>
+                  ) : (
+                    <>
+                      <Line label="LTV actual" value={`${(overallLTVIfBorrow*100).toFixed(1)}%`} tone={ltvTone} />
+                      <Line label="Objetivo Low-Cost" value={`${(targetLtv*100).toFixed(0)}%`} muted />
+                      <Line label="Margin call" value={`${(marginCallLtv*100).toFixed(0)}%`} muted />
+                      <Line label="Auto-repay" value={`${(autoRepayLtv*100).toFixed(0)}%`} muted />
+                      <Line label="Cap Low-Cost" value={fmt(capLowCost * rate, currency)} tone={lowCostHeadroom > 0 ? "ok" : "danger"} />
+                    </>
+                  )}
                 </div>
               </Card>
 
@@ -1079,8 +1193,16 @@
                     {minBalancePerks > 0 && <span className="text-xs text-neutral-500">* Elegible si balance ≥ ${minBalancePerks}.</span>}
                   </div>
 
+                  {isBinance && (
+                    <div className="col-span-2 rounded-2xl border border-neutral-200 p-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <NumberParam label="Ajuste colateral simulado (USD)" value={params.binanceCollateralDelta} onChange={(v)=> setParams({ ...params, binanceCollateralDelta: v })} />
+                      <NumberParam label="Repago simulado (USD)" value={params.binanceRepaySim} onChange={(v)=> setParams({ ...params, binanceRepaySim: Math.max(0, v) })} />
+                      <p className="sm:col-span-2 text-xs text-neutral-500">Usá estos campos para estimar cómo impactan los ajustes de colateral o repagos anticipados en el LTV y el precio de liquidación.</p>
+                    </div>
+                  )}
+
                   <div className="col-span-2 text-xs text-neutral-500">
-                    * LTV, APR por nivel y descuentos Low-Cost provienen de la plataforma elegida. Aquí solo ajustás parámetros de entorno (cambio, frecuencia, toggles).
+                    {isBinance ? 'LTV, rangos de salud y precios de liquidación se basan en las reglas flexibles de Binance. Ajusta valores para simular escenarios.' : '* LTV, APR por nivel y descuentos Low-Cost provienen de la plataforma elegida. Aquí solo ajustás parámetros de entorno (cambio, frecuencia, toggles).'}
                   </div>
                 </div>
               </Card>
@@ -1307,7 +1429,7 @@
       );
     }
 
-    function LTVGauge({ value, target, marginCall, autoRepay }) {
+    function LTVGauge({ value, zones = [], markers = [] }) {
       const clamp = (v) => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
       const size = 300;
       const center = size / 2;
@@ -1332,20 +1454,29 @@
         const sweepFlag = delta <= 0 ? 1 : 0;
         return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} ${sweepFlag} ${end.x} ${end.y}`;
       };
-      const zones = [
-        { label: 'Óptimo', max: target, color: '#22c55e', legend: `≤${Math.round(target * 100)}%` },
-        { label: 'Estable', max: marginCall, color: '#facc15', legend: `≤${Math.round(marginCall * 100)}%` },
-        { label: 'A riesgo', max: autoRepay, color: '#fb923c', legend: `≤${Math.round(autoRepay * 100)}%` },
-        { label: 'Crítico', max: 1, color: '#ef4444', legend: '> límite' },
-      ];
+      const palette = ['#22c55e', '#facc15', '#fb923c', '#ef4444'];
+      const normalizedZones = (zones.length ? zones : [
+        { label: 'Óptimo', max: 0.2, color: palette[0], legend: '≤20%', tone: 'ok' },
+        { label: 'Estable', max: 0.7, color: palette[1], legend: '≤70%', tone: 'warn' },
+        { label: 'A riesgo', max: 0.85, color: palette[2], legend: '≤85%', tone: 'danger' },
+        { label: 'Crítico', max: 1, color: palette[3], legend: '> límite', tone: 'danger' },
+      ]).map((zone, idx, arr) => ({
+        label: zone.label ?? `Zona ${idx + 1}`,
+        color: zone.color ?? palette[Math.min(idx, palette.length - 1)],
+        legend: zone.legend ?? `≤${Math.round(clamp(zone.max) * 100)}%`,
+        rawTo: clamp(zone.max),
+        tone: zone.tone ?? (idx === 0 ? 'ok' : idx === arr.length - 1 ? 'danger' : 'warn'),
+      }))
+        .filter((zone, idx, arr) => zone.rawTo > 0 && idx === arr.findIndex((z) => z.rawTo === zone.rawTo))
+        .sort((a, b) => a.rawTo - b.rawTo);
       const gap = 0.005;
-      const segments = zones.reduce((acc, zone) => {
+      const segments = normalizedZones.reduce((acc, zone) => {
         const prev = acc[acc.length - 1];
         const from = prev ? prev.rawTo : 0;
-        const capped = Math.min(zone.max, 1);
+        const capped = Math.min(Math.max(zone.rawTo, from), 1);
         if (capped <= from) return acc;
         const to = Math.max(Math.min(1, capped), from + 0.002);
-        acc.push({ from, to, rawTo: capped, color: zone.color, label: zone.label, legend: zone.legend });
+        acc.push({ from, to, rawTo: capped, color: zone.color, label: zone.label, legend: zone.legend, tone: zone.tone });
         return acc;
       }, []);
       const valuePct = clamp(value);
@@ -1361,25 +1492,18 @@
         y: center + pointerBaseRadius * Math.sin(pointerAngle - Math.PI / 2),
       };
       const pointerPath = `M ${baseLeft.x} ${baseLeft.y} L ${pointerTip.x} ${pointerTip.y} L ${baseRight.x} ${baseRight.y} Z`;
-      const status = valuePct <= target
-        ? 'Óptimo'
-        : valuePct <= marginCall
-          ? 'Estable'
-          : valuePct <= autoRepay
-            ? 'A riesgo'
-            : 'Crítico';
-      const statusTone = valuePct <= target
-        ? { text: 'text-emerald-500', bg: 'bg-emerald-100/70', dot: '#22c55e' }
-        : valuePct <= marginCall
-          ? { text: 'text-amber-500', bg: 'bg-amber-100/70', dot: '#facc15' }
-          : valuePct <= autoRepay
-            ? { text: 'text-orange-500', bg: 'bg-orange-100/70', dot: '#fb923c' }
-            : { text: 'text-rose-500', bg: 'bg-rose-100/70', dot: '#ef4444' };
-      const thresholds = [
-        { pct: target, label: `${Math.round(target * 100)}%` },
-        { pct: marginCall, label: `${Math.round(marginCall * 100)}%` },
-        { pct: autoRepay, label: `${Math.round(autoRepay * 100)}%` },
-      ].filter((t, idx, arr) => t.pct > 0 && t.pct <= 1 && arr.findIndex((tt) => tt.pct === t.pct) === idx);
+      const statusZone = segments.find((seg) => valuePct <= seg.rawTo + 1e-6) ?? segments[segments.length - 1];
+      const status = statusZone?.label ?? '—';
+      const toneKey = statusZone?.tone ?? 'warn';
+      const toneStyles = {
+        ok: { text: 'text-emerald-500', bg: 'bg-emerald-100/70', dot: '#22c55e' },
+        warn: { text: 'text-amber-500', bg: 'bg-amber-100/70', dot: '#facc15' },
+        danger: { text: 'text-rose-500', bg: 'bg-rose-100/70', dot: '#ef4444' },
+      };
+      const statusTone = toneStyles[toneKey] ?? toneStyles.warn;
+      const thresholds = (markers.length ? markers : [])
+        .map((marker, idx) => ({ pct: clamp(marker.pct), label: marker.label ?? `${Math.round(clamp(marker.pct) * 100)}%`, key: `marker-${idx}` }))
+        .filter((marker, idx, arr) => marker.pct > 0 && marker.pct <= 1 && idx === arr.findIndex((m) => m.pct === marker.pct));
       const tickOuter = radius + 6;
       const tickInner = radius - ring + 4;
       return (
@@ -1413,7 +1537,7 @@
               const to = Math.max(from + 0.001, seg.to - (isLast ? 0 : gap));
               return (
                 <path
-                  key={seg.label}
+                  key={`${seg.label}-${idx}`}
                   d={describeArc(from, to, radius)}
                   stroke={seg.color}
                   strokeWidth={ring}
@@ -1430,7 +1554,7 @@
               const labelOffset = t.pct > 0.67 ? -10 : t.pct < 0.33 ? 10 : 0;
               const labelY = t.pct < 0.2 ? inner.y + 16 : t.pct > 0.8 ? inner.y + 16 : inner.y - 10;
               return (
-                <g key={t.label}>
+                <g key={t.key ?? t.label}>
                   <line x1={outer.x} y1={outer.y} x2={inner.x} y2={inner.y} stroke="#0f172a" strokeOpacity="0.18" strokeWidth="2" strokeLinecap="round" />
                   <text
                     x={inner.x + labelOffset}
@@ -1473,10 +1597,10 @@
             {status}
           </div>
           <div className="mt-5 grid grid-cols-2 gap-3 text-[11px] font-semibold text-neutral-600">
-            {segments.map((seg) => (
-              <div key={seg.label} className="flex items-center gap-2">
+            {segments.map((seg, idx) => (
+              <div key={`${seg.label}-${idx}-legend`} className="flex items-center gap-2">
                 <span className="h-2.5 w-3.5 rounded-full" style={{ backgroundColor: seg.color }} />
-                <span>{seg.legend} {seg.label}</span>
+                <span>{seg.legend ?? seg.label}</span>
               </div>
             ))}
           </div>
