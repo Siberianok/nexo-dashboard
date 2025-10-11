@@ -3262,7 +3262,8 @@
         .filter((marker, idx, arr) => marker.pct > 0 && marker.pct <= 1 && idx === arr.findIndex((m) => m.pct === marker.pct));
       const tickOuter = radius + 6;
       const tickInner = radius - ring + 6;
-      const labelRadius = radius + 28;
+      const valueLabelY = center + radius * 0.44;
+      const statusLabelY = valueLabelY + 24;
       return (
         <div className="flex flex-col items-center">
           <svg viewBox={`0 0 ${size} ${size}`} className="w-full max-w-[340px]">
@@ -3307,22 +3308,9 @@
             {thresholds.map((t) => {
               const outer = polarPoint(t.pct, tickOuter);
               const inner = polarPoint(t.pct, tickInner);
-              const labelPoint = polarPoint(t.pct, labelRadius);
-              const labelAnchor = t.pct < 0.33 ? 'start' : t.pct > 0.67 ? 'end' : 'middle';
-              const verticalNudge = t.pct > 0.8 ? 8 : t.pct < 0.2 ? -8 : 0;
               return (
-                <g key={t.key ?? t.label}>
+                <g key={t.key ?? t.label ?? `marker-${Math.round(t.pct * 1000)}`}>
                   <line x1={outer.x} y1={outer.y} x2={inner.x} y2={inner.y} stroke="#0f172a" strokeOpacity="0.18" strokeWidth="2" strokeLinecap="round" />
-                  <text
-                    x={labelPoint.x}
-                    y={labelPoint.y + verticalNudge}
-                    textAnchor={labelAnchor}
-                    dominantBaseline="middle"
-                    className="fill-slate-500"
-                    style={{ fontSize: '10px', fontWeight: 600 }}
-                  >
-                    {t.label}
-                  </text>
                 </g>
               );
             })}
@@ -3333,7 +3321,7 @@
             <circle cx={center} cy={center} r={6} fill="#f1f5f9" />
             <text
               x={center}
-              y={center + 6}
+              y={valueLabelY}
               textAnchor="middle"
               className="fill-slate-700"
               style={{ fontWeight: 700, fontSize: '24px' }}
@@ -3342,7 +3330,7 @@
             </text>
             <text
               x={center}
-              y={center + 34}
+              y={statusLabelY}
               textAnchor="middle"
               className="fill-slate-400"
               style={{ fontWeight: 600, fontSize: '11px', letterSpacing: '0.16em' }}
