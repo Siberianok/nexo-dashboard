@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Simulador de Préstamos Mejor</title>
+  <title>Simulador de Préstamos</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
@@ -159,7 +159,32 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <script type="text/babel">
-    // Simulador de Préstamos Mejor – HTML portable (sin build, con CDN)
+    // Simulador de Préstamos – HTML portable (sin build, con CDN)
+    const DEFAULT_EXCHANGE_RATES = {
+      USD: 1,
+      ARS: 1000,
+      EUR: 0.92,
+      GBP: 0.79,
+      CAD: 1.36,
+      AUD: 1.53,
+      CHF: 0.89,
+      JPY: 157,
+      BRL: 5.0,
+      MXN: 17.2,
+    };
+
+    const SUPPORTED_CURRENCIES = [
+      { code: "USD", label: "USD — Dólar estadounidense" },
+      { code: "ARS", label: "ARS — Peso argentino" },
+      { code: "EUR", label: "EUR — Euro" },
+      { code: "GBP", label: "GBP — Libra esterlina" },
+      { code: "CAD", label: "CAD — Dólar canadiense" },
+      { code: "AUD", label: "AUD — Dólar australiano" },
+      { code: "CHF", label: "CHF — Franco suizo" },
+      { code: "JPY", label: "JPY — Yen japonés" },
+      { code: "BRL", label: "BRL — Real brasileño" },
+      { code: "MXN", label: "MXN — Peso mexicano" },
+    ];
     const { useState, useEffect, useMemo, useRef } = React;
 
     const LIVE_REFRESH_SECONDS = 5;
@@ -263,7 +288,7 @@
           { id: 7, name: "Algorand", ticker: "ALGO", qty: 0, price: 0, priceAuto: true, useAsCollateral: false },
         ],
         defaultParams: {
-          usdToArs: 1000,
+          exchangeRates: { ...DEFAULT_EXCHANGE_RATES },
           loyaltyModel: "vsRest",
           liveQuotes: true,
           refreshSec: LIVE_REFRESH_SECONDS,
@@ -273,9 +298,9 @@
         previewSnapshot: {
           loanAmount: 15000,
           repayInDays: 120,
-          showArs: false,
+          currency: "USD",
           params: {
-            usdToArs: 1050,
+            exchangeRates: { ...DEFAULT_EXCHANGE_RATES, ARS: 1050 },
             loyaltyModel: "vsRest",
             liveQuotes: true,
             earnOptIn: true,
@@ -392,7 +417,7 @@
           { id: 8, name: "XRP", ticker: "XRP", qty: 0, price: 0, priceAuto: true, useAsCollateral: false },
         ],
         defaultParams: {
-          usdToArs: 1000,
+          exchangeRates: { ...DEFAULT_EXCHANGE_RATES },
           loyaltyModel: "vsTotal",
           liveQuotes: true,
           refreshSec: LIVE_REFRESH_SECONDS,
@@ -402,9 +427,9 @@
         previewSnapshot: {
           loanAmount: 12000,
           repayInDays: 90,
-          showArs: false,
+          currency: "USD",
           params: {
-            usdToArs: 1050,
+            exchangeRates: { ...DEFAULT_EXCHANGE_RATES, ARS: 1050 },
             loyaltyModel: "vsTotal",
             liveQuotes: true,
             earnOptIn: true,
@@ -441,7 +466,7 @@
 
     const todayISO = () => new Date().toISOString().slice(0, 10);
 
-    function SimuladorPrestamosMejor() {
+    function SimuladorPrestamos() {
       const initialPlatformId = PLATFORM_IDS[0];
       const [platformId, setPlatformId] = useState(() => {
         if (typeof window === 'undefined') return initialPlatformId;
@@ -506,12 +531,36 @@
       };
       const storageKeys = useMemo(() => ({
         assets: `spm_${id}_assets_v1`,
-        params: `spm_${id}_params_v1`,
+        params: `spm_${id}_params_v2`,
       }), [id]);
       const baseAssets = useMemo(() => sanitizeAssets(platformDefaultAssets), [platformDefaultAssets, ltvByTicker, defaultLtv]);
+      const baseExchangeRates = useMemo(() => {
+        const merged = { ...DEFAULT_EXCHANGE_RATES, ...(platformDefaultParams?.exchangeRates || {}) };
+        merged.USD = 1;
+        return merged;
+      }, [platformDefaultParams]);
+      const sanitizeExchangeRates = (rawRates, legacyUsdToArs) => {
+        const next = { ...baseExchangeRates };
+        const source = rawRates && typeof rawRates === 'object' ? rawRates : {};
+        const legacy = Number.isFinite(legacyUsdToArs) ? legacyUsdToArs : null;
+        for (const { code } of SUPPORTED_CURRENCIES) {
+          if (code === 'USD') { next.USD = 1; continue; }
+          const candidate = source[code];
+          const value = Number(candidate);
+          if (Number.isFinite(value) && value > 0) {
+            next[code] = value;
+          } else if (code === 'ARS' && legacy != null && legacy > 0) {
+            next[code] = legacy;
+          } else if (!Number.isFinite(Number(next[code])) || next[code] <= 0) {
+            next[code] = DEFAULT_EXCHANGE_RATES[code] ?? 1;
+          }
+        }
+        next.USD = 1;
+        return next;
+      };
       const baseParams = useMemo(() => {
         const fallback = {
-          usdToArs: 1000,
+          exchangeRates: { ...baseExchangeRates },
           loyaltyModel: loyaltyModelFallback,
           liveQuotes: true,
           refreshSec: LIVE_REFRESH_SECONDS,
@@ -522,33 +571,54 @@
         if (loyaltyModels.length && !loyaltyModels.some((m) => m.id === merged.loyaltyModel)) {
           merged.loyaltyModel = loyaltyModelFallback;
         }
+        merged.exchangeRates = sanitizeExchangeRates(merged.exchangeRates, merged.usdToArs);
         return merged;
-      }, [platformDefaultParams, loyaltyModelFallback, loyaltyModels]);
-
-      useEffect(() => {
-        if (typeof document === 'undefined') return;
-        const bodyEl = document.body;
-        if (!bodyEl) return;
-        PLATFORM_THEME_CLASSES.forEach((cls) => {
-          if (cls) bodyEl.classList.remove(cls);
-        });
-        bodyEl.classList.add(themeClass);
-        return () => {
-          if (!bodyEl) return;
-          bodyEl.classList.remove(themeClass);
-          if (!PLATFORM_THEME_CLASSES.some((cls) => bodyEl.classList.contains(cls))) {
-            bodyEl.classList.add('theme-nexo');
-          }
-        };
-      }, [themeClass]);
+      }, [platformDefaultParams, loyaltyModelFallback, loyaltyModels, baseExchangeRates]);
       const sanitizeParams = (raw) => {
         const merged = { ...baseParams, ...(raw || {}) };
         if (loyaltyModels.length && !loyaltyModels.some((m) => m.id === merged.loyaltyModel)) {
           merged.loyaltyModel = loyaltyModelFallback;
         }
-        merged.liveQuotes = true;
-        merged.refreshSec = LIVE_REFRESH_SECONDS;
+        merged.exchangeRates = sanitizeExchangeRates(merged.exchangeRates, merged.usdToArs);
         return merged;
+      };
+
+      const applyPreviewSnapshot = () => {
+        if (!previewSnapshot) return;
+        const {
+          assets: previewAssets,
+          params: previewParams,
+          loanAmount: previewLoanAmount,
+          repayDate: previewRepayDate,
+          repayInDays,
+          currency: previewCurrency,
+        } = previewSnapshot;
+
+        if (Array.isArray(previewAssets)) {
+          setAssets(sanitizeAssets(previewAssets));
+        }
+
+        if (previewParams) {
+          setParams(sanitizeParams(previewParams));
+        }
+
+        if (Number.isFinite(previewLoanAmount)) {
+          setLoanAmount(Number(previewLoanAmount) || 0);
+        }
+
+        if (typeof previewCurrency === 'string' && previewCurrency) {
+          setSelectedCurrency(previewCurrency);
+        } else if (typeof previewSnapshot?.showArs === 'boolean') {
+          setSelectedCurrency(previewSnapshot.showArs ? 'ARS' : 'USD');
+        }
+
+        if (previewRepayDate) {
+          setRepayDate(previewRepayDate);
+        } else if (Number.isFinite(repayInDays)) {
+          const d = new Date();
+          d.setDate(d.getDate() + Math.max(0, Math.round(repayInDays)));
+          setRepayDate(d.toISOString().slice(0, 10));
+        }
       };
 
       const [assets, setAssets] = useState(() => {
@@ -618,12 +688,18 @@
       const [repayDate, setRepayDate] = useState(() => {
         const d = new Date(); d.setDate(d.getDate() + 60); return d.toISOString().slice(0, 10);
       });
-      const [showArs, setShowArs] = useState(false);
+      const [selectedCurrency, setSelectedCurrency] = useState(() => {
+        if (previewSnapshot?.currency) return previewSnapshot.currency;
+        if (typeof previewSnapshot?.showArs === 'boolean') {
+          return previewSnapshot.showArs ? 'ARS' : 'USD';
+        }
+        return 'USD';
+      });
       const [lastPriceTs, setLastPriceTs] = useState(null);
       const [liveError, setLiveError] = useState(null);
 
-      const currency = showArs ? "ARS" : "USD";
-      const rate = showArs ? params.usdToArs : 1;
+      const currency = selectedCurrency;
+      const rate = params.exchangeRates?.[currency] ?? 1;
       const pct = (x) => (x == null ? "—" : (x * 100).toFixed(1) + "%");
 
       const tickerToId = (ticker) => {
@@ -868,7 +944,7 @@
             <div className="mx-auto max-w-7xl px-4 py-6">
               <header className="flex flex-wrap items-end justify-between gap-4">
                 <div>
-                  <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Simulador de Préstamos Mejor — {platformName}</h1>
+                  <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Simulador de Préstamos</h1>
                   <p className={`${accentClass}`}>{platformTagline}</p>
                 </div>
                 <div className="flex items-center gap-4">
@@ -880,10 +956,26 @@
                       ))}
                     </select>
                   </div>
-                  <label className="flex items-center gap-2 text-sm font-medium">
-                    <span>Mostrar en ARS</span>
-                    <input type="checkbox" checked={showArs} onChange={(e) => setShowArs(e.target.checked)} className="h-5 w-5" />
-                  </label>
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <label htmlFor="currency-select">Mostrar en</label>
+                    <select
+                      id="currency-select"
+                      value={currency}
+                      onChange={(e) => setSelectedCurrency(e.target.value)}
+                      className="rounded-xl border border-white/40 bg-white/15 px-3 py-1.5 text-sm font-semibold text-white shadow-sm backdrop-blur focus:outline-none focus:ring-2 focus:ring-white/80"
+                    >
+                      {SUPPORTED_CURRENCIES.map((option) => (
+                        <option
+                          key={option.code}
+                          value={option.code}
+                          className="text-neutral-900"
+                          title={option.label}
+                        >
+                          {option.code}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               </header>
             </div>
@@ -946,7 +1038,17 @@
 
               <Card title="Parámetros (solo entorno)">
                 <div className="grid grid-cols-2 gap-3">
-                    <NumberParam label="USD→ARS" value={params.usdToArs} onChange={(v)=> setParams({ ...params, usdToArs: v })} ringClass={focusRingClass} />
+                  {SUPPORTED_CURRENCIES.filter((option) => option.code !== 'USD').map((option) => (
+                    <NumberParam
+                      key={option.code}
+                      label={`USD→${option.code}`}
+                      value={params.exchangeRates?.[option.code] ?? baseExchangeRates[option.code] ?? DEFAULT_EXCHANGE_RATES[option.code] ?? 1}
+                      onChange={(v) => setParams({
+                        ...params,
+                        exchangeRates: { ...params.exchangeRates, [option.code]: v },
+                      })}
+                    />
+                  ))}
 
                   <div className="col-span-2 rounded-2xl border border-neutral-200 p-3 flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-2 text-sm font-medium">
@@ -1556,7 +1658,7 @@
     if (typeof window !== 'undefined') { try { runDevTests(); } catch (_) {} }
 
     const root = ReactDOM.createRoot(document.getElementById('root'));
-    root.render(<SimuladorPrestamosMejor />);
+    root.render(<SimuladorPrestamos />);
   </script>
 </body>
 </html>
