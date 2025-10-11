@@ -162,6 +162,8 @@
     // Simulador de Préstamos Mejor – HTML portable (sin build, con CDN)
     const { useState, useEffect, useMemo, useRef } = React;
 
+    const LIVE_REFRESH_SECONDS = 5;
+
     const PLATFORM_CONFIGS = {
       nexo: {
         id: "nexo",
@@ -264,7 +266,7 @@
           usdToArs: 1000,
           loyaltyModel: "vsRest",
           liveQuotes: true,
-          refreshSec: 60,
+          refreshSec: LIVE_REFRESH_SECONDS,
           earnOptIn: true,
           earnOnCollateral: true,
         },
@@ -275,10 +277,10 @@
           params: {
             usdToArs: 1050,
             loyaltyModel: "vsRest",
-            liveQuotes: false,
+            liveQuotes: true,
             earnOptIn: true,
             earnOnCollateral: true,
-            refreshSec: 60,
+            refreshSec: LIVE_REFRESH_SECONDS,
           },
           assets: [
             { id: 1, name: "Bitcoin", ticker: "BTC", qty: 0.6, price: 42000, priceAuto: false, useAsCollateral: true },
@@ -393,7 +395,7 @@
           usdToArs: 1000,
           loyaltyModel: "vsTotal",
           liveQuotes: true,
-          refreshSec: 60,
+          refreshSec: LIVE_REFRESH_SECONDS,
           earnOptIn: true,
           earnOnCollateral: true,
         },
@@ -404,10 +406,10 @@
           params: {
             usdToArs: 1050,
             loyaltyModel: "vsTotal",
-            liveQuotes: false,
+            liveQuotes: true,
             earnOptIn: true,
             earnOnCollateral: true,
-            refreshSec: 60,
+            refreshSec: LIVE_REFRESH_SECONDS,
           },
           assets: [
             { id: 1, name: "Bitcoin", ticker: "BTC", qty: 0.8, price: 42000, priceAuto: false, useAsCollateral: true },
@@ -467,7 +469,6 @@
         defaultParams: platformDefaultParams = {},
         exportPrefix = "simulador_prestamos",
         disclaimers = {},
-        previewSnapshot,
       } = platform;
 
       const themeClass = classes.body || "theme-nexo";
@@ -513,7 +514,7 @@
           usdToArs: 1000,
           loyaltyModel: loyaltyModelFallback,
           liveQuotes: true,
-          refreshSec: 60,
+          refreshSec: LIVE_REFRESH_SECONDS,
           earnOptIn: true,
           earnOnCollateral: true,
         };
@@ -545,43 +546,9 @@
         if (loyaltyModels.length && !loyaltyModels.some((m) => m.id === merged.loyaltyModel)) {
           merged.loyaltyModel = loyaltyModelFallback;
         }
+        merged.liveQuotes = true;
+        merged.refreshSec = LIVE_REFRESH_SECONDS;
         return merged;
-      };
-
-      const applyPreviewSnapshot = () => {
-        if (!previewSnapshot) return;
-        const {
-          assets: previewAssets,
-          params: previewParams,
-          loanAmount: previewLoanAmount,
-          repayDate: previewRepayDate,
-          repayInDays,
-          showArs: previewShowArs,
-        } = previewSnapshot;
-
-        if (Array.isArray(previewAssets)) {
-          setAssets(sanitizeAssets(previewAssets));
-        }
-
-        if (previewParams) {
-          setParams(sanitizeParams(previewParams));
-        }
-
-        if (Number.isFinite(previewLoanAmount)) {
-          setLoanAmount(Number(previewLoanAmount) || 0);
-        }
-
-        if (typeof previewShowArs === 'boolean') {
-          setShowArs(previewShowArs);
-        }
-
-        if (previewRepayDate) {
-          setRepayDate(previewRepayDate);
-        } else if (Number.isFinite(repayInDays)) {
-          const d = new Date();
-          d.setDate(d.getDate() + Math.max(0, Math.round(repayInDays)));
-          setRepayDate(d.toISOString().slice(0, 10));
-        }
       };
 
       const [assets, setAssets] = useState(() => {
@@ -711,7 +678,7 @@
       useEffect(() => {
         if (!params.liveQuotes) return;
         fetchLivePricesNow();
-        const sec = Math.max(10, Number(params.refreshSec || 60));
+        const sec = Math.max(LIVE_REFRESH_SECONDS, Number(params.refreshSec || LIVE_REFRESH_SECONDS));
         const t = setInterval(fetchLivePricesNow, sec * 1000);
         return () => clearInterval(t);
       }, [params.liveQuotes, params.refreshSec, tickersKey]);
@@ -913,11 +880,6 @@
                       ))}
                     </select>
                   </div>
-                  {previewSnapshot ? (
-                    <button type="button" onClick={applyPreviewSnapshot} className="nx-btn nx-btn-ghost text-sm whitespace-nowrap">
-                      Cargar vista previa
-                    </button>
-                  ) : null}
                   <label className="flex items-center gap-2 text-sm font-medium">
                     <span>Mostrar en ARS</span>
                     <input type="checkbox" checked={showArs} onChange={(e) => setShowArs(e.target.checked)} className="h-5 w-5" />
@@ -987,13 +949,11 @@
                     <NumberParam label="USD→ARS" value={params.usdToArs} onChange={(v)=> setParams({ ...params, usdToArs: v })} ringClass={focusRingClass} />
 
                   <div className="col-span-2 rounded-2xl border border-neutral-200 p-3 flex flex-wrap items-center gap-3">
-                    <label className="flex items-center gap-2 text-sm font-medium">
-                      <input type="checkbox" className="h-5 w-5" checked={!!params.liveQuotes} onChange={(e)=> setParams({ ...params, liveQuotes: e.target.checked })} />
-                      Precios en vivo (CoinGecko)
-                    </label>
-                    <div className="w-48">
-                        <NumberParam label="Frecuencia (s)" value={params.refreshSec ?? 60} onChange={(v)=> setParams({ ...params, refreshSec: v })} ringClass={focusRingClass} />
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">Activo</span>
+                      <span>Precios en tiempo real (CoinGecko)</span>
                     </div>
+                    <span className="text-xs text-neutral-500">Actualización en tiempo real cada {LIVE_REFRESH_SECONDS} segundos.</span>
                     <button onClick={fetchLivePricesNow} className="nx-btn text-sm">Actualizar ahora</button>
                     <span className="text-xs text-neutral-500">{lastPriceTs ? `Últ. actualización: ${new Date(lastPriceTs).toLocaleTimeString()}` : '— sin actualizar —'}</span>
                     {liveError && <span className="text-xs text-rose-600">Error: {liveError}</span>}
