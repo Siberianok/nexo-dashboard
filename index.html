@@ -10,20 +10,86 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     html,body{height:100%}
-    body{font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"}
+    body{
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background:var(--theme-surface-soft, linear-gradient(180deg,#eef3ff 0%, #f6f9ff 100%));
+      transition:background .3s ease;
+    }
+    :root{
+      --theme-surface-soft:linear-gradient(180deg,#eef3ff 0%, #f6f9ff 100%);
+      --theme-card-border:#dfe6ff;
+      --theme-card-shadow:0 12px 30px rgba(16,35,90,.08);
+      --theme-kpi-border:#e6eaf5;
+      --theme-kpi-bg:linear-gradient(155deg,#1c3fa0 0%,#2f5de0 45%,#4c8fff 100%);
+      --theme-kpi-shadow:0 16px 30px rgba(8,20,66,0.35);
+      --theme-kpi-hover-shadow:0 22px 36px rgba(12,28,84,0.42);
+      --theme-kpi-active-shadow:0 10px 18px rgba(10,24,70,0.3);
+      --theme-btn-bg:linear-gradient(155deg,#2451d5 0%,#3368f0 45%,#4a8cff 100%);
+      --theme-btn-text:#fff;
+      --theme-btn-border:rgba(255,255,255,0.22);
+      --theme-btn-shadow:0 14px 28px rgba(15,33,90,0.32);
+      --theme-btn-hover-shadow:0 20px 34px rgba(12,30,88,0.4);
+      --theme-btn-active-shadow:0 10px 20px rgba(10,26,70,0.25);
+      --theme-ghost-bg:linear-gradient(150deg,#ffffff 0%,#f1f5ff 100%);
+      --theme-ghost-text:#1e2f67;
+      --theme-ghost-border:rgba(30,64,175,0.16);
+      --theme-ghost-shadow:0 10px 22px rgba(15,30,70,0.12);
+      --theme-ghost-hover-shadow:0 16px 26px rgba(15,30,70,0.18);
+    }
+    .theme-nexo{
+      --theme-surface-soft:linear-gradient(180deg,#eef3ff 0%, #f6f9ff 100%);
+      --theme-card-border:#dfe6ff;
+      --theme-card-shadow:0 12px 30px rgba(16,35,90,.08);
+      --theme-kpi-border:#e6eaf5;
+      --theme-kpi-bg:linear-gradient(155deg,#1c3fa0 0%,#2f5de0 45%,#4c8fff 100%);
+      --theme-kpi-shadow:0 16px 30px rgba(8,20,66,0.35);
+      --theme-kpi-hover-shadow:0 22px 36px rgba(12,28,84,0.42);
+      --theme-kpi-active-shadow:0 10px 18px rgba(10,24,70,0.3);
+      --theme-btn-bg:linear-gradient(155deg,#2451d5 0%,#3368f0 45%,#4a8cff 100%);
+      --theme-btn-text:#fff;
+      --theme-btn-border:rgba(255,255,255,0.22);
+      --theme-btn-shadow:0 14px 28px rgba(15,33,90,0.32);
+      --theme-btn-hover-shadow:0 20px 34px rgba(12,30,88,0.4);
+      --theme-btn-active-shadow:0 10px 20px rgba(10,26,70,0.25);
+      --theme-ghost-bg:linear-gradient(150deg,#ffffff 0%,#f1f5ff 100%);
+      --theme-ghost-text:#1e2f67;
+      --theme-ghost-border:rgba(30,64,175,0.16);
+      --theme-ghost-shadow:0 10px 22px rgba(15,30,70,0.12);
+      --theme-ghost-hover-shadow:0 16px 26px rgba(15,30,70,0.18);
+    }
+    .theme-binance{
+      --theme-surface-soft:linear-gradient(180deg,#fff6e6 0%,#ffedcc 100%);
+      --theme-card-border:rgba(251,191,36,0.35);
+      --theme-card-shadow:0 12px 30px rgba(146,64,14,0.15);
+      --theme-kpi-border:rgba(253,224,71,0.45);
+      --theme-kpi-bg:linear-gradient(155deg,#d97706 0%,#f59e0b 45%,#fbbf24 100%);
+      --theme-kpi-shadow:0 16px 30px rgba(146,64,14,0.32);
+      --theme-kpi-hover-shadow:0 22px 36px rgba(124,45,18,0.42);
+      --theme-kpi-active-shadow:0 10px 18px rgba(124,45,18,0.3);
+      --theme-btn-bg:linear-gradient(155deg,#d97706 0%,#f59e0b 45%,#fbbf24 100%);
+      --theme-btn-text:#fff7db;
+      --theme-btn-border:rgba(255,255,255,0.24);
+      --theme-btn-shadow:0 14px 28px rgba(146,64,14,0.28);
+      --theme-btn-hover-shadow:0 20px 34px rgba(124,45,18,0.35);
+      --theme-btn-active-shadow:0 10px 20px rgba(124,45,18,0.25);
+      --theme-ghost-bg:linear-gradient(150deg,#ffffff 0%,#fff7e6 100%);
+      --theme-ghost-text:#7c2d12;
+      --theme-ghost-border:rgba(217,119,6,0.3);
+      --theme-ghost-shadow:0 10px 22px rgba(146,64,14,0.16);
+      --theme-ghost-hover-shadow:0 16px 26px rgba(124,45,18,0.22);
+    }
     /* Paleta y estilos base */
     .nx-gradient{background:linear-gradient(135deg,#0b1e4b 0%,#1b44a6 50%,#2052c1 100%)}
     .bn-gradient{background:linear-gradient(135deg,#1f2937 0%,#f59e0b 45%,#f97316 100%)}
-    .nx-gradient-soft{background:linear-gradient(180deg,#eef3ff 0%, #f6f9ff 100%)}
-    .nx-card{border:1px solid #dfe6ff; box-shadow:0 12px 30px rgba(16,35,90,.08); border-radius:1.5rem}
-    .nx-kpi{border:1px solid #e6eaf5}
+    .nx-card{border:1px solid var(--theme-card-border); box-shadow:var(--theme-card-shadow); border-radius:1.5rem; transition:box-shadow .3s ease,border-color .3s ease;}
+    .nx-kpi{border:1px solid var(--theme-kpi-border); transition:border-color .3s ease;}
     .nx-kpi-btn{
       position:relative;
       border-radius:1.25rem;
-      background:linear-gradient(155deg,#1c3fa0 0%,#2f5de0 45%,#4c8fff 100%);
+      background:var(--theme-kpi-bg);
       color:#fff;
       border:1px solid rgba(255,255,255,0.22);
-      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),0 16px 30px rgba(8,20,66,0.35);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),var(--theme-kpi-shadow);
       transition:transform .25s ease, box-shadow .25s ease, filter .25s ease;
     }
     .nx-kpi-btn::after{
@@ -37,11 +103,11 @@
     .nx-kpi-btn:hover{
       transform:translateY(-3px);
       filter:brightness(1.02);
-      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),0 22px 36px rgba(12,28,84,0.42);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),var(--theme-kpi-hover-shadow);
     }
     .nx-kpi-btn:active{
       transform:translateY(1px);
-      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),0 10px 18px rgba(10,24,70,0.3);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),var(--theme-kpi-active-shadow);
     }
     .nx-btn{
       position:relative;
@@ -49,38 +115,42 @@
       align-items:center;
       justify-content:center;
       gap:.4rem;
-      background:linear-gradient(155deg,#2451d5 0%,#3368f0 45%,#4a8cff 100%);
-      color:#fff;
+      background:var(--theme-btn-bg);
+      color:var(--theme-btn-text);
       border-radius:1rem;
       padding:.55rem 1.35rem;
       font-weight:600;
-      border:1px solid rgba(255,255,255,0.22);
-      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),0 14px 28px rgba(15,33,90,0.32);
+      border:1px solid var(--theme-btn-border);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),var(--theme-btn-shadow);
       transition:transform .22s ease, box-shadow .22s ease, filter .22s ease;
     }
     .nx-btn:hover{
       transform:translateY(-2px);
       filter:brightness(1.03);
-      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),0 20px 34px rgba(12,30,88,0.4);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),var(--theme-btn-hover-shadow);
     }
     .nx-btn:active{
       transform:translateY(1px);
-      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),0 10px 20px rgba(10,26,70,0.25);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),var(--theme-btn-active-shadow);
     }
     .nx-btn-ghost{
-      background:linear-gradient(150deg,#ffffff 0%,#f1f5ff 100%);
-      color:#1e2f67;
-      border:1px solid rgba(30,64,175,0.16);
-      box-shadow:inset 0 1px 0 rgba(255,255,255,0.8),0 10px 22px rgba(15,30,70,0.12);
+      background:var(--theme-ghost-bg);
+      color:var(--theme-ghost-text);
+      border:1px solid var(--theme-ghost-border);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.8),var(--theme-ghost-shadow);
+      transition:transform .22s ease, box-shadow .22s ease, filter .22s ease;
     }
     .nx-btn-ghost:hover{
       filter:brightness(1.02);
-      box-shadow:inset 0 1px 0 rgba(255,255,255,0.8),0 16px 26px rgba(15,30,70,0.18);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.8),var(--theme-ghost-hover-shadow);
+    }
+    .nx-btn-ghost:active{
+      transform:translateY(1px);
     }
     .nx-btn-sm{padding:.35rem .95rem; font-size:.8rem; border-radius:.9rem;}
   </style>
 </head>
-<body class="nx-gradient-soft">
+<body class="theme-nexo">
   <div id="root"></div>
 
   <!-- React 18 UMD + ReactDOM + Babel (para compilar JSX en el navegador) -->
@@ -102,6 +172,8 @@
         classes: {
           header: "nx-gradient",
           accent: "text-blue-100/90",
+          body: "theme-nexo",
+          focusRing: "focus:ring-blue-700",
         },
         coingeckoIds: {
           BTC: "bitcoin",
@@ -232,6 +304,8 @@
         classes: {
           header: "bn-gradient",
           accent: "text-amber-100/90",
+          body: "theme-binance",
+          focusRing: "focus:ring-amber-500",
         },
         coingeckoIds: {
           BTC: "bitcoin",
@@ -354,6 +428,11 @@
       },
     };
 
+    const PLATFORM_THEME_CLASSES = Array.from(new Set([
+      "theme-nexo",
+      ...Object.values(PLATFORM_CONFIGS).map((cfg) => cfg?.classes?.body).filter(Boolean),
+    ]));
+
     const PLATFORM_IDS = Object.keys(PLATFORM_CONFIGS);
     const GLOBAL_COINGECKO_IDS = Object.values(PLATFORM_CONFIGS).reduce((acc, cfg) => ({ ...acc, ...(cfg.coingeckoIds || {}) }), {});
 
@@ -392,6 +471,8 @@
         disclaimers = {},
       } = platform;
 
+      const themeClass = classes.body || "theme-nexo";
+      const focusRingClass = classes.focusRing || "focus:ring-blue-700";
       const headerClass = classes.header || "nx-gradient";
       const accentClass = classes.accent || "text-blue-100/90";
       const platformTagline = tagline || "Datos en vivo y cálculos de Earn (flexible) y crédito.";
@@ -443,6 +524,23 @@
         }
         return merged;
       }, [platformDefaultParams, loyaltyModelFallback, loyaltyModels]);
+
+      useEffect(() => {
+        if (typeof document === 'undefined') return;
+        const bodyEl = document.body;
+        if (!bodyEl) return;
+        PLATFORM_THEME_CLASSES.forEach((cls) => {
+          if (cls) bodyEl.classList.remove(cls);
+        });
+        bodyEl.classList.add(themeClass);
+        return () => {
+          if (!bodyEl) return;
+          bodyEl.classList.remove(themeClass);
+          if (!PLATFORM_THEME_CLASSES.some((cls) => bodyEl.classList.contains(cls))) {
+            bodyEl.classList.add('theme-nexo');
+          }
+        };
+      }, [themeClass]);
       const sanitizeParams = (raw) => {
         const merged = { ...baseParams, ...(raw || {}) };
         if (loyaltyModels.length && !loyaltyModels.some((m) => m.id === merged.loyaltyModel)) {
@@ -809,10 +907,22 @@
               <Card title="Préstamo & Repago">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 justify-items-center">
                   <Field label={`Monto a pedir (${currency})`} align="center" className="w-full max-w-xs">
-                    <input type="number" className="w-full rounded-full border border-neutral-300 px-5 py-3 text-center text-lg font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-700" value={(loanAmount * rate).toString()} onChange={(e)=> setLoanAmount(Number(e.target.value) / rate)} min={0} />
+                    <input
+                      type="number"
+                      className={`w-full rounded-full border border-neutral-300 px-5 py-3 text-center text-lg font-semibold shadow-sm focus:outline-none focus:ring-2 ${focusRingClass}`}
+                      value={(loanAmount * rate).toString()}
+                      onChange={(e)=> setLoanAmount(Number(e.target.value) / rate)}
+                      min={0}
+                    />
                   </Field>
                   <Field label="Fecha de repago" align="center" className="w-full max-w-xs">
-                    <input type="date" className="w-full rounded-full border border-neutral-300 px-5 py-3 text-center text-lg font-semibold shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-700" value={repayDate} min={todayISO()} onChange={(e)=> setRepayDate(e.target.value)} />
+                    <input
+                      type="date"
+                      className={`w-full rounded-full border border-neutral-300 px-5 py-3 text-center text-lg font-semibold shadow-sm focus:outline-none focus:ring-2 ${focusRingClass}`}
+                      value={repayDate}
+                      min={todayISO()}
+                      onChange={(e)=> setRepayDate(e.target.value)}
+                    />
                   </Field>
                 </div>
                 <div className="mt-6 space-y-3">
@@ -836,7 +946,7 @@
 
               <Card title="Parámetros (solo entorno)">
                 <div className="grid grid-cols-2 gap-3">
-                  <NumberParam label="USD→ARS" value={params.usdToArs} onChange={(v)=> setParams({ ...params, usdToArs: v })} />
+                    <NumberParam label="USD→ARS" value={params.usdToArs} onChange={(v)=> setParams({ ...params, usdToArs: v })} ringClass={focusRingClass} />
 
                   <div className="col-span-2 rounded-2xl border border-neutral-200 p-3 flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-2 text-sm font-medium">
@@ -1053,10 +1163,10 @@
         </label>
       );
     }
-    function NumberParam({ label, value, onChange, step = 1 }) {
+    function NumberParam({ label, value, onChange, step = 1, ringClass = "focus:ring-blue-700" }) {
       return (
         <Field label={label}>
-          <input type="number" value={value} step={step} onChange={(e) => onChange(Number(e.target.value))} className="w-full rounded-2xl border border-neutral-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-700 text-right" />
+          <input type="number" value={value} step={step} onChange={(e) => onChange(Number(e.target.value))} className={`w-full rounded-2xl border border-neutral-300 px-3 py-2 focus:outline-none focus:ring-2 ${ringClass} text-right`} />
         </Field>
       );
     }
