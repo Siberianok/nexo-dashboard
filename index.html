@@ -229,9 +229,10 @@
       { code: "BRL", label: "BRL — Real brasileño" },
       { code: "MXN", label: "MXN — Peso mexicano" },
     ];
-    const { useState, useEffect, useMemo, useRef } = React;
+    const { useState, useEffect, useMemo, useRef, useCallback } = React;
 
     const LIVE_REFRESH_SECONDS = 5;
+    const FX_SYMBOLS = SUPPORTED_CURRENCIES.filter((c) => c.code !== "USD").map((c) => c.code);
 
     const PLATFORM_CONFIGS = {
       nexo: {
@@ -1042,7 +1043,7 @@
         merged.USD = 1;
         return merged;
       }, [platformDefaultParams]);
-      const sanitizeExchangeRates = (rawRates, legacyUsdToArs) => {
+      const sanitizeExchangeRates = useCallback((rawRates, legacyUsdToArs) => {
         const next = { ...baseExchangeRates };
         const source = rawRates && typeof rawRates === 'object' ? rawRates : {};
         const legacy = Number.isFinite(legacyUsdToArs) ? legacyUsdToArs : null;
@@ -1060,7 +1061,7 @@
         }
         next.USD = 1;
         return next;
-      };
+      }, [baseExchangeRates]);
       const baseParams = useMemo(() => {
         const fallback = {
           exchangeRates: { ...baseExchangeRates },
@@ -1149,6 +1150,37 @@
         return baseParams;
       });
 
+      const [fxMeta, setFxMeta] = useState({ loading: false, error: null, lastUpdated: null });
+
+      const fetchOfficialFxRates = useCallback(async () => {
+        if (!FX_SYMBOLS.length) return;
+        setFxMeta((prev) => ({ ...prev, loading: true, error: null }));
+        try {
+          const url = `https://api.exchangerate.host/latest?base=USD&symbols=${FX_SYMBOLS.join(',')}`;
+          const res = await fetch(url);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          const fetched = data?.rates || {};
+          const sanitized = {};
+          for (const code of FX_SYMBOLS) {
+            const value = Number(fetched?.[code]);
+            if (Number.isFinite(value) && value > 0) {
+              sanitized[code] = value;
+            }
+          }
+          if (!Object.keys(sanitized).length) {
+            throw new Error('Sin datos válidos de cotización');
+          }
+          setParams((prev) => ({
+            ...prev,
+            exchangeRates: sanitizeExchangeRates({ ...prev.exchangeRates, ...sanitized }),
+          }));
+          setFxMeta({ loading: false, error: null, lastUpdated: Date.now() });
+        } catch (err) {
+          setFxMeta((prev) => ({ ...prev, loading: false, error: String(err?.message || err) }));
+        }
+      }, [FX_SYMBOLS, sanitizeExchangeRates, setParams]);
+
       useEffect(() => {
         if (typeof window === 'undefined') return;
         try { localStorage.setItem('spm_platform', platformId); } catch {}
@@ -1179,6 +1211,10 @@
           return baseParams;
         });
       }, [storageKeys.params, baseParams]);
+
+      useEffect(() => {
+        fetchOfficialFxRates();
+      }, [fetchOfficialFxRates]);
 
       useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -1639,6 +1675,19 @@
                     <button onClick={fetchLivePricesNow} className="nx-btn text-sm">Actualizar ahora</button>
                     <span className="text-xs text-neutral-500">{lastPriceTs ? `Últ. actualización: ${new Date(lastPriceTs).toLocaleTimeString()}` : '— sin actualizar —'}</span>
                     {liveError && <span className="text-xs text-rose-600">Error: {liveError}</span>}
+                  </div>
+
+                  <div className="col-span-2 rounded-2xl border border-neutral-200 p-3 flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">FX</span>
+                      <span>Cotizaciones oficiales (USD base)</span>
+                    </div>
+                    <button onClick={fetchOfficialFxRates} disabled={fxMeta.loading} className="nx-btn text-sm disabled:cursor-not-allowed disabled:opacity-60">
+                      {fxMeta.loading ? 'Actualizando…' : 'Actualizar cotizaciones'}
+                    </button>
+                    <span className="text-xs text-neutral-500">{fxMeta.lastUpdated ? `Últ. actualización: ${new Date(fxMeta.lastUpdated).toLocaleTimeString()}` : '— sin actualizar —'}</span>
+                    <span className="text-xs text-neutral-500">Fuente: exchangerate.host (tipo de cambio oficial)</span>
+                    {fxMeta.error && <span className="text-xs text-rose-600">Error: {fxMeta.error}</span>}
                   </div>
 
                   <div className="col-span-2 rounded-2xl border border-neutral-200 p-3 flex flex-wrap items-center gap-3">
