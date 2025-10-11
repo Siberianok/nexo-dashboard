@@ -1461,6 +1461,8 @@
 
       const inFlight = useRef(false);
       const importInputRef = useRef(null);
+      const exportMenuRef = useRef(null);
+      const [exportMenuOpen, setExportMenuOpen] = useState(false);
       async function fetchLivePricesNow() {
         try {
           if (inFlight.current) return; inFlight.current = true;
@@ -1501,6 +1503,89 @@
           setLastPriceTs(Date.now());
         } catch (e) { setLiveError(String(e?.message || e)); }
       }
+
+      const closeExportMenu = () => setExportMenuOpen(false);
+
+      const handleExportJSON = () => {
+        const blob = new Blob([JSON.stringify({ assets, params, cashflowPlan, benchmarkConfig }, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${exportPrefix}_${Date.now()}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        closeExportMenu();
+      };
+
+      const handleImportRequest = () => {
+        closeExportMenu();
+        importInputRef.current?.click();
+      };
+
+      const handleResetParams = () => {
+        if (confirm("¿Restablecer parámetros por defecto?")) {
+          localStorage.removeItem(storageKeys.params);
+          setParams({ ...baseParams });
+        }
+        closeExportMenu();
+      };
+
+      const handleResetAssets = () => {
+        if (confirm("¿Restablecer activos por defecto?")) {
+          localStorage.removeItem(storageKeys.assets);
+          setAssets(sanitizeAssets(platformDefaultAssets));
+        }
+        closeExportMenu();
+      };
+
+      const handleResetPlanners = () => {
+        if (confirm("¿Limpiar plan de cashflow y benchmark?")) {
+          localStorage.removeItem(storageKeys.cashflow);
+          localStorage.removeItem(storageKeys.benchmark);
+          setCashflowPlan(baseCashflowPlan);
+          setBenchmarkConfig(baseBenchmarkConfig);
+        }
+        closeExportMenu();
+      };
+
+      const handleImportFile = (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        file.text()
+          .then((text) => {
+            try {
+              const parsed = JSON.parse(text);
+              if (parsed.assets) setAssets(sanitizeAssets(parsed.assets));
+              if (parsed.params) setParams(sanitizeParams(parsed.params));
+              if (parsed.cashflowPlan) setCashflowPlan(sanitizeCashflowPlan(parsed.cashflowPlan, repayDate));
+              if (parsed.benchmarkConfig) setBenchmarkConfig(sanitizeBenchmarkConfig(parsed.benchmarkConfig));
+            } catch (err) {
+              alert(`No se pudo importar el archivo: ${err?.message || err}`);
+            }
+          })
+          .finally(() => {
+            if (importInputRef.current) importInputRef.current.value = '';
+          });
+      };
+
+      useEffect(() => {
+        if (!exportMenuOpen) return;
+        if (typeof document === 'undefined') return;
+        const handleClick = (event) => {
+          if (!exportMenuRef.current) return;
+          if (exportMenuRef.current.contains(event.target)) return;
+          closeExportMenu();
+        };
+        const handleKey = (event) => {
+          if (event.key === 'Escape') closeExportMenu();
+        };
+        document.addEventListener('mousedown', handleClick);
+        document.addEventListener('keydown', handleKey);
+        return () => {
+          document.removeEventListener('mousedown', handleClick);
+          document.removeEventListener('keydown', handleKey);
+        };
+      }, [exportMenuOpen]);
 
       useEffect(() => {
         if (!params.liveQuotes) return;
@@ -1744,34 +1829,64 @@
                   <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{`Simulador de Préstamos / ${displayPlatformName}`}</h1>
                   <p className={`${accentClass}`}>{platformTagline}</p>
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm font-medium">Plataforma</label>
-                    <select value={platformId} onChange={(e) => setPlatformId(PLATFORM_IDS.includes(e.target.value) ? e.target.value : initialPlatformId)} className="rounded-xl border border-white/40 bg-white/15 px-3 py-1.5 text-sm font-semibold text-white shadow-sm backdrop-blur focus:outline-none focus:ring-2 focus:ring-white/80">
-                      {PLATFORM_IDS.map((pid) => (
-                        <option key={pid} value={pid} className="text-neutral-900">{PLATFORM_CONFIGS[pid]?.name ?? pid}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <label htmlFor="currency-select">Mostrar en</label>
-                    <select
-                      id="currency-select"
-                      value={currency}
-                      onChange={(e) => setSelectedCurrency(e.target.value)}
-                      className="rounded-xl border border-white/40 bg-white/15 px-3 py-1.5 text-sm font-semibold text-white shadow-sm backdrop-blur focus:outline-none focus:ring-2 focus:ring-white/80"
+                <div className="flex flex-col items-end gap-3 sm:flex-row sm:items-center">
+                  <div ref={exportMenuRef} className="relative">
+                    <input
+                      ref={importInputRef}
+                      type="file"
+                      accept="application/json"
+                      className="hidden"
+                      onChange={handleImportFile}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setExportMenuOpen((open) => !open)}
+                      className="nx-btn text-sm"
+                      aria-haspopup="true"
+                      aria-expanded={exportMenuOpen}
                     >
-                      {SUPPORTED_CURRENCIES.map((option) => (
-                        <option
-                          key={option.code}
-                          value={option.code}
-                          className="text-neutral-900"
-                          title={option.label}
-                        >
-                          {option.code}
-                        </option>
-                      ))}
-                    </select>
+                      Plantillas &amp; datos
+                    </button>
+                    {exportMenuOpen && (
+                      <div className="absolute right-0 z-20 mt-3 w-60 rounded-2xl border border-neutral-200 bg-white p-2 text-neutral-700 shadow-2xl">
+                        <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold hover:bg-neutral-100" onClick={handleExportJSON}>Exportar JSON</button>
+                        <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold hover:bg-neutral-100" onClick={handleImportRequest}>Importar JSON</button>
+                        <div className="my-1 border-t border-neutral-200" />
+                        <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-neutral-100" onClick={handleResetParams}>Reset parámetros</button>
+                        <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-neutral-100" onClick={handleResetAssets}>Reset activos</button>
+                        <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-neutral-100" onClick={handleResetPlanners}>Reset planners</button>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-4">
+                    <div className="flex items-center gap-2">
+                      <label className="text-sm font-medium">Plataforma</label>
+                      <select value={platformId} onChange={(e) => setPlatformId(PLATFORM_IDS.includes(e.target.value) ? e.target.value : initialPlatformId)} className="rounded-xl border border-white/40 bg-white/15 px-3 py-1.5 text-sm font-semibold text-white shadow-sm backdrop-blur focus:outline-none focus:ring-2 focus:ring-white/80">
+                        {PLATFORM_IDS.map((pid) => (
+                          <option key={pid} value={pid} className="text-neutral-900">{PLATFORM_CONFIGS[pid]?.name ?? pid}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <label htmlFor="currency-select">Mostrar en</label>
+                      <select
+                        id="currency-select"
+                        value={currency}
+                        onChange={(e) => setSelectedCurrency(e.target.value)}
+                        className="rounded-xl border border-white/40 bg-white/15 px-3 py-1.5 text-sm font-semibold text-white shadow-sm backdrop-blur focus:outline-none focus:ring-2 focus:ring-white/80"
+                      >
+                        {SUPPORTED_CURRENCIES.map((option) => (
+                          <option
+                            key={option.code}
+                            value={option.code}
+                            className="text-neutral-900"
+                            title={option.label}
+                          >
+                            {option.code}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
               </header>
@@ -1808,91 +1923,208 @@
               ))}
             </section>
 
-            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <Card title="Préstamo & Repago">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 justify-items-center">
-                  <Field label={`Monto a pedir (${currency})`} align="center" className="w-full max-w-xs">
-                    <input
-                      type="number"
-                      className={`w-full rounded-full border border-neutral-300 px-5 py-3 text-center text-lg font-semibold shadow-sm focus:outline-none focus:ring-2 ${focusRingClass}`}
-                      value={(loanAmount * rate).toString()}
-                      onChange={(e)=> setLoanAmount(Number(e.target.value) / rate)}
-                      min={0}
-                    />
-                  </Field>
-                  <Field label="Fecha de repago" align="center" className="w-full max-w-xs">
-                    <input
-                      type="date"
-                      className={`w-full rounded-full border border-neutral-300 px-5 py-3 text-center text-lg font-semibold shadow-sm focus:outline-none focus:ring-2 ${focusRingClass}`}
-                      value={repayDate}
-                      min={todayISO()}
-                      onChange={(e)=> setRepayDate(e.target.value)}
-                    />
-                  </Field>
-                </div>
-                <div className="mt-6 space-y-3">
-                  {isBinance ? (
-                    <>
-                      <Pill label="LTV actual" value={`${(overallLTVIfBorrow*100).toFixed(2)}%`} tone={ltvTone} />
-                      <Pill label="LTV simulado" value={`${(binanceLtvAfterAdjust*100).toFixed(2)}%`} tone={binanceLtvTone} />
-                      <Pill label={`Colateral extra para ≤${toPct(ltvHealthyThreshold, 0)}`} value={fmt(binanceExtraCollateralNeeded * rate, currency)} tone={binanceExtraCollateralNeeded > 0 ? "warn" : "ok"} />
-                      <Pill label={`Repago para ≤${toPct(ltvHealthyThreshold, 0)}`} value={fmt(binanceRepayNeeded * rate, currency)} tone={binanceRepayNeeded > 0 ? "warn" : "ok"} />
-                      <Pill label={`Buffer hasta ${toPct(ltvWarnThreshold, 0)}`} value={fmt(binanceBufferToCaution * rate, currency)} tone={binanceBufferToCaution > 0 ? "ok" : "danger"} />
-                    </>
-                  ) : (
-                    <>
-                      <Pill label="LTV si pides esto" value={`${(overallLTVIfBorrow*100).toFixed(2)}%`} tone={ltvTone} />
-                      <Pill label="≤20% LTV (fijo)" value={loanAmount <= recommendedLoanAtTarget ? "Sí" : "No"} tone={loanAmount <= recommendedLoanAtTarget ? "ok" : "warn"} />
-                      <Pill label="¿Califica Low-Cost?" value={meetsLowCost ? "Sí" : "No"} tone={meetsLowCost ? "ok" : "warn"} />
-                      <Pill label="Margen Low-Cost" value={fmt(lowCostHeadroom * rate, currency)} tone={lowCostHeadroom > 0 ? "ok" : "danger"} />
-                    </>
-                  )}
-                </div>
-              </Card>
-
-              <Card title="Salud del préstamo">
-                <LTVGauge value={ltvGaugeValue} zones={ltvGaugeZones} markers={ltvGaugeMarkers} />
-                <div className="mt-2 text-center text-xs text-neutral-500">
-                  {ltvScenarioLabel ? `Escenario activo: ${ltvScenarioLabel}` : 'Escenario base sin shocks.'}
-                </div>
-                {cashflowAlerts.length > 0 && (
-                  <div className="mt-3 space-y-2 text-xs">
-                    {cashflowAlerts.slice(0, 2).map((alert, idx) => (
-                      <div key={`ltv-alert-${idx}`} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
-                        {alert}
-                      </div>
-                    ))}
+            <section className="mb-10 grid grid-cols-1 xl:grid-cols-3 gap-6">
+              <div className="space-y-6">
+                <Card title="Préstamo & Repago">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 justify-items-center">
+                    <Field label={`Monto a pedir (${currency})`} align="center" className="w-full max-w-xs">
+                      <input
+                        type="number"
+                        className={`w-full rounded-full border border-neutral-300 px-5 py-3 text-center text-lg font-semibold shadow-sm focus:outline-none focus:ring-2 ${focusRingClass}`}
+                        value={(loanAmount * rate).toString()}
+                        onChange={(e)=> setLoanAmount(Number(e.target.value) / rate)}
+                        min={0}
+                      />
+                    </Field>
+                    <Field label="Fecha de repago" align="center" className="w-full max-w-xs">
+                      <input
+                        type="date"
+                        className={`w-full rounded-full border border-neutral-300 px-5 py-3 text-center text-lg font-semibold shadow-sm focus:outline-none focus:ring-2 ${focusRingClass}`}
+                        value={repayDate}
+                        min={todayISO()}
+                        onChange={(e)=> setRepayDate(e.target.value)}
+                      />
+                    </Field>
                   </div>
-                )}
-                <div className="mt-4 space-y-2">
-                  {isBinance ? (
-                    <>
-                      <Line label="LTV proyectado (cashflow)" value={`${Number.isFinite(ltvGaugeValue) ? (ltvGaugeValue*100).toFixed(2) : '∞'}%`} tone={ltvTone} />
-                      <Line label="LTV actual" value={`${(overallLTVIfBorrow*100).toFixed(2)}%`} muted />
-                      <Line label="LTV simulado" value={`${(binanceLtvAfterAdjust*100).toFixed(2)}%`} tone={binanceLtvTone} />
-                      <Line label="Rango saludable" value={`≤ ${toPct(ltvHealthyThreshold, 0)}`} muted />
-                      <Line label="Riesgo medio" value={binanceCautionLabel} muted />
-                      <Line label="Margin call" value={toPct(marginCallLtv, 0)} muted />
-                      <Line label="Auto-liquidación" value={toPct(autoRepayLtv, 0)} muted />
-                      <Line label="Colateral mínimo (margin call)" value={fmt(binanceLiquidationValue * rate, currency)} tone={binanceLiquidationBuffer >= 0 ? "ok" : "danger"} />
-                      <Line label="Buffer actual" value={binanceLiquidationBuffer >= 0 ? fmt(binanceLiquidationBuffer * rate, currency) : `Déficit ${fmt(Math.abs(binanceLiquidationBuffer) * rate, currency)}`} tone={binanceLiquidationBuffer >= 0 ? "ok" : "danger"} />
-                      <Line label="Buffer simulado" value={binanceAdjustedLiquidationBuffer >= 0 ? fmt(binanceAdjustedLiquidationBuffer * rate, currency) : `Déficit ${fmt(Math.abs(binanceAdjustedLiquidationBuffer) * rate, currency)}`} tone={binanceAdjustedLiquidationBuffer >= 0 ? "ok" : "danger"} />
-                    </>
-                  ) : (
-                    <>
-                      <Line label="LTV proyectado (cashflow)" value={`${Number.isFinite(ltvGaugeValue) ? (ltvGaugeValue*100).toFixed(1) : '∞'}%`} tone={ltvTone} />
-                      <Line label="LTV actual" value={`${(overallLTVIfBorrow*100).toFixed(1)}%`} muted />
-                      <Line label="Objetivo Low-Cost" value={`${(targetLtv*100).toFixed(0)}%`} muted />
-                      <Line label="Margin call" value={`${(marginCallLtv*100).toFixed(0)}%`} muted />
-                      <Line label="Auto-repay" value={`${(autoRepayLtv*100).toFixed(0)}%`} muted />
-                      <Line label="Cap Low-Cost" value={fmt(capLowCost * rate, currency)} tone={lowCostHeadroom > 0 ? "ok" : "danger"} />
-                    </>
-                  )}
-                </div>
-              </Card>
+                  <div className="mt-6 space-y-3">
+                    {isBinance ? (
+                      <>
+                        <Pill label="LTV actual" value={`${(overallLTVIfBorrow*100).toFixed(2)}%`} tone={ltvTone} />
+                        <Pill label="LTV simulado" value={`${(binanceLtvAfterAdjust*100).toFixed(2)}%`} tone={binanceLtvTone} />
+                        <Pill label={`Colateral extra para ≤${toPct(ltvHealthyThreshold, 0)}`} value={fmt(binanceExtraCollateralNeeded * rate, currency)} tone={binanceExtraCollateralNeeded > 0 ? "warn" : "ok"} />
+                        <Pill label={`Repago para ≤${toPct(ltvHealthyThreshold, 0)}`} value={fmt(binanceRepayNeeded * rate, currency)} tone={binanceRepayNeeded > 0 ? "warn" : "ok"} />
+                        <Pill label={`Buffer hasta ${toPct(ltvWarnThreshold, 0)}`} value={fmt(binanceBufferToCaution * rate, currency)} tone={binanceBufferToCaution > 0 ? "ok" : "danger"} />
+                      </>
+                    ) : (
+                      <>
+                        <Pill label="LTV si pides esto" value={`${(overallLTVIfBorrow*100).toFixed(2)}%`} tone={ltvTone} />
+                        <Pill label="≤20% LTV (fijo)" value={loanAmount <= recommendedLoanAtTarget ? "Sí" : "No"} tone={loanAmount <= recommendedLoanAtTarget ? "ok" : "warn"} />
+                        <Pill label="¿Califica Low-Cost?" value={meetsLowCost ? "Sí" : "No"} tone={meetsLowCost ? "ok" : "warn"} />
+                        <Pill label="Margen Low-Cost" value={fmt(lowCostHeadroom * rate, currency)} tone={lowCostHeadroom > 0 ? "ok" : "danger"} />
+                      </>
+                    )}
+                  </div>
+                </Card>
 
+                <Card title={loyaltyCardTitle}>
+                  <div className="grid grid-cols-1 gap-3">
+                    {loyalty && loyaltyReqs?.tiers?.length ? (
+                      loyaltyReqs.tiers.map((tier) => (
+                        <React.Fragment key={tier.label}>
+                          <Line label={`Requerido ${tier.label} (${(tier.minRatio * 100).toFixed(1)}% ${loyaltyModelActive === 'vsTotal' ? 'vs total' : 'vs resto'})`} value={fmt(tier.required * rate, currency)} />
+                          <Line label={`Faltante ${tier.label}`} value={fmt(tier.missing * rate, currency)} muted={tier.missing <= 0} />
+                        </React.Fragment>
+                      ))
+                    ) : (
+                      <p className="text-sm text-neutral-500">Esta plataforma no tiene un programa de niveles ligado a un token específico.</p>
+                    )}
+                    <div className="h-px bg-neutral-200 my-1" />
+                    <Line label={`Colateral extra para ≤${(targetLtv * 100).toFixed(0)}%`} value={fmt(extraCollateralForTarget * rate, currency)} tone={extraCollateralForTarget <= 0 ? "ok" : "warn"} />
+                  </div>
+                </Card>
+              </div>
+
+              <div className="space-y-6">
+                <Card title="Salud del préstamo">
+                  <LTVGauge value={ltvGaugeValue} zones={ltvGaugeZones} markers={ltvGaugeMarkers} />
+                  <div className="mt-2 text-center text-xs text-neutral-500">
+                    {ltvScenarioLabel ? `Escenario activo: ${ltvScenarioLabel}` : 'Escenario base sin shocks.'}
+                  </div>
+                  {cashflowAlerts.length > 0 && (
+                    <div className="mt-3 space-y-2 text-xs">
+                      {cashflowAlerts.slice(0, 2).map((alert, idx) => (
+                        <div key={`ltv-alert-${idx}`} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
+                          {alert}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="mt-4 space-y-2">
+                    {isBinance ? (
+                      <>
+                        <Line label="LTV proyectado (cashflow)" value={`${Number.isFinite(ltvGaugeValue) ? (ltvGaugeValue*100).toFixed(2) : '∞'}%`} tone={ltvTone} />
+                        <Line label="LTV actual" value={`${(overallLTVIfBorrow*100).toFixed(2)}%`} muted />
+                        <Line label="LTV simulado" value={`${(binanceLtvAfterAdjust*100).toFixed(2)}%`} tone={binanceLtvTone} />
+                        <Line label="Rango saludable" value={`≤ ${toPct(ltvHealthyThreshold, 0)}`} muted />
+                        <Line label="Riesgo medio" value={binanceCautionLabel} muted />
+                        <Line label="Margin call" value={toPct(marginCallLtv, 0)} muted />
+                        <Line label="Auto-liquidación" value={toPct(autoRepayLtv, 0)} muted />
+                        <Line label="Colateral mínimo (margin call)" value={fmt(binanceLiquidationValue * rate, currency)} tone={binanceLiquidationBuffer >= 0 ? "ok" : "danger"} />
+                        <Line label="Buffer actual" value={binanceLiquidationBuffer >= 0 ? fmt(binanceLiquidationBuffer * rate, currency) : `Déficit ${fmt(Math.abs(binanceLiquidationBuffer) * rate, currency)}`} tone={binanceLiquidationBuffer >= 0 ? "ok" : "danger"} />
+                        <Line label="Buffer simulado" value={binanceAdjustedLiquidationBuffer >= 0 ? fmt(binanceAdjustedLiquidationBuffer * rate, currency) : `Déficit ${fmt(Math.abs(binanceAdjustedLiquidationBuffer) * rate, currency)}`} tone={binanceAdjustedLiquidationBuffer >= 0 ? "ok" : "danger"} />
+                      </>
+                    ) : (
+                      <>
+                        <Line label="LTV proyectado (cashflow)" value={`${Number.isFinite(ltvGaugeValue) ? (ltvGaugeValue*100).toFixed(1) : '∞'}%`} tone={ltvTone} />
+                        <Line label="LTV actual" value={`${(overallLTVIfBorrow*100).toFixed(1)}%`} muted />
+                        <Line label="Objetivo Low-Cost" value={`${(targetLtv*100).toFixed(0)}%`} muted />
+                        <Line label="Margin call" value={`${(marginCallLtv*100).toFixed(0)}%`} muted />
+                        <Line label="Auto-repay" value={`${(autoRepayLtv*100).toFixed(0)}%`} muted />
+                        <Line label="Cap Low-Cost" value={fmt(capLowCost * rate, currency)} tone={lowCostHeadroom > 0 ? "ok" : "danger"} />
+                      </>
+                    )}
+                  </div>
+                </Card>
+
+                <Card title="Diagnóstico & Sugerencias">
+                  <ul className="list-disc pl-5 space-y-2 text-sm">
+                    {loyalty ? (
+                      <li>
+                        Tu {loyalty.ratioLabel ?? `ratio ${loyalty.tokenTicker?.toUpperCase() || ''}`} es <b>{(totals.ratioVsRest* 100).toFixed(2)}% vs resto</b> / <b>{(totals.ratioVsTotal * 100).toFixed(2)}% vs total</b>. Modelo activo: <b>{loyaltyModelActive === "vsTotal" ? "vs total" : "vs resto"}</b>. Nivel actual: <b>{loyaltyTier}</b>.
+                        {totals.total < minBalancePerks && (<span className="text-neutral-600"> (El balance total no supera el mínimo de perks).</span>)}
+                      </li>
+                    ) : (
+                      <li>Esta plataforma no requiere ratio de token para acceder a mejores tasas: el enfoque es puramente por colateral.</li>
+                    )}
+                    {loyalty && loyaltyReqs?.tiers?.length ? (
+                      <li>
+                        {loyaltyReqs.tiers.map((tier, idx) => (
+                          <span key={tier.label}>{idx > 0 ? ' · ' : ''}Para <b>{tier.label}</b> faltan {fmt(tier.missing * rate, currency)}</span>
+                        ))}
+                      </li>
+                    ) : null}
+                    <li>
+                      Con tu colateral actual, el tope por LTVs es {fmt(totals.maxBorrow * rate, currency)}. El cap Low-Cost (≤{(targetLtv * 100).toFixed(0)}%) permite pedir hasta {fmt(capLowCost * rate, currency)} y deja {fmt(lowCostHeadroom * rate, currency)} de margen.
+                    </li>
+                    <li>
+                      Para solicitar {fmt(loanAmount * rate, currency)} y mantener ≤{(targetLtv * 100).toFixed(0)}% LTV se requieren {fmt(extraCollateralForTarget * rate, currency)} adicionales en colateral.
+                    </li>
+                    <li>
+                      APR estimado: <b>{(chosenAPR * 100).toFixed(2)}%</b>. Interés hasta repago ({daysUntilRepay} días): {fmt(interestCalc.total * rate, currency)}.{interestCalc.early > 0 && <span> Incluye interés por "early rule".</span>}
+                    </li>
+                    <li>
+                      Earn (flex) mensual estimado {earnEligible ? (minBalancePerks > 0 ? "(tope)" : "") : (minBalancePerks > 0 ? "(requiere balance mínimo)" : "(no elegible)")}: <b>{fmt(earnMonthly * rate, currency)}</b>. Neto mensual: <b className={netMonthly>=0?"text-emerald-700":"text-rose-700"}>{fmt(netMonthly * rate, currency)}</b>.
+                    </li>
+                  </ul>
+                </Card>
+              </div>
+
+              <div className="space-y-6">
+                <Card title="Proyección del préstamo">
+                  <TrendChart data={timeline} currency={currency} rate={rate} />
+                </Card>
+
+                <Card title="Breakdown de colateral & LTV">
+                  <CollateralBreakdownCard
+                    breakdown={collateralBreakdown}
+                    currency={currency}
+                    rate={rate}
+                    totalCollateral={totals.totalCollateralValue}
+                    totalMaxBorrow={totals.maxBorrow}
+                    overallLTV={overallLTVIfBorrow}
+                    target={targetLtv}
+                    marginCall={marginCallLtv}
+                    autoRepay={autoRepayLtv}
+                    capLowCost={capLowCost}
+                    lowCostHeadroom={lowCostHeadroom}
+                  />
+                </Card>
+              </div>
+            </section>
+
+            <section className="mb-10 grid grid-cols-1 xl:grid-cols-2 gap-6">
+              <CashflowPlanner
+                plan={cashflowPlan}
+                derived={cashflowDerived}
+                onPlanChange={updateCashflowPlan}
+                currency={currency}
+                rate={rate}
+                fmt={fmt}
+                loanAmount={loanAmount}
+                chosenAPR={chosenAPR}
+                interestCalc={interestCalc}
+                daysUntilRepay={daysUntilRepay}
+                repayDate={repayDate}
+                totals={totals}
+                targetLtv={targetLtv}
+                marginCallLtv={marginCallLtv}
+                autoRepayLtv={autoRepayLtv}
+                scenarioDefaults={cashflowPlan?.scenarioShocks}
+                focusRingClass={focusRingClass}
+                netMonthly={netMonthly}
+                earnMonthly={earnMonthly}
+                earnEligible={earnEligible}
+                minBalancePerks={minBalancePerks}
+              />
+
+              <BenchmarkCeFiDeFi
+                config={benchmarkConfig}
+                onChange={updateBenchmarkConfig}
+                fmt={fmt}
+                currency={currency}
+                rate={rate}
+                loanAmount={loanAmount}
+                chosenAPR={chosenAPR}
+                daysUntilRepay={daysUntilRepay}
+                scenarioName={ltvScenarioLabel}
+                cashflowNet={cashflowDerived?.netBalanceFinal}
+                defaultMatrix={baseBenchmarkConfig?.rateMatrix}
+              />
+            </section>
+
+            <section className="mb-10">
               <Card title="Parámetros (solo entorno)">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {SUPPORTED_CURRENCIES.filter((option) => option.code !== 'USD').map((option) => (
                     <NumberParam
                       key={option.code}
@@ -1905,7 +2137,7 @@
                     />
                   ))}
 
-                  <div className="col-span-2 rounded-2xl border border-neutral-200 p-3 flex flex-wrap items-center gap-3">
+                  <div className="sm:col-span-2 rounded-2xl border border-neutral-200 p-3 flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-2 text-sm font-medium">
                       <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">Activo</span>
                       <span>Precios en tiempo real (CoinGecko)</span>
@@ -1916,7 +2148,7 @@
                     {liveError && <span className="text-xs text-rose-600">Error: {liveError}</span>}
                   </div>
 
-                  <div className="col-span-2 rounded-2xl border border-neutral-200 p-3 flex flex-wrap items-center gap-3">
+                  <div className="sm:col-span-2 rounded-2xl border border-neutral-200 p-3 flex flex-wrap items-center gap-3">
                     <div className="flex items-center gap-2 text-sm font-medium">
                       <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">FX</span>
                       <span>Cotizaciones oficiales (USD base)</span>
@@ -1929,7 +2161,7 @@
                     {fxMeta.error && <span className="text-xs text-rose-600">Error: {fxMeta.error}</span>}
                   </div>
 
-                  <div className="col-span-2 rounded-2xl border border-neutral-200 p-3 flex flex-wrap items-center gap-3">
+                  <div className="sm:col-span-2 rounded-2xl border border-neutral-200 p-3 flex flex-wrap items-center gap-3">
                     <label className="flex items-center gap-2 text-sm font-medium">
                       <input type="checkbox" className="h-5 w-5" checked={!!params.earnOptIn} onChange={(e)=> setParams({ ...params, earnOptIn: e.target.checked })} />
                       Considerar intereses (Savings) y compounding
@@ -1942,33 +2174,16 @@
                   </div>
 
                   {isBinance && (
-                    <div className="col-span-2 rounded-2xl border border-neutral-200 p-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="sm:col-span-2 rounded-2xl border border-neutral-200 p-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <NumberParam label="Ajuste colateral simulado (USD)" value={params.binanceCollateralDelta} onChange={(v)=> setParams({ ...params, binanceCollateralDelta: v })} />
                       <NumberParam label="Repago simulado (USD)" value={params.binanceRepaySim} onChange={(v)=> setParams({ ...params, binanceRepaySim: Math.max(0, v) })} />
                       <p className="sm:col-span-2 text-xs text-neutral-500">Usá estos campos para estimar cómo impactan los ajustes de colateral o repagos anticipados en el LTV y el precio de liquidación.</p>
                     </div>
                   )}
 
-                  <div className="col-span-2 text-xs text-neutral-500">
+                  <div className="sm:col-span-2 text-xs text-neutral-500">
                     {isBinance ? 'LTV, rangos de salud y precios de liquidación se basan en las reglas flexibles de Binance. Ajusta valores para simular escenarios.' : '* LTV, APR por nivel y descuentos Low-Cost provienen de la plataforma elegida. Aquí solo ajustás parámetros de entorno (cambio, frecuencia, toggles).'}
                   </div>
-                </div>
-              </Card>
-
-              <Card title={loyaltyCardTitle}>
-                <div className="grid grid-cols-1 gap-3">
-                  {loyalty && loyaltyReqs?.tiers?.length ? (
-                    loyaltyReqs.tiers.map((tier) => (
-                      <React.Fragment key={tier.label}>
-                        <Line label={`Requerido ${tier.label} (${(tier.minRatio * 100).toFixed(1)}% ${loyaltyModelActive === 'vsTotal' ? 'vs total' : 'vs resto'})`} value={fmt(tier.required * rate, currency)} />
-                        <Line label={`Faltante ${tier.label}`} value={fmt(tier.missing * rate, currency)} muted={tier.missing <= 0} />
-                      </React.Fragment>
-                    ))
-                  ) : (
-                    <p className="text-sm text-neutral-500">Esta plataforma no tiene un programa de niveles ligado a un token específico.</p>
-                  )}
-                  <div className="h-px bg-neutral-200 my-1" />
-                  <Line label={`Colateral extra para ≤${(targetLtv * 100).toFixed(0)}%`} value={fmt(extraCollateralForTarget * rate, currency)} tone={extraCollateralForTarget <= 0 ? "ok" : "warn"} />
                 </div>
               </Card>
             </section>
@@ -2036,141 +2251,10 @@
               </div>
             </section>
 
-            <section className="mb-10 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              <Card title="Proyección del préstamo">
-                <TrendChart data={timeline} currency={currency} rate={rate} />
-              </Card>
 
-              <Card title="Breakdown de colateral & LTV">
-                <CollateralBreakdownCard
-                  breakdown={collateralBreakdown}
-                  currency={currency}
-                  rate={rate}
-                  totalCollateral={totals.totalCollateralValue}
-                  totalMaxBorrow={totals.maxBorrow}
-                  overallLTV={overallLTVIfBorrow}
-                  target={targetLtv}
-                  marginCall={marginCallLtv}
-                  autoRepay={autoRepayLtv}
-                  capLowCost={capLowCost}
-                  lowCostHeadroom={lowCostHeadroom}
-                />
-              </Card>
 
-              <Card title="Diagnóstico & Sugerencias">
-                <ul className="list-disc pl-5 space-y-2 text-sm">
-                  {loyalty ? (
-                    <li>
-                      Tu {loyalty.ratioLabel ?? `ratio ${loyalty.tokenTicker?.toUpperCase() || ''}`} es <b>{(totals.ratioVsRest * 100).toFixed(2)}% vs resto</b> / <b>{(totals.ratioVsTotal * 100).toFixed(2)}% vs total</b>. Modelo activo: <b>{loyaltyModelActive === "vsTotal" ? "vs total" : "vs resto"}</b>. Nivel actual: <b>{loyaltyTier}</b>.
-                      {totals.total < minBalancePerks && (<span className="text-neutral-600"> (El balance total no supera el mínimo de perks).</span>)}
-                    </li>
-                  ) : (
-                    <li>Esta plataforma no requiere ratio de token para acceder a mejores tasas: el enfoque es puramente por colateral.</li>
-                  )}
-                  {loyalty && loyaltyReqs?.tiers?.length ? (
-                    <li>
-                      {loyaltyReqs.tiers.map((tier, idx) => (
-                        <span key={tier.label}>{idx > 0 ? ' · ' : ''}Para <b>{tier.label}</b> faltan {fmt(tier.missing * rate, currency)}</span>
-                      ))}
-                    </li>
-                  ) : null}
-                  <li>
-                    Con tu colateral actual, el tope por LTVs es {fmt(totals.maxBorrow * rate, currency)}. El cap Low-Cost (≤{(targetLtv * 100).toFixed(0)}%) permite pedir hasta {fmt(capLowCost * rate, currency)} y deja {fmt(lowCostHeadroom * rate, currency)} de margen.
-                  </li>
-                  <li>
-                    Para solicitar {fmt(loanAmount * rate, currency)} y mantener ≤{(targetLtv * 100).toFixed(0)}% LTV se requieren {fmt(extraCollateralForTarget * rate, currency)} adicionales en colateral.
-                  </li>
-                  <li>
-                    APR estimado: <b>{(chosenAPR * 100).toFixed(2)}%</b>. Interés hasta repago ({daysUntilRepay} días): {fmt(interestCalc.total * rate, currency)}.{interestCalc.early > 0 && <span> Incluye interés por "early rule".</span>}
-                  </li>
-                  <li>
-                    Earn (flex) mensual estimado {earnEligible ? (minBalancePerks > 0 ? "(tope)" : "") : (minBalancePerks > 0 ? "(requiere balance mínimo)" : "(no elegible)")}: <b>{fmt(earnMonthly * rate, currency)}</b>. Neto mensual: <b className={netMonthly>=0?"text-emerald-700":"text-rose-700"}>{fmt(netMonthly * rate, currency)}</b>.
-                  </li>
-                </ul>
-              </Card>
 
-              <Card title="Exportar / Plantilla">
-                <p className="text-sm text-neutral-700 mb-3">Guardamos tus datos en <code>localStorage</code>. Podés exportar un JSON con todo o resetear la demo.</p>
-                <div className="flex flex-wrap gap-3">
-                  <input
-                    ref={importInputRef}
-                    type="file"
-                    accept="application/json"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      file.text().then((text) => {
-                        try {
-                          const parsed = JSON.parse(text);
-                          if (parsed.assets) setAssets(sanitizeAssets(parsed.assets));
-                          if (parsed.params) setParams(sanitizeParams(parsed.params));
-                          if (parsed.cashflowPlan) setCashflowPlan(sanitizeCashflowPlan(parsed.cashflowPlan, repayDate));
-                          if (parsed.benchmarkConfig) setBenchmarkConfig(sanitizeBenchmarkConfig(parsed.benchmarkConfig));
-                        } catch (err) {
-                          alert(`No se pudo importar el archivo: ${err?.message || err}`);
-                        }
-                      }).finally(() => {
-                        if (importInputRef.current) importInputRef.current.value = '';
-                      });
-                    }}
-                  />
-                  <button className="nx-btn text-sm" onClick={() => {
-                    const blob = new Blob([ JSON.stringify({ assets, params, cashflowPlan, benchmarkConfig }, null, 2) ], { type: "application/json" });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement("a");
-                    a.href = url; a.download = `${exportPrefix}_${Date.now()}.json`; a.click(); URL.revokeObjectURL(url);
-                  }}>Exportar JSON</button>
 
-                  <button className="nx-btn nx-btn-ghost text-sm" onClick={() => importInputRef.current?.click()}>Importar JSON</button>
-
-                  <button className="nx-btn nx-btn-ghost text-sm" onClick={() => { if (confirm("¿Restablecer parámetros por defecto?")) { localStorage.removeItem(storageKeys.params); setParams({ ...baseParams }); } }}>Reset parámetros</button>
-                  <button className="nx-btn nx-btn-ghost text-sm" onClick={() => { if (confirm("¿Restablecer activos por defecto?")) { localStorage.removeItem(storageKeys.assets); setAssets(sanitizeAssets(platformDefaultAssets)); } }}>Reset activos</button>
-                  <button className="nx-btn nx-btn-ghost text-sm" onClick={() => { if (confirm("¿Limpiar plan de cashflow y benchmark?")) { localStorage.removeItem(storageKeys.cashflow); localStorage.removeItem(storageKeys.benchmark); setCashflowPlan(baseCashflowPlan); setBenchmarkConfig(baseBenchmarkConfig); } }}>Reset planners</button>
-                </div>
-                <div className="mt-4 text-xs text-neutral-500"><p>{disclaimers.finePrint || '* Este simulador es orientativo. Verifica términos/tasas vigentes en la plataforma oficial.'}</p></div>
-              </Card>
-            </section>
-
-            <section className="mb-10 grid grid-cols-1 xl:grid-cols-2 gap-6">
-              <CashflowPlanner
-                plan={cashflowPlan}
-                derived={cashflowDerived}
-                onPlanChange={updateCashflowPlan}
-                currency={currency}
-                rate={rate}
-                fmt={fmt}
-                loanAmount={loanAmount}
-                chosenAPR={chosenAPR}
-                interestCalc={interestCalc}
-                daysUntilRepay={daysUntilRepay}
-                repayDate={repayDate}
-                totals={totals}
-                targetLtv={targetLtv}
-                marginCallLtv={marginCallLtv}
-                autoRepayLtv={autoRepayLtv}
-                scenarioDefaults={cashflowPlan?.scenarioShocks}
-                focusRingClass={focusRingClass}
-                netMonthly={netMonthly}
-                earnMonthly={earnMonthly}
-                earnEligible={earnEligible}
-                minBalancePerks={minBalancePerks}
-              />
-
-              <BenchmarkCeFiDeFi
-                config={benchmarkConfig}
-                onChange={updateBenchmarkConfig}
-                fmt={fmt}
-                currency={currency}
-                rate={rate}
-                loanAmount={loanAmount}
-                chosenAPR={chosenAPR}
-                daysUntilRepay={daysUntilRepay}
-                scenarioName={ltvScenarioLabel}
-                cashflowNet={cashflowDerived?.netBalanceFinal}
-                defaultMatrix={baseBenchmarkConfig?.rateMatrix}
-              />
-            </section>
 
             <section className="mb-10 grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card title="Plataformas en radar">
