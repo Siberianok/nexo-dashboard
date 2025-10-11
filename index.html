@@ -1291,6 +1291,32 @@
         return baseParams;
       });
 
+      const [fxMeta, setFxMeta] = useState({ loading: false, lastUpdated: null, error: null });
+
+      const fetchOfficialFxRates = useCallback(async () => {
+        setFxMeta((prev) => ({ ...prev, loading: true, error: null }));
+        try {
+          const symbols = SUPPORTED_CURRENCIES.filter((option) => option.code !== 'USD')
+            .map((option) => option.code)
+            .join(',');
+          const res = await fetch(`https://api.exchangerate.host/latest?base=USD&symbols=${symbols}`);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          const nextRates = sanitizeExchangeRates(data?.rates || {});
+          setParams((prev) => ({
+            ...prev,
+            exchangeRates: nextRates,
+          }));
+          setFxMeta({ loading: false, lastUpdated: Date.now(), error: null });
+        } catch (error) {
+          setFxMeta((prev) => ({
+            ...prev,
+            loading: false,
+            error: String(error?.message || error || 'Error desconocido'),
+          }));
+        }
+      }, [sanitizeExchangeRates, setParams]);
+
       const [cashflowPlan, setCashflowPlan] = useState(() => {
         if (typeof window === 'undefined') return baseCashflowPlan;
         try {
