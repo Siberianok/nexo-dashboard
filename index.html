@@ -78,9 +78,53 @@
       --theme-ghost-shadow:0 10px 22px rgba(146,64,14,0.16);
       --theme-ghost-hover-shadow:0 16px 26px rgba(124,45,18,0.22);
     }
+    .theme-youhodler{
+      --theme-surface-soft:linear-gradient(180deg,#e0f2ff 0%,#f5fbff 100%);
+      --theme-card-border:rgba(59,130,246,0.25);
+      --theme-card-shadow:0 12px 30px rgba(30,64,175,0.12);
+      --theme-kpi-border:rgba(125,211,252,0.6);
+      --theme-kpi-bg:linear-gradient(155deg,#0ea5e9 0%,#2563eb 45%,#3b82f6 100%);
+      --theme-kpi-shadow:0 16px 30px rgba(14,165,233,0.28);
+      --theme-kpi-hover-shadow:0 22px 36px rgba(14,116,233,0.34);
+      --theme-kpi-active-shadow:0 10px 18px rgba(14,116,233,0.24);
+      --theme-btn-bg:linear-gradient(155deg,#0284c7 0%,#2563eb 50%,#38bdf8 100%);
+      --theme-btn-text:#f0f9ff;
+      --theme-btn-border:rgba(255,255,255,0.3);
+      --theme-btn-shadow:0 14px 28px rgba(14,116,233,0.28);
+      --theme-btn-hover-shadow:0 20px 34px rgba(14,116,233,0.35);
+      --theme-btn-active-shadow:0 10px 20px rgba(14,116,233,0.25);
+      --theme-ghost-bg:linear-gradient(150deg,#ffffff 0%,#e0f2ff 100%);
+      --theme-ghost-text:#0f172a;
+      --theme-ghost-border:rgba(59,130,246,0.22);
+      --theme-ghost-shadow:0 10px 22px rgba(37,99,235,0.12);
+      --theme-ghost-hover-shadow:0 16px 26px rgba(37,99,235,0.18);
+    }
+    .theme-ledn{
+      --theme-surface-soft:linear-gradient(180deg,#f3f4f6 0%,#ffffff 100%);
+      --theme-card-border:rgba(15,118,110,0.22);
+      --theme-card-shadow:0 12px 30px rgba(15,118,110,0.12);
+      --theme-kpi-border:rgba(45,212,191,0.45);
+      --theme-kpi-bg:linear-gradient(155deg,#0f766e 0%,#14b8a6 45%,#2dd4bf 100%);
+      --theme-kpi-shadow:0 16px 30px rgba(15,118,110,0.26);
+      --theme-kpi-hover-shadow:0 22px 36px rgba(13,148,136,0.32);
+      --theme-kpi-active-shadow:0 10px 18px rgba(15,118,110,0.22);
+      --theme-btn-bg:linear-gradient(155deg,#0f766e 0%,#14b8a6 50%,#2dd4bf 100%);
+      --theme-btn-text:#ecfeff;
+      --theme-btn-border:rgba(255,255,255,0.28);
+      --theme-btn-shadow:0 14px 28px rgba(13,148,136,0.25);
+      --theme-btn-hover-shadow:0 20px 34px rgba(13,148,136,0.32);
+      --theme-btn-active-shadow:0 10px 20px rgba(13,148,136,0.24);
+      --theme-ghost-bg:linear-gradient(150deg,#ffffff 0%,#ecfdf5 100%);
+      --theme-ghost-text:#0f172a;
+      --theme-ghost-border:rgba(45,212,191,0.22);
+      --theme-ghost-shadow:0 10px 22px rgba(15,118,110,0.12);
+      --theme-ghost-hover-shadow:0 16px 26px rgba(15,118,110,0.18);
+    }
     /* Paleta y estilos base */
     .nx-gradient{background:linear-gradient(135deg,#0b1e4b 0%,#1b44a6 50%,#2052c1 100%)}
     .bn-gradient{background:linear-gradient(135deg,#1f2937 0%,#f59e0b 45%,#f97316 100%)}
+    .yh-gradient{background:linear-gradient(135deg,#0ea5e9 0%,#2563eb 55%,#38bdf8 100%)}
+    .ld-gradient{background:linear-gradient(135deg,#0f766e 0%,#14b8a6 55%,#2dd4bf 100%)}
     .nx-card{border:1px solid var(--theme-card-border); box-shadow:var(--theme-card-shadow); border-radius:1.5rem; transition:box-shadow .3s ease,border-color .3s ease;}
     .nx-kpi{border:1px solid var(--theme-kpi-border); transition:border-color .3s ease;}
     .nx-kpi-btn{
@@ -464,6 +508,402 @@
           finePrint: "* Este simulador es orientativo. Verifica términos/tasas vigentes en Binance.",
         },
       },
+      youhodler: {
+        id: "youhodler",
+        name: "YouHodler",
+        tagline: "Multi-colateral y planes de tasas basados en stablecoins.",
+        classes: {
+          header: "yh-gradient",
+          accent: "text-sky-100/90",
+          body: "theme-youhodler",
+          focusRing: "focus:ring-sky-500",
+        },
+        coingeckoIds: {
+          BTC: "bitcoin",
+          ETH: "ethereum",
+          LTC: "litecoin",
+          SOL: "solana",
+          ADA: "cardano",
+          USDT: "tether",
+          USDC: "usd-coin",
+        },
+        ltvByTicker: {
+          BTC: 0.90,
+          ETH: 0.90,
+          LTC: 0.85,
+          SOL: 0.80,
+          ADA: 0.75,
+          USDT: 0.90,
+          USDC: 0.90,
+        },
+        earnAprTop: {
+          BTC: 0.05,
+          ETH: 0.05,
+          LTC: 0.04,
+          SOL: 0.05,
+          ADA: 0.03,
+          USDT: 0.12,
+          USDC: 0.12,
+        },
+        policies: {
+          targetLtv: 0.70,
+          marginCallLtv: 0.85,
+          autoRepayLtv: 0.90,
+          minBalancePerks: 0,
+          defaultLtv: 0.30,
+        },
+        apr: {
+          base: 0.12,
+          standard: {
+            "Classic": 0.12,
+            "Premium": 0.10,
+            "VIP": 0.08,
+          },
+          discounted: {
+            "Classic": 0.11,
+            "Premium": 0.09,
+            "VIP": 0.07,
+          },
+          earlyRuleDays: 30,
+          earlyAPR: 0.12,
+          lowCostEligibleTiers: ["Premium", "VIP"],
+          baseTier: "Classic",
+        },
+        loyalty: {
+          tokenTicker: "USDT",
+          baseLabel: "Classic",
+          belowMinimumLabel: "Classic",
+          tierThresholds: [
+            { label: "VIP", minRatio: 0.50 },
+            { label: "Premium", minRatio: 0.25 },
+          ],
+          models: [
+            { id: "vsTotal", label: "vs total (stablecoins)" },
+          ],
+          kpiLabel: "Plan activo",
+          ratioLabel: "ratio stablecoins",
+        },
+        ltvHealth: {
+          zones: [
+            { label: "Seguro", max: 0.7, color: "#38bdf8", legend: "≤70%", tone: "ok" },
+            { label: "Vigilar", max: 0.85, color: "#f97316", legend: "70-85%", tone: "warn" },
+            { label: "Crítico", max: 1, color: "#ef4444", legend: "≥85%", tone: "danger" },
+          ],
+          markers: [
+            { pct: 0.70, label: "Nivel óptimo" },
+            { pct: 0.85, label: "Margin call" },
+            { pct: 0.9, label: "Auto-liquidación" },
+          ],
+        },
+        defaultAssets: [
+          { id: 1, name: "Bitcoin", ticker: "BTC", qty: 0, price: 0, priceAuto: true, useAsCollateral: true },
+          { id: 2, name: "Ethereum", ticker: "ETH", qty: 0, price: 0, priceAuto: true, useAsCollateral: true },
+          { id: 3, name: "Tether", ticker: "USDT", qty: 0, price: 1, priceAuto: true, useAsCollateral: true },
+          { id: 4, name: "USD Coin", ticker: "USDC", qty: 0, price: 1, priceAuto: true, useAsCollateral: true },
+          { id: 5, name: "Litecoin", ticker: "LTC", qty: 0, price: 0, priceAuto: true, useAsCollateral: true },
+          { id: 6, name: "Solana", ticker: "SOL", qty: 0, price: 0, priceAuto: true, useAsCollateral: true },
+          { id: 7, name: "Cardano", ticker: "ADA", qty: 0, price: 0, priceAuto: true, useAsCollateral: false },
+        ],
+        defaultParams: {
+          exchangeRates: { ...DEFAULT_EXCHANGE_RATES },
+          loyaltyModel: "vsTotal",
+          liveQuotes: true,
+          refreshSec: LIVE_REFRESH_SECONDS,
+          earnOptIn: true,
+          earnOnCollateral: true,
+        },
+        previewSnapshot: {
+          loanAmount: 18000,
+          repayInDays: 75,
+          currency: "USD",
+          params: {
+            exchangeRates: { ...DEFAULT_EXCHANGE_RATES, EUR: 0.94 },
+            loyaltyModel: "vsTotal",
+            liveQuotes: true,
+            earnOptIn: true,
+            earnOnCollateral: true,
+            refreshSec: LIVE_REFRESH_SECONDS,
+          },
+          assets: [
+            { id: 1, name: "Bitcoin", ticker: "BTC", qty: 0.9, price: 42000, priceAuto: false, useAsCollateral: true },
+            { id: 2, name: "Ethereum", ticker: "ETH", qty: 10, price: 2000, priceAuto: false, useAsCollateral: true },
+            { id: 3, name: "Tether", ticker: "USDT", qty: 20000, price: 1, priceAuto: false, useAsCollateral: true },
+            { id: 4, name: "USD Coin", ticker: "USDC", qty: 15000, price: 1, priceAuto: false, useAsCollateral: true },
+            { id: 5, name: "Litecoin", ticker: "LTC", qty: 300, price: 65, priceAuto: false, useAsCollateral: true },
+            { id: 6, name: "Solana", ticker: "SOL", qty: 400, price: 55, priceAuto: false, useAsCollateral: true },
+            { id: 7, name: "Cardano", ticker: "ADA", qty: 6000, price: 0.38, priceAuto: false, useAsCollateral: false },
+          ],
+        },
+        exportPrefix: "youhodler_dashboard",
+        disclaimers: {
+          finePrint: "* Tasas aproximadas según planes Classic/Premium/VIP publicados por YouHodler (referencial).",
+        },
+      },
+      ledn: {
+        id: "ledn",
+        name: "Ledn",
+        tagline: "Créditos sobre BTC/USDC con métricas conservadoras y B2B.",
+        classes: {
+          header: "ld-gradient",
+          accent: "text-teal-100/90",
+          body: "theme-ledn",
+          focusRing: "focus:ring-teal-500",
+        },
+        coingeckoIds: {
+          BTC: "bitcoin",
+          ETH: "ethereum",
+          WBTC: "wrapped-bitcoin",
+          USDC: "usd-coin",
+          USDT: "tether",
+          LTC: "litecoin",
+        },
+        ltvByTicker: {
+          BTC: 0.70,
+          ETH: 0.65,
+          WBTC: 0.70,
+          USDC: 0.90,
+          USDT: 0.85,
+          LTC: 0.60,
+        },
+        earnAprTop: {
+          BTC: 0.06,
+          ETH: 0.06,
+          USDC: 0.07,
+          USDT: 0.07,
+          WBTC: 0.06,
+          LTC: 0.04,
+        },
+        policies: {
+          targetLtv: 0.55,
+          marginCallLtv: 0.75,
+          autoRepayLtv: 0.85,
+          minBalancePerks: 1000,
+          defaultLtv: 0.30,
+        },
+        apr: {
+          base: 0.119,
+          standard: {
+            "Standard": 0.119,
+            "Silver": 0.109,
+            "Gold": 0.089,
+          },
+          discounted: {
+            "Standard": 0.109,
+            "Silver": 0.099,
+            "Gold": 0.079,
+          },
+          earlyRuleDays: 60,
+          earlyAPR: 0.119,
+          lowCostEligibleTiers: ["Gold"],
+          baseTier: "Standard",
+        },
+        loyalty: {
+          tokenTicker: "BTC",
+          baseLabel: "Standard",
+          belowMinimumLabel: "Standard",
+          tierThresholds: [
+            { label: "Gold", minRatio: 0.50 },
+            { label: "Silver", minRatio: 0.30 },
+          ],
+          models: [
+            { id: "vsRest", label: "vs resto (BTC dominante)" },
+            { id: "vsTotal", label: "vs total" },
+          ],
+          kpiLabel: "Plan de tasa",
+          ratioLabel: "ratio BTC",
+        },
+        ltvHealth: {
+          zones: [
+            { label: "Conservador", max: 0.55, color: "#2dd4bf", legend: "≤55%", tone: "ok" },
+            { label: "Observación", max: 0.75, color: "#fbbf24", legend: "55-75%", tone: "warn" },
+            { label: "Crítico", max: 1, color: "#ef4444", legend: "≥75%", tone: "danger" },
+          ],
+          markers: [
+            { pct: 0.55, label: "Zona Ledn" },
+            { pct: 0.75, label: "Margin call" },
+            { pct: 0.85, label: "Liquidación" },
+          ],
+        },
+        defaultAssets: [
+          { id: 1, name: "Bitcoin", ticker: "BTC", qty: 0, price: 0, priceAuto: true, useAsCollateral: true },
+          { id: 2, name: "Ethereum", ticker: "ETH", qty: 0, price: 0, priceAuto: true, useAsCollateral: true },
+          { id: 3, name: "Wrapped BTC", ticker: "WBTC", qty: 0, price: 0, priceAuto: true, useAsCollateral: true },
+          { id: 4, name: "USD Coin", ticker: "USDC", qty: 0, price: 1, priceAuto: true, useAsCollateral: true },
+          { id: 5, name: "Tether", ticker: "USDT", qty: 0, price: 1, priceAuto: true, useAsCollateral: true },
+          { id: 6, name: "Litecoin", ticker: "LTC", qty: 0, price: 0, priceAuto: true, useAsCollateral: false },
+        ],
+        defaultParams: {
+          exchangeRates: { ...DEFAULT_EXCHANGE_RATES },
+          loyaltyModel: "vsRest",
+          liveQuotes: true,
+          refreshSec: LIVE_REFRESH_SECONDS,
+          earnOptIn: true,
+          earnOnCollateral: true,
+        },
+        previewSnapshot: {
+          loanAmount: 9000,
+          repayInDays: 150,
+          currency: "USD",
+          params: {
+            exchangeRates: { ...DEFAULT_EXCHANGE_RATES, CAD: 1.34 },
+            loyaltyModel: "vsRest",
+            liveQuotes: true,
+            earnOptIn: true,
+            earnOnCollateral: true,
+            refreshSec: LIVE_REFRESH_SECONDS,
+          },
+          assets: [
+            { id: 1, name: "Bitcoin", ticker: "BTC", qty: 1.2, price: 42000, priceAuto: false, useAsCollateral: true },
+            { id: 2, name: "Wrapped BTC", ticker: "WBTC", qty: 0.6, price: 42000, priceAuto: false, useAsCollateral: true },
+            { id: 3, name: "USD Coin", ticker: "USDC", qty: 15000, price: 1, priceAuto: false, useAsCollateral: true },
+            { id: 4, name: "Tether", ticker: "USDT", qty: 5000, price: 1, priceAuto: false, useAsCollateral: true },
+            { id: 5, name: "Ethereum", ticker: "ETH", qty: 4, price: 2000, priceAuto: false, useAsCollateral: true },
+            { id: 6, name: "Litecoin", ticker: "LTC", qty: 600, price: 65, priceAuto: false, useAsCollateral: false },
+          ],
+        },
+        exportPrefix: "ledn_dashboard",
+        disclaimers: {
+          finePrint: "* Tasas Ledn orientativas basadas en publicaciones públicas (pueden cambiar sin previo aviso).",
+        },
+      },
+    };
+
+    const PLATFORM_EXPANSION_CANDIDATES = [
+      {
+        id: "youhodler",
+        name: "YouHodler",
+        segment: "CeFi Europa",
+        region: "UE / LatAm",
+        focus: "Planes escalonados con stablecoins y Turbocharge.",
+        highlights: [
+          "LTV hasta 90% en USDT/USDC",
+          "Bundles de Earn + préstamos para carry trade",
+          "Integración con Turbocharge (loop automático)",
+        ],
+      },
+      {
+        id: "ledn",
+        name: "Ledn",
+        segment: "CeFi Canadá",
+        region: "Norteamérica / LatAm",
+        focus: "Enfoque regulado y productos institucionales.",
+        highlights: [
+          "Préstamos B2B con auditorías de reservas",
+          "Programas de ahorro en BTC y USDC",
+          "Requisitos KYC/AML estrictos (compliance)",
+        ],
+      },
+      {
+        id: "coinloan",
+        name: "CoinLoan",
+        segment: "CeFi Báltico",
+        region: "UE",
+        focus: "Préstamos flexibles con tasas personalizadas por token.",
+        highlights: [
+          "Interfaz modular para vaults y préstamos",
+          "Earn escalonado en activos long tail",
+          "Marketplace interno para ajustar APR de prestatarios",
+        ],
+      },
+      {
+        id: "matrixport",
+        name: "Matrixport",
+        segment: "Prime Services",
+        region: "Asia / Europa",
+        focus: "Servicios institucionales con estrategias estructuradas.",
+        highlights: [
+          "Préstamos con margen por bloques (term loans)",
+          "Productos dual-currency y smart yield",
+          "API institucional y riesgo compartimentado",
+        ],
+      },
+      {
+        id: "crypto_com",
+        name: "Crypto.com Lending",
+        segment: "Retail exchange",
+        region: "Global",
+        focus: "Integración con app móvil y tarjeta Visa.",
+        highlights: [
+          "APR ligado al stake de CRO",
+          "Liberación parcial de colateral desde la app",
+          "Earn flexible sincronizado con el exchange",
+        ],
+      },
+    ];
+
+    const FEATURE_IMPROVEMENT_TASKS = {
+      common: [
+        {
+          id: "scenario-engine",
+          title: "Motor de escenarios de estrés",
+          description: "Permitir shocks de precio (%) o volatilidad intradía y graficar cómo evolucionan LTV, margen y liquidaciones.",
+        },
+        {
+          id: "alerting",
+          title: "Alertas multi-canal",
+          description: "Configurar umbrales de LTV/ratio que disparen alertas por email, Telegram o webhook para reaccionar antes de margin call.",
+        },
+        {
+          id: "benchmarking",
+          title: "Benchmark CeFi vs DeFi",
+          description: "Comparar automáticamente las tasas del simulador con protocolos DeFi (Aave, Spark) para detectar oportunidades de arbitraje.",
+        },
+        {
+          id: "cashflow-planning",
+          title: "Planificador de cashflow",
+          description: "Agregar calendario de pagos parciales, rollovers y cálculo de costo efectivo mensual (CEM) por escenario.",
+        },
+      ],
+      byPlatform: {
+        nexo: [
+          {
+            id: "nexo-booster",
+            title: "Simular Booster & convert",
+            description: "Incluir loops de crédito + compra automática de cripto para ver impacto de Booster y conversión instantánea.",
+          },
+          {
+            id: "nexo-insurance",
+            title: "Visor de seguro Nexo",
+            description: "Agregar panel que estime cobertura de seguro y auditorías (Armanino) frente a colateral disponible.",
+          },
+        ],
+        binance: [
+          {
+            id: "binance-vip",
+            title: "Modelo VIP dinámico",
+            description: "Calcular automáticamente upgrade de nivel VIP considerando volumen spot/futuros y mostrar APR objetivo.",
+          },
+          {
+            id: "binance-crossmargin",
+            title: "Cruce con Cross-Margin",
+            description: "Permitir importar posiciones de margin/futuros para medir riesgo agregado y requirements de colateral.",
+          },
+        ],
+        youhodler: [
+          {
+            id: "yh-turbo",
+            title: "Turbocharge loops",
+            description: "Simular iteraciones Turbocharge (auto-loop) para ver cuántas rondas maximizan el capital sin liquidar.",
+          },
+          {
+            id: "yh-stable-buckets",
+            title: "Buckets de stablecoins",
+            description: "Segregar stablecoins por plan (Classic/Premium/VIP) y optimizar qué cantidad conviene bloquear para subir de nivel.",
+          },
+        ],
+        ledn: [
+          {
+            id: "ledn-b2b",
+            title: "Modo institución",
+            description: "Añadir campos de reporting (auditorías, segregación de cuentas) y métricas de reservas para clientes corporativos.",
+          },
+          {
+            id: "ledn-proof",
+            title: "Prueba de reservas",
+            description: "Integrar feed de pruebas de reservas trimestrales y alertar si cambian los índices de cobertura BTC/USDC.",
+          },
+        ],
+      },
     };
 
     const PLATFORM_THEME_CLASSES = Array.from(new Set([
@@ -521,6 +961,19 @@
       const autoRepayLtv = policies.autoRepayLtv ?? 0.85;
       const minBalancePerks = policies.minBalancePerks ?? 0;
       const defaultLtv = policies.defaultLtv ?? 0.25;
+      const candidatePlatforms = useMemo(
+        () => PLATFORM_EXPANSION_CANDIDATES.map((candidate) => ({
+          ...candidate,
+          integrated: PLATFORM_IDS.includes(candidate.id),
+          isCurrent: candidate.id === platformId,
+        })),
+        [platformId]
+      );
+      const improvementIdeas = useMemo(() => {
+        const base = FEATURE_IMPROVEMENT_TASKS.common || [];
+        const extras = (FEATURE_IMPROVEMENT_TASKS.byPlatform || {})[platformId] || [];
+        return [...base, ...extras];
+      }, [platformId]);
       const loyaltyModels = loyalty?.models ?? [];
       const loyaltyModelFallback = platformDefaultParams?.loyaltyModel ?? loyaltyModels[0]?.id ?? "vsRest";
       const isBinance = id === "binance";
@@ -1365,6 +1818,45 @@
               </Card>
             </section>
 
+            <section className="mb-10 grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card title="Plataformas en radar">
+                <p className="text-sm text-neutral-600 mb-3">Listado vivo de proveedores CeFi/prime que podemos sumar al simulador. Indicamos si ya están integrados y qué aportan.</p>
+                <div className="space-y-3">
+                  {candidatePlatforms.map((candidate) => (
+                    <div key={candidate.id} className="rounded-2xl border border-neutral-200 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <div className="text-sm font-semibold text-neutral-900">{candidate.name}</div>
+                          <div className="text-xs text-neutral-500">{candidate.segment} · {candidate.region}</div>
+                        </div>
+                        <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${candidate.integrated ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                          {candidate.integrated ? (candidate.isCurrent ? 'Integrada (activa)' : 'Integrada') : 'Pendiente'}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm text-neutral-600">{candidate.focus}</p>
+                      <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-neutral-500">
+                        {candidate.highlights.map((point, idx) => (
+                          <li key={`${candidate.id}-highlight-${idx}`}>{point}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+
+              <Card title="Ideas para un simulador único">
+                <p className="text-sm text-neutral-600">Backlog sugerido para diferenciar la herramienta y hacerla monetizable.</p>
+                <ol className="mt-3 list-decimal space-y-3 pl-5 text-sm text-neutral-700">
+                  {improvementIdeas.map((idea) => (
+                    <li key={idea.id}>
+                      <div className="font-semibold text-neutral-900">{idea.title}</div>
+                      <p className="text-xs text-neutral-500 mt-1">{idea.description}</p>
+                    </li>
+                  ))}
+                </ol>
+              </Card>
+            </section>
+
             <footer className="text-xs text-neutral-500">© {new Date().getFullYear()} – Demo técnica. Estilos y métricas se adaptan según la plataforma elegida.</footer>
           </div>
         </div>
@@ -1780,6 +2272,8 @@
       try {
         const nexo = PLATFORM_CONFIGS.nexo;
         const binance = PLATFORM_CONFIGS.binance;
+        const youhodler = PLATFORM_CONFIGS.youhodler;
+        const ledn = PLATFORM_CONFIGS.ledn;
         console.assert(approxEq((nexo.policies?.targetLtv ?? 0), 0.20), 'Test1: Target LTV Nexo 20%');
         console.assert(approxEq((nexo.ltvByTicker?.BTC ?? 0), 0.50), 'Test2: LTV BTC Nexo 50%');
         console.assert((binance.earnAprTop?.BNB ?? 0) >= 0.05, 'Test3: Earn BNB Binance ≥5%');
@@ -1789,6 +2283,9 @@
         console.assert(lowCostNexo.includes('Gold') && lowCostNexo.includes('Platinum'), 'Test6: Low-Cost tiers Nexo');
         const defaultTicker = (nexo.defaultAssets?.[0]?.ticker || '').toUpperCase();
         console.assert(defaultTicker === 'BTC', 'Test7: default asset BTC');
+        console.assert((youhodler?.policies?.targetLtv ?? 0) >= 0.7, 'Test8: Target LTV YouHodler ≥70%');
+        console.assert((ledn?.ltvByTicker?.BTC ?? 0) <= 0.7, 'Test9: LTV BTC Ledn ≤70%');
+        console.assert(PLATFORM_IDS.includes('youhodler') && PLATFORM_IDS.includes('ledn'), 'Test10: nuevas plataformas registradas');
         console.log('%cSanity tests OK', 'color:green');
       } catch (e) { console.error('Sanity tests failed', e); }
     }
