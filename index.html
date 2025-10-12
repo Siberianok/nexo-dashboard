@@ -2258,24 +2258,23 @@
                 minBalancePerks={minBalancePerks}
               />
 
-              <BenchmarkCeFiDeFi
-                config={benchmarkConfig}
-                onChange={updateBenchmarkConfig}
-                fmt={fmt}
-                currency={currency}
-                rate={rate}
-                loanAmount={loanAmount}
-                chosenAPR={chosenAPR}
-                daysUntilRepay={daysUntilRepay}
-                scenarioName={ltvScenarioLabel}
-                cashflowNet={cashflowDerived?.netBalanceFinal}
-                defaultMatrix={baseBenchmarkConfig?.rateMatrix}
-              />
-            </section>
+              <div className="flex flex-col gap-6">
+                <BenchmarkCeFiDeFi
+                  config={benchmarkConfig}
+                  onChange={updateBenchmarkConfig}
+                  fmt={fmt}
+                  currency={currency}
+                  rate={rate}
+                  loanAmount={loanAmount}
+                  chosenAPR={chosenAPR}
+                  daysUntilRepay={daysUntilRepay}
+                  scenarioName={ltvScenarioLabel}
+                  cashflowNet={cashflowDerived?.netBalanceFinal}
+                  defaultMatrix={baseBenchmarkConfig?.rateMatrix}
+                />
 
-            <section className="mb-8">
-              <Card title="Parámetros (solo entorno)">
-                <div className="grid grid-cols-1 gap-4">
+                <Card title="Parámetros (solo entorno)">
+                  <div className="grid grid-cols-1 gap-4">
                   {SUPPORTED_CURRENCIES.filter((option) => option.code !== 'USD').map((option) => (
                     <NumberParam
                       key={option.code}
@@ -2338,8 +2337,9 @@
                   <div className="sm:col-span-2 text-xs text-neutral-500">
                     {isBinance ? 'LTV, rangos de salud y precios de liquidación se basan en las reglas flexibles de Binance. Ajusta valores para simular escenarios.' : '* LTV, APR por nivel y descuentos Low-Cost provienen de la plataforma elegida. Aquí solo ajustás parámetros de entorno (cambio, frecuencia, toggles).'}
                   </div>
-                </div>
-              </Card>
+                  </div>
+                </Card>
+              </div>
             </section>
 
             <section className="mb-10 grid grid-cols-1 lg:grid-cols-2 gap-6">
