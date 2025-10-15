@@ -3920,7 +3920,16 @@
       if (!data || data.length < 2) {
         return <div className="text-sm text-neutral-500">Configura un monto y una fecha de repago para visualizar la trayectoria.</div>;
       }
-      const maxVal = Math.max(...data.flatMap(d => [d.cost, d.earn, d.balance]));
+      const maxVal = data.reduce((max, point) => {
+        const candidates = [point.cost, point.earn, point.balance];
+        for (const raw of candidates) {
+          const value = Number(raw);
+          if (Number.isFinite(value) && value > max) {
+            max = value;
+          }
+        }
+        return max;
+      }, 0);
       if (!(maxVal > 0)) {
         return <div className="text-sm text-neutral-500">Agrega colateral o préstamo para generar la proyección.</div>;
       }
