@@ -1335,6 +1335,21 @@
         next.USD = 1;
         return next;
       }, [baseExchangeRates]);
+      const sanitizeLoanRequests = useCallback((rawRequests) => {
+        if (!Array.isArray(rawRequests)) return [];
+        return rawRequests
+          .map((item, idx) => {
+            const amount = Math.max(0, Number(item?.amount) || 0);
+            if (!(amount > 0)) return null;
+            const ticker = sanitizeTicker(item?.ticker || '');
+            const id = typeof item?.id === 'string' && item.id
+              ? item.id
+              : `loan-${idx + 1}-${ticker || 'GEN'}`;
+            return { id, amount, ticker };
+          })
+          .filter(Boolean);
+      }, []);
+
       const baseParams = useMemo(() => {
         const fallback = {
           exchangeRates: { ...baseExchangeRates },
@@ -1346,6 +1361,7 @@
           binanceCollateralDelta: 0,
           binanceRepaySim: 0,
           manualLoanAllocation: false,
+          loanRequests: [],
         };
         const merged = { ...fallback, ...platformDefaultParams };
         if (loyaltyModels.length && !loyaltyModels.some((m) => m.id === merged.loyaltyModel)) {
@@ -1375,6 +1391,7 @@
         merged.binanceCollateralDelta = Number(merged.binanceCollateralDelta) || 0;
         merged.binanceRepaySim = Number(merged.binanceRepaySim) || 0;
         merged.manualLoanAllocation = !!merged.manualLoanAllocation;
+        merged.loanRequests = sanitizeLoanRequests(merged.loanRequests);
         if (isBinance) {
           const defaultTicker = borrowTickerList[0] || '';
           const candidate = sanitizeTicker(merged.binanceBorrowTicker);
@@ -1398,8 +1415,10 @@
           setAssets(sanitizeAssets(previewAssets));
         }
 
+        let sanitizedPreviewParams = null;
         if (previewParams) {
-          setParams(sanitizeParams(previewParams));
+          sanitizedPreviewParams = sanitizeParams(previewParams);
+          setParams(sanitizedPreviewParams);
         }
 
         if (previewSnapshot?.cashflow) {
@@ -1411,7 +1430,18 @@
         }
 
         if (Number.isFinite(previewLoanAmount)) {
-          setLoanAmount(Number(previewLoanAmount) || 0);
+          const amount = Math.max(0, Number(previewLoanAmount) || 0);
+          setLoanDraftAmount(amount);
+          setParams((prev) => {
+            const baseParams = sanitizedPreviewParams || prev;
+            const defaultTicker = isBinance
+              ? (sanitizeTicker(baseParams?.binanceBorrowTicker) || borrowTickerList[0] || '')
+              : '';
+            const nextRequests = amount > 0
+              ? sanitizeLoanRequests([{ id: `loan-preview-${Date.now()}`, amount, ticker: defaultTicker }])
+              : [];
+            return { ...prev, loanRequests: nextRequests };
+          });
         }
 
         if (typeof previewCurrency === 'string' && previewCurrency) {
@@ -1450,6 +1480,10 @@
         } catch {}
         return baseParams;
       });
+      const loanRequests = useMemo(
+        () => sanitizeLoanRequests(params.loanRequests),
+        [params.loanRequests, sanitizeLoanRequests]
+      );
 
       const [fxMeta, setFxMeta] = useState({ loading: false, lastUpdated: null, error: null });
 
@@ -1544,7 +1578,7 @@
         try { localStorage.setItem(storageKeys.params, JSON.stringify(params)); } catch {}
       }, [params, storageKeys.params]);
 
-      const [loanAmount, setLoanAmount] = useState(0);
+      const [loanDraftAmount, setLoanDraftAmount] = useState(0);
       const [repayDate, setRepayDate] = useState(() => {
         const d = new Date(); d.setDate(d.getDate() + 60); return d.toISOString().slice(0, 10);
       });
@@ -1557,6 +1591,31 @@
       });
       const [lastPriceTs, setLastPriceTs] = useState(null);
       const [liveError, setLiveError] = useState(null);
+      const buildLoanRequest = useCallback((amount, ticker) => ({
+        id: `loan-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        amount: Math.max(0, Number(amount) || 0),
+        ticker: sanitizeTicker(ticker || ''),
+      }), []);
+      const handleAddLoanRequest = useCallback(() => {
+        if (!(loanDraftAmount > 0)) return;
+        const resolvedTicker = isBinance ? (binanceBorrowTicker || borrowTickerList[0] || '') : '';
+        const entry = buildLoanRequest(loanDraftAmount, resolvedTicker);
+        setParams((prev) => ({
+          ...prev,
+          loanRequests: sanitizeLoanRequests([...(prev.loanRequests || []), entry]),
+        }));
+        setLoanDraftAmount(0);
+      }, [loanDraftAmount, isBinance, binanceBorrowTicker, borrowTickerList, buildLoanRequest, setParams, sanitizeLoanRequests, setLoanDraftAmount]);
+      const handleRemoveLoanRequest = useCallback((id) => {
+        setParams((prev) => ({
+          ...prev,
+          loanRequests: sanitizeLoanRequests((prev.loanRequests || []).filter((item) => item.id !== id)),
+        }));
+      }, [setParams, sanitizeLoanRequests]);
+      const handleClearLoanRequests = useCallback(() => {
+        setParams((prev) => ({ ...prev, loanRequests: [] }));
+        setLoanDraftAmount(0);
+      }, [setParams, setLoanDraftAmount]);
 
       const updateCashflowPlan = (updater) => {
         setCashflowPlan((prev) => {
@@ -1610,6 +1669,16 @@
 
       const currency = selectedCurrency;
       const rate = params.exchangeRates?.[currency] ?? 1;
+      const loanAmount = useMemo(() => loanRequests.reduce((acc, item) => acc + (Number(item.amount) || 0), 0), [loanRequests]);
+      const loanRequestsTotals = useMemo(() => {
+        const totals = {};
+        loanRequests.forEach((item) => {
+          const ticker = sanitizeTicker(item.ticker || '');
+          if (!ticker) return;
+          totals[ticker] = (totals[ticker] || 0) + item.amount;
+        });
+        return totals;
+      }, [loanRequests]);
       const pct = (value, digits = 1) => formatPercent(Number(value), {
         minimumFractionDigits: digits,
         maximumFractionDigits: digits,
@@ -1691,6 +1760,7 @@
         if (confirm("¿Restablecer parámetros por defecto?")) {
           localStorage.removeItem(storageKeys.params);
           setParams({ ...baseParams });
+          setLoanDraftAmount(0);
         }
         closeExportMenu();
       };
@@ -1809,10 +1879,48 @@
         return borrowTickerList[0] || null;
       }, [isBinance, params.binanceBorrowTicker, borrowRatesByTicker, borrowTickerList]);
       const binanceBorrowInfo = binanceBorrowTicker ? borrowRatesByTicker[binanceBorrowTicker] : null;
-      const binanceBorrowAnnualRate = binanceBorrowInfo?.annual ?? 0;
-      const binanceBorrowNetAnnualRate = binanceBorrowInfo?.netAnnual ?? binanceBorrowAnnualRate;
-      const binanceBorrowAdjustment = binanceBorrowInfo?.adjustmentAnnual ?? Math.max(0, binanceBorrowAnnualRate - binanceBorrowNetAnnualRate);
-      const binanceBorrowLabel = binanceBorrowInfo?.label || (binanceBorrowTicker || null);
+      const binanceActiveLoanEntries = useMemo(() => {
+        if (!isBinance) return [];
+        return Object.entries(loanRequestsTotals).filter(([, amount]) => amount > 0);
+      }, [isBinance, loanRequestsTotals]);
+      const binanceBorrowAnnualRate = useMemo(() => {
+        if (!isBinance) return 0;
+        if (loanAmount > 0 && binanceActiveLoanEntries.length > 0) {
+          return binanceActiveLoanEntries.reduce((acc, [ticker, amount]) => {
+            const info = borrowRatesByTicker[ticker];
+            const rate = info?.annual ?? binanceBorrowInfo?.annual ?? 0;
+            return acc + rate * (amount / loanAmount);
+          }, 0);
+        }
+        return binanceBorrowInfo?.annual ?? 0;
+      }, [isBinance, loanAmount, binanceActiveLoanEntries, borrowRatesByTicker, binanceBorrowInfo]);
+      const binanceBorrowNetAnnualRate = useMemo(() => {
+        if (!isBinance) return 0;
+        if (loanAmount > 0 && binanceActiveLoanEntries.length > 0) {
+          return binanceActiveLoanEntries.reduce((acc, [ticker, amount]) => {
+            const info = borrowRatesByTicker[ticker];
+            const net = info?.netAnnual ?? info?.annual ?? binanceBorrowInfo?.netAnnual ?? binanceBorrowInfo?.annual ?? 0;
+            return acc + net * (amount / loanAmount);
+          }, 0);
+        }
+        return binanceBorrowInfo?.netAnnual ?? binanceBorrowInfo?.annual ?? 0;
+      }, [isBinance, loanAmount, binanceActiveLoanEntries, borrowRatesByTicker, binanceBorrowInfo]);
+      const binanceBorrowAdjustment = useMemo(
+        () => Math.max(0, binanceBorrowAnnualRate - binanceBorrowNetAnnualRate),
+        [binanceBorrowAnnualRate, binanceBorrowNetAnnualRate]
+      );
+      const binanceBorrowLabel = useMemo(() => {
+        if (!isBinance) return null;
+        if (binanceActiveLoanEntries.length === 0) {
+          return binanceBorrowInfo?.label || (binanceBorrowTicker || null);
+        }
+        if (binanceActiveLoanEntries.length === 1) {
+          const [ticker] = binanceActiveLoanEntries[0];
+          return borrowRatesByTicker[ticker]?.label || ticker;
+        }
+        const tickers = binanceActiveLoanEntries.map(([ticker]) => ticker).join(', ');
+        return `${binanceActiveLoanEntries.length} criptos (${tickers})`;
+      }, [isBinance, binanceActiveLoanEntries, borrowRatesByTicker, binanceBorrowInfo, binanceBorrowTicker]);
 
       useEffect(() => {
         if (autoMasterRef.current) {
@@ -1851,8 +1959,8 @@
       const lowCostHeadroom = useMemo(() => Math.max(0, capLowCost - loanAmount), [capLowCost, loanAmount]);
 
       const chosenAPR = useMemo(() => {
-        if (isBinance && binanceBorrowTicker && borrowRatesByTicker[binanceBorrowTicker]) {
-          return borrowRatesByTicker[binanceBorrowTicker].annual;
+        if (isBinance) {
+          return binanceBorrowAnnualRate;
         }
         const table = loanAmount <= recommendedLoanAtTarget ? aprDiscountTable : aprStandardTable;
         const aprFromTier = table?.[loyaltyTier];
@@ -1860,7 +1968,7 @@
         if (aprBaseTier && typeof table?.[aprBaseTier] === 'number') return table[aprBaseTier];
         if (loyalty?.baseLabel && typeof table?.[loyalty.baseLabel] === 'number') return table[loyalty.baseLabel];
         return aprBase;
-      }, [isBinance, binanceBorrowTicker, borrowRatesByTicker, loanAmount, recommendedLoanAtTarget, aprDiscountTable, aprStandardTable, loyaltyTier, aprBaseTier, aprBase, loyalty?.baseLabel]);
+      }, [isBinance, binanceBorrowAnnualRate, loanAmount, recommendedLoanAtTarget, aprDiscountTable, aprStandardTable, loyaltyTier, aprBaseTier, aprBase, loyalty?.baseLabel]);
 
       const daysUntilRepay = useMemo(() => {
         const a = new Date(); const b = new Date(repayDate);
@@ -1968,6 +2076,10 @@
           .reduce((acc, asset) => acc + asset.loanAssigned, 0);
         const manualEnabled = manualLoanAllocationEnabled;
         const manualActive = manualEnabled && manualTotal > 0;
+        const directLoanActive = isBinance && Object.keys(loanRequestsTotals).length > 0;
+        const directLoanSum = directLoanActive
+          ? Object.values(loanRequestsTotals).reduce((acc, value) => acc + value, 0)
+          : 0;
         const loanBase = Math.max(0, loanAmount);
         const items = totals.withValue
           .filter((asset) => asset.useAsCollateral && asset.value > 0)
@@ -1976,7 +2088,10 @@
             const policyLTV = ltvByTicker[ticker] ?? asset.ltv ?? defaultLtv;
             const maxBorrowForAsset = asset.value * policyLTV;
             const share = asset.value / totalCollateral;
-            const allocatedLoan = manualActive ? Math.max(0, asset.loanAssigned || 0) : loanBase * share;
+            const mappedLoan = directLoanActive ? Math.max(0, loanRequestsTotals[ticker] || 0) : 0;
+            const allocatedLoan = manualActive
+              ? Math.max(0, asset.loanAssigned || 0)
+              : (directLoanActive ? mappedLoan : loanBase * share);
             const usageVsCap = maxBorrowForAsset > 0 ? allocatedLoan / maxBorrowForAsset : 0;
             const actualLtv = asset.value > 0 ? allocatedLoan / asset.value : 0;
             const earnApr = earnAprTop[ticker] ?? 0;
@@ -1989,7 +2104,11 @@
             } else if (usageVsCap > 0.75 || actualLtv > policyLTV * 0.9 || overallLTVIfBorrow >= marginCallLtv) {
               tone = "warn";
             }
-            const loanShareDenom = manualActive ? manualTotal : loanBase;
+            const loanShareDenom = manualActive
+              ? manualTotal
+              : directLoanActive
+                ? (directLoanSum > 0 ? directLoanSum : loanBase)
+                : loanBase;
             return {
               id: asset.id,
               name: asset.name || ticker || `Activo ${asset.id}`,
@@ -2012,7 +2131,9 @@
           .sort((a, b) => b.value - a.value);
         const totalAllocated = manualActive
           ? manualTotal
-          : items.reduce((acc, item) => acc + item.allocatedLoan, 0);
+          : directLoanActive
+            ? (directLoanSum || loanBase)
+            : items.reduce((acc, item) => acc + item.allocatedLoan, 0);
         const weightedAprOffset = isBinance
           ? binanceBorrowAdjustment
           : (totalAllocated > 0
@@ -2028,7 +2149,7 @@
           weightedAprOffset,
           weightedNetApr,
         };
-      }, [autoRepayLtv, binanceBorrowAdjustment, binanceBorrowNetAnnualRate, defaultLtv, earnAprTop, isBinance, loanAmount, manualLoanAllocationEnabled, marginCallLtv, overallLTVIfBorrow, totals.totalCollateralValue, totals.withValue, ltvByTicker]);
+      }, [autoRepayLtv, binanceBorrowAdjustment, binanceBorrowNetAnnualRate, defaultLtv, earnAprTop, isBinance, loanAmount, loanRequestsTotals, manualLoanAllocationEnabled, marginCallLtv, overallLTVIfBorrow, totals.totalCollateralValue, totals.withValue, ltvByTicker]);
 
       const binanceNetAprOffset = isBinance ? (collateralBreakdown.weightedAprOffset || 0) : 0;
       const binanceNetAnnualRate = isBinance ? (collateralBreakdown.weightedNetApr ?? chosenAPR) : 0;
@@ -2239,8 +2360,8 @@
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 justify-items-center">
                     <Field label={`Monto a pedir (${currency})`} align="center" className="w-full max-w-xs">
                       <LocaleNumberInput
-                        value={loanAmount * rate}
-                        onChange={(v) => setLoanAmount(Math.max(0, v / rate))}
+                        value={loanDraftAmount * rate}
+                        onChange={(v) => setLoanDraftAmount(Math.max(0, v / rate))}
                         decimals={2}
                         min={0}
                         className={`w-full rounded-full border border-neutral-300 px-5 py-3 text-center text-lg font-semibold shadow-sm focus:outline-none focus:ring-2 ${focusRingClass}`}
@@ -2271,10 +2392,81 @@
                       </Field>
                     )}
                   </div>
+                  <div className="mt-4 flex flex-col items-center justify-center gap-3 md:flex-row">
+                    <button
+                      type="button"
+                      onClick={handleAddLoanRequest}
+                      disabled={!(loanDraftAmount > 0)}
+                      className="nx-btn text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Agregar préstamo
+                    </button>
+                    {loanRequests.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleClearLoanRequests}
+                        className="nx-btn nx-btn-ghost text-sm"
+                      >
+                        Limpiar préstamos
+                      </button>
+                    )}
+                    <span className="text-sm font-medium text-neutral-600">
+                      Total cargado: {fmt(loanAmount * rate, currency)}
+                    </span>
+                  </div>
+                  <div className="mt-4 w-full">
+                    {loanRequests.length > 0 ? (
+                      <div className="rounded-2xl border border-neutral-200 bg-white/70 p-3 shadow-inner">
+                        <div className="flex flex-col gap-2">
+                          {loanRequests.map((request) => {
+                            const ticker = sanitizeTicker(request.ticker || '');
+                            const info = isBinance && ticker ? borrowRatesByTicker[ticker] : null;
+                            const label = info?.label || (ticker || 'General');
+                            const share = loanAmount > 0 ? request.amount / loanAmount : 0;
+                            const aprText = info?.annual != null ? toPct(info.annual, 2) : '—';
+                            return (
+                              <div
+                                key={request.id}
+                                className="grid grid-cols-1 gap-2 rounded-xl bg-neutral-50 px-3 py-2 text-sm text-neutral-700 shadow-sm md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center"
+                              >
+                                <div>
+                                  <div className="font-semibold text-neutral-900">{label}</div>
+                                  <div className="text-xs text-neutral-500">
+                                    {share > 0 ? `${toPct(share, 1)} del total` : 'Sin distribución'}{info ? ` · ${aprText} APR` : ''}
+                                  </div>
+                                </div>
+                                <div className="text-right font-semibold text-neutral-800">
+                                  {fmt(request.amount * rate, currency)}
+                                </div>
+                                <div className="text-right">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveLoanRequest(request.id)}
+                                    className="nx-btn nx-btn-ghost nx-btn-sm"
+                                  >
+                                    Quitar
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-center text-sm text-neutral-500">No agregaste préstamos todavía.</p>
+                    )}
+                  </div>
                   <div className="mt-6 space-y-3">
                     {isBinance ? (
                       <>
-                        <p className="text-sm text-neutral-500 text-center">Préstamo seleccionado en <span className="font-semibold text-neutral-700">{binanceBorrowLabel || '—'}</span>. {params.manualLoanAllocation ? 'Estás distribuyendo el préstamo manualmente entre los colaterales activos.' : 'La herramienta reparte el préstamo de forma proporcional al valor del colateral.'}</p>
+                        <p className="text-sm text-neutral-500 text-center">
+                          Distribución actual: <span className="font-semibold text-neutral-700">{binanceBorrowLabel || '—'}</span>.{' '}
+                          {params.manualLoanAllocation
+                            ? 'Estás distribuyendo el préstamo manualmente entre los colaterales activos.'
+                            : (binanceActiveLoanEntries.length > 0
+                              ? 'Se respeta la asignación por cripto que agregaste en la lista.'
+                              : 'La herramienta reparte el préstamo de forma proporcional al valor del colateral.')}
+                        </p>
                         <Pill label="LTV actual" value={toPct(overallLTVIfBorrow, 2)} tone={ltvTone} />
                         <Pill label="LTV simulado" value={toPct(binanceLtvAfterAdjust, 2)} tone={binanceLtvTone} />
                         <Pill label={`Colateral extra para ≤${toPct(ltvHealthyThreshold, 0)}`} value={fmt(binanceExtraCollateralNeeded * rate, currency)} tone={binanceExtraCollateralNeeded > 0 ? "warn" : "ok"} />
@@ -2385,19 +2577,26 @@
                   {bipSources.length > 0 && (
                     <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/70 p-3">
                       <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">Fuentes oficiales (BIP)</div>
-                      <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-amber-800">
-                        {bipSources.map((source) => (
-                          <li key={source.code || source.title}>
-                            {source.url ? (
-                              <a href={source.url} target="_blank" rel="noreferrer" className="font-semibold underline decoration-dotted">
-                                {source.code || source.title}
-                              </a>
-                            ) : (
-                              <span className="font-semibold">{source.code || source.title}</span>
-                            )}
-                            {source.title && source.code ? ` — ${source.title}` : (source.title && !source.code ? ` — ${source.title}` : '')}
-                          </li>
-                        ))}
+                      <ul className="mt-2 list-disc space-y-2 pl-4 text-xs text-amber-800">
+                        {bipSources.map((source) => {
+                          const codeLabel = source.code || source.title || 'BIP';
+                          const titleText = source.title && source.title !== source.code ? source.title : '';
+                          const labelContent = (
+                            <span className="font-semibold">{codeLabel}</span>
+                          );
+                          return (
+                            <li key={codeLabel} className="leading-relaxed">
+                              {source.url ? (
+                                <a href={source.url} target="_blank" rel="noreferrer" className="underline decoration-dotted">
+                                  {labelContent}
+                                </a>
+                              ) : (
+                                labelContent
+                              )}
+                              {titleText ? <span className="ml-1">— {titleText}</span> : null}
+                            </li>
+                          );
+                        })}
                       </ul>
                     </div>
                   )}
@@ -3472,11 +3671,13 @@
     }
     function Card({ title, children }) {
       return (
-        <div className="rounded-2xl bg-white p-5 shadow-sm nx-card">
+        <div className="flex h-full flex-col rounded-2xl bg-white p-5 shadow-sm nx-card">
           <div className="mb-4 text-center">
             <h3 className="text-lg font-semibold tracking-tight text-neutral-800">{title}</h3>
           </div>
-          {children}
+          <div className="flex-1">
+            {children}
+          </div>
         </div>
       );
     }
