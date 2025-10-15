@@ -1997,8 +1997,6 @@
         }, 0);
       }, [earnEligible, params.earnOnCollateral, totals.withValue, earnAprTop]);
 
-      const netMonthly = useMemo(() => earnMonthly - monthlyLoanCost, [earnMonthly, monthlyLoanCost]);
-
       const timeline = useMemo(() => {
         const totalDays = Math.max(1, daysUntilRepay);
         const steps = Math.max(4, Math.min(12, Math.ceil(totalDays / 20)));
@@ -2155,12 +2153,6 @@
       const binanceNetAnnualRate = isBinance ? (collateralBreakdown.weightedNetApr ?? chosenAPR) : 0;
       const netAnnualRate = isBinance ? binanceNetAnnualRate : standardNetAnnualRate;
 
-      const monthlyNetInterest = useMemo(() => {
-        const annualRate = Math.max(0, netAnnualRate);
-        if (!(loanAmount > 0)) return 0;
-        return loanAmount * (Math.pow(1 + annualRate / 365, 30) - 1);
-      }, [loanAmount, netAnnualRate]);
-
       const extraCollateralForTarget = useMemo(() => {
         if (targetLtv <= 0) return 0;
         const neededCollateral = loanAmount / targetLtv;
@@ -2309,14 +2301,6 @@
                   value: fmt(monthlyLoanCost * rate, currency),
                   subtle: `${toPct(chosenAPR, 2)} APR base`,
                 },
-                {
-                  key: 'interest-monthly-net',
-                  title: 'Interés mensual neto',
-                  value: fmt(monthlyNetInterest * rate, currency),
-                  subtle: netAnnualRate !== chosenAPR ? `${toPct(netAnnualRate, 2)} neto` : undefined,
-                  tone: monthlyNetInterest <= monthlyLoanCost ? 'ok' : undefined,
-                },
-                { key: 'liquidation', title: `Valor colateral (${toPct(marginCallLtv, 0)} margin call)`, value: fmt(binanceLiquidationValue * rate, currency), subtle: binanceLiquidationBuffer >= 0 ? `Buffer ${fmt(binanceLiquidationBuffer * rate, currency)}` : `Déficit ${fmt(Math.abs(binanceLiquidationBuffer) * rate, currency)}`, tone: binanceLiquidationBuffer >= 0 ? 'ok' : 'danger' },
                 { key: 'repay-total', title: 'Total a devolver', value: fmt(interestCalc.repayTotal * rate, currency) },
               ] : [
                 { key: 'balance', title: 'Balance total', value: fmt(totals.total * rate, currency) },
@@ -2328,7 +2312,6 @@
                 { key: 'interest-total', title: 'Interés hasta repago', value: fmt(interestCalc.total * rate, currency), subtle: `${daysUntilRepay} días` },
                 { key: 'repay-total', title: 'Total a devolver', value: fmt(interestCalc.repayTotal * rate, currency) },
                 { key: 'earn-monthly', title: 'Earn mensual (hasta)', value: fmt(earnMonthly * rate, currency), subtle: earnEligible ? (minBalancePerks > 0 ? `Savings ≥ US$${formatDecimal(minBalancePerks, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : undefined) : 'no elegible' },
-                { key: 'net-monthly', title: 'Neto mensual (Earn − crédito)', value: fmt(netMonthly * rate, currency), tone: netMonthly >= 0 ? 'ok' : 'danger' },
               ]).map((item) => (
                 <KPI key={item.key} title={item.title} value={item.value} subtle={item.subtle} tone={item.tone} variant={item.variant || 'button'} />
               ))}
@@ -2527,7 +2510,6 @@
                         <Line label="Riesgo medio" value={binanceCautionLabel} muted />
                         <Line label="Margin call" value={toPct(marginCallLtv, 0)} muted />
                         <Line label="Auto-liquidación" value={toPct(autoRepayLtv, 0)} muted />
-                        <Line label="Colateral mínimo (margin call)" value={fmt(binanceLiquidationValue * rate, currency)} tone={binanceLiquidationBuffer >= 0 ? "ok" : "danger"} />
                         <Line label="Buffer actual" value={binanceLiquidationBuffer >= 0 ? fmt(binanceLiquidationBuffer * rate, currency) : `Déficit ${fmt(Math.abs(binanceLiquidationBuffer) * rate, currency)}`} tone={binanceLiquidationBuffer >= 0 ? "ok" : "danger"} />
                         <Line label="Buffer simulado" value={binanceAdjustedLiquidationBuffer >= 0 ? fmt(binanceAdjustedLiquidationBuffer * rate, currency) : `Déficit ${fmt(Math.abs(binanceAdjustedLiquidationBuffer) * rate, currency)}`} tone={binanceAdjustedLiquidationBuffer >= 0 ? "ok" : "danger"} />
                       </>
@@ -2571,7 +2553,7 @@
                       APR estimado: <b>{toPct(chosenAPR, 2)}</b>{isBinance && binanceBorrowLabel ? ` (${binanceBorrowLabel})` : ''}. Interés hasta repago ({daysUntilRepay} días): {fmt(interestCalc.total * rate, currency)}.{interestCalc.early > 0 && <span> Incluye interés por "early rule".</span>}
                     </li>
                     <li>
-                      Earn (flex) mensual estimado {earnEligible ? (minBalancePerks > 0 ? "(tope)" : "") : (minBalancePerks > 0 ? "(requiere balance mínimo)" : "(no elegible)")}: <b>{fmt(earnMonthly * rate, currency)}</b>. Neto mensual: <b className={netMonthly>=0?"text-emerald-700":"text-rose-700"}>{fmt(netMonthly * rate, currency)}</b>.
+                      Earn (flex) mensual estimado {earnEligible ? (minBalancePerks > 0 ? "(tope)" : "") : (minBalancePerks > 0 ? "(requiere balance mínimo)" : "(no elegible)")}: <b>{fmt(earnMonthly * rate, currency)}</b>.
                     </li>
                   </ul>
                   {bipSources.length > 0 && (
@@ -2753,7 +2735,6 @@
                 autoRepayLtv={autoRepayLtv}
                 scenarioDefaults={cashflowPlan?.scenarioShocks}
                 focusRingClass={focusRingClass}
-                netMonthly={netMonthly}
                 earnMonthly={earnMonthly}
                 earnEligible={earnEligible}
                 minBalancePerks={minBalancePerks}
@@ -2884,7 +2865,6 @@
       autoRepayLtv,
       scenarioDefaults,
       focusRingClass,
-      netMonthly,
       earnMonthly,
       earnEligible,
       minBalancePerks,
@@ -2957,7 +2937,7 @@
             startDate: todayISO(),
             endDate: repayDate,
             frequency: 'monthly',
-            amount: Math.max(0, earnMonthly || netMonthly || 0),
+            amount: Math.max(0, earnMonthly || 0),
             platform: '',
             token: '',
             label: `Earn ${nextId}`,
