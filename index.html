@@ -2792,6 +2792,10 @@
                   </div>
                 </Card>
 
+                <Card title="Proyección del préstamo">
+                  <TrendChart data={timeline} currency={currency} rate={rate} />
+                </Card>
+
                 <CashflowPlanner
                   plan={cashflowPlan}
                   derived={cashflowDerived}
@@ -2876,10 +2880,6 @@
                   cashflowNet={cashflowDerived?.netBalanceFinal}
                   defaultMatrix={baseBenchmarkConfig?.rateMatrix}
                 />
-
-                <Card title="Proyección del préstamo">
-                  <TrendChart data={timeline} currency={currency} rate={rate} />
-                </Card>
 
                 {!isBinance && (
                   <Card title="Diagnóstico & Sugerencias">
