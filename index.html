@@ -2823,26 +2823,6 @@
                   <TrendChart data={timeline} currency={currency} rate={rate} />
                 </Card>
 
-                <Card title="Breakdown de colateral & LTV">
-                  <CollateralBreakdownCard
-                    breakdown={collateralBreakdown.items}
-                    currency={currency}
-                    rate={rate}
-                    totalCollateral={totals.totalCollateralValue}
-                    totalMaxBorrow={totals.maxBorrow}
-                    overallLTV={plannedOverallLTV}
-                    target={targetLtv}
-                    marginCall={marginCallLtv}
-                    autoRepay={autoRepayLtv}
-                    capLowCost={capLowCost}
-                    lowCostHeadroom={lowCostHeadroom}
-                    manualAllocationEnabled={collateralBreakdown.manualEnabled}
-                    manualAllocationActive={collateralBreakdown.manualActive}
-                    manualAllocationTotal={collateralBreakdown.manualTotal}
-                    loanAmount={plannedOutstanding}
-                  />
-                </Card>
-
                 {!isBinance && (
                   <Card title="Diagnóstico & Sugerencias">
                   <ul className="list-disc pl-5 space-y-2 text-sm">
