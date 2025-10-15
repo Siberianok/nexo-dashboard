@@ -319,6 +319,12 @@
       });
     };
     const FX_SYMBOLS = SUPPORTED_CURRENCIES.filter((c) => c.code !== "USD").map((c) => c.code);
+    const HOURS_IN_YEAR = 365 * 24;
+    const annualToHourly = (apr) => {
+      const normalized = Number(apr);
+      if (!Number.isFinite(normalized) || normalized <= 0) return 0;
+      return Math.pow(1 + normalized, 1 / HOURS_IN_YEAR) - 1;
+    };
 
     const PLATFORM_CONFIGS = {
       nexo: {
@@ -474,6 +480,7 @@
           ALGO: "algorand",
           XRP: "ripple",
           SOL: "solana",
+          ALGO: "algorand",
         },
         ltvByTicker: {
           BTC: 0.65,
@@ -486,6 +493,7 @@
           ALGO: 0.09,
           XRP: 0.50,
           SOL: 0.50,
+          ALGO: 0.45,
         },
         earnAprTop: {
           BTC: 0.03,
@@ -498,6 +506,19 @@
           ALGO: 0.02,
           XRP: 0.02,
           SOL: 0.03,
+          ALGO: 0.02,
+        },
+        borrowRates: {
+          ADA: {
+            label: "Cardano (ADA)",
+            annual: 0.0507,
+            hourly: annualToHourly(0.0507),
+          },
+          ALGO: {
+            label: "Algorand (ALGO)",
+            annual: 0.0507,
+            hourly: annualToHourly(0.0507),
+          },
         },
         policies: {
           targetLtv: 0.75,
@@ -507,35 +528,23 @@
           defaultLtv: 0.30,
         },
         apr: {
-          base: 0.18,
+          base: 0.0507,
           standard: {
-            "VIP 0": 0.18,
-            "VIP 1": 0.17,
-            "VIP 2": 0.16,
-            "VIP 3": 0.15,
-            "VIP 4": 0.14,
-            "VIP 5": 0.13,
-            "VIP 6": 0.12,
-            "VIP 7": 0.11,
-            "VIP 8": 0.10,
-            "VIP 9": 0.09,
+            "Estándar": 0.0507,
+            "VIP 1": 0.045,
+            "VIP 2": 0.04,
+            "VIP 3": 0.035,
           },
           discounted: {
-            "VIP 0": 0.18,
-            "VIP 1": 0.16,
-            "VIP 2": 0.15,
-            "VIP 3": 0.14,
-            "VIP 4": 0.13,
-            "VIP 5": 0.12,
-            "VIP 6": 0.11,
-            "VIP 7": 0.10,
-            "VIP 8": 0.095,
-            "VIP 9": 0.09,
+            "Estándar": 0.0507,
+            "VIP 1": 0.042,
+            "VIP 2": 0.037,
+            "VIP 3": 0.032,
           },
           earlyRuleDays: 30,
-          earlyAPR: 0.18,
-          lowCostEligibleTiers: ["VIP 4", "VIP 5", "VIP 6", "VIP 7", "VIP 8", "VIP 9"],
-          baseTier: "VIP 0",
+          earlyAPR: 0.0507,
+          lowCostEligibleTiers: ["VIP 2", "VIP 3"],
+          baseTier: "Estándar",
         },
         loyalty: {
           tokenTicker: "BNB",
@@ -576,9 +585,9 @@
           { id: 4, name: "Tether", ticker: "USDT", qty: 0, price: 1, priceAuto: true, useAsCollateral: true },
           { id: 5, name: "USD Coin", ticker: "USDC", qty: 0, price: 1, priceAuto: true, useAsCollateral: true },
           { id: 6, name: "BUSD", ticker: "BUSD", qty: 0, price: 1, priceAuto: true, useAsCollateral: true },
-          { id: 7, name: "Cardano", ticker: "ADA", qty: 0, price: 0, priceAuto: true, useAsCollateral: true },
-          { id: 8, name: "Algorand", ticker: "ALGO", qty: 0, price: 0, priceAuto: true, useAsCollateral: true },
-          { id: 9, name: "XRP", ticker: "XRP", qty: 0, price: 0, priceAuto: true, useAsCollateral: false },
+          { id: 7, name: "Cardano", ticker: "ADA", qty: 0, price: 0, priceAuto: true, useAsCollateral: false },
+          { id: 8, name: "XRP", ticker: "XRP", qty: 0, price: 0, priceAuto: true, useAsCollateral: false },
+          { id: 9, name: "Algorand", ticker: "ALGO", qty: 0, price: 0, priceAuto: true, useAsCollateral: false },
         ],
         defaultParams: {
           exchangeRates: { ...DEFAULT_EXCHANGE_RATES },
@@ -589,6 +598,7 @@
           earnOnCollateral: true,
           binanceCollateralDelta: 0,
           binanceRepaySim: 0,
+          binanceBorrowTicker: "ADA",
         },
         previewSnapshot: {
           loanAmount: 12000,
@@ -601,6 +611,7 @@
             earnOptIn: true,
             earnOnCollateral: true,
             refreshSec: LIVE_REFRESH_SECONDS,
+            binanceBorrowTicker: "ADA",
           },
           assets: [
             { id: 1, name: "Bitcoin", ticker: "BTC", qty: 0.8, price: 42000, priceAuto: false, useAsCollateral: true },
@@ -608,9 +619,9 @@
             { id: 3, name: "BNB", ticker: "BNB", qty: 150, price: 230, priceAuto: false, useAsCollateral: true },
             { id: 4, name: "USD Coin", ticker: "USDC", qty: 2000, price: 1, priceAuto: false, useAsCollateral: true },
             { id: 5, name: "BUSD", ticker: "BUSD", qty: 1000, price: 1, priceAuto: false, useAsCollateral: true },
-            { id: 6, name: "Cardano", ticker: "ADA", qty: 25000, price: 0.38, priceAuto: false, useAsCollateral: true, loanAssigned: 4500 },
-            { id: 7, name: "Algorand", ticker: "ALGO", qty: 30000, price: 0.16, priceAuto: false, useAsCollateral: true, loanAssigned: 430 },
-            { id: 8, name: "XRP", ticker: "XRP", qty: 5000, price: 0.5, priceAuto: false, useAsCollateral: false },
+            { id: 6, name: "Cardano", ticker: "ADA", qty: 4000, price: 0.4, priceAuto: false, useAsCollateral: false },
+            { id: 7, name: "XRP", ticker: "XRP", qty: 5000, price: 0.5, priceAuto: false, useAsCollateral: false },
+            { id: 8, name: "Algorand", ticker: "ALGO", qty: 6000, price: 0.14, priceAuto: false, useAsCollateral: false },
           ],
         },
         exportPrefix: "binance_dashboard",
@@ -991,6 +1002,7 @@
         earnAprTop = {},
         policies = {},
         apr: aprConfig = {},
+        borrowRates = {},
         loyalty,
         ltvHealth,
         previewSnapshot,
@@ -1059,6 +1071,25 @@
       }, [ltvHealth, targetLtv, marginCallLtv, autoRepayLtv]);
 
       const sanitizeTicker = (t) => (t || "").toUpperCase();
+      const borrowRatesByTicker = useMemo(() => {
+        if (!borrowRates || typeof borrowRates !== 'object') return {};
+        return Object.entries(borrowRates).reduce((acc, [ticker, info = {}]) => {
+          const key = sanitizeTicker(ticker);
+          if (!key) return acc;
+          const annual = Number(info.annual);
+          const safeAnnual = Number.isFinite(annual) && annual > 0 ? annual : 0;
+          const hourly = Number(info.hourly);
+          const safeHourly = Number.isFinite(hourly) && hourly > 0 ? hourly : annualToHourly(safeAnnual);
+          acc[key] = {
+            ...info,
+            label: info.label || key,
+            annual: safeAnnual,
+            hourly: safeHourly,
+          };
+          return acc;
+        }, {});
+      }, [borrowRates]);
+      const borrowTickerList = useMemo(() => Object.keys(borrowRatesByTicker), [borrowRatesByTicker]);
       const toNumber = (value) => {
         const n = Number(value);
         return Number.isFinite(n) ? n : 0;
@@ -1249,8 +1280,13 @@
           merged.loyaltyModel = loyaltyModelFallback;
         }
         merged.exchangeRates = sanitizeExchangeRates(merged.exchangeRates, merged.usdToArs);
+        if (isBinance) {
+          const defaultTicker = borrowTickerList[0] || '';
+          const candidate = sanitizeTicker(merged.binanceBorrowTicker);
+          merged.binanceBorrowTicker = borrowRatesByTicker[candidate] ? candidate : defaultTicker;
+        }
         return merged;
-      }, [platformDefaultParams, loyaltyModelFallback, loyaltyModels, baseExchangeRates]);
+      }, [platformDefaultParams, loyaltyModelFallback, loyaltyModels, baseExchangeRates, isBinance, borrowTickerList, borrowRatesByTicker]);
       const baseCashflowPlan = useMemo(
         () => sanitizeCashflowPlan(previewSnapshot?.cashflow, (previewSnapshot?.repayDate || previewSnapshot?.cashflow?.payments?.[0]?.date || todayISO())),
         [previewSnapshot]
@@ -1266,6 +1302,11 @@
         }
         merged.binanceCollateralDelta = Number(merged.binanceCollateralDelta) || 0;
         merged.binanceRepaySim = Number(merged.binanceRepaySim) || 0;
+        if (isBinance) {
+          const defaultTicker = borrowTickerList[0] || '';
+          const candidate = sanitizeTicker(merged.binanceBorrowTicker);
+          merged.binanceBorrowTicker = borrowRatesByTicker[candidate] ? candidate : defaultTicker;
+        }
         return merged;
       };
 
@@ -1688,6 +1729,17 @@
       const allCollateral = assets.length > 0 && assets.every((asset) => asset.useAsCollateral);
       const someCollateral = assets.some((asset) => asset.useAsCollateral);
 
+      const binanceBorrowTicker = useMemo(() => {
+        if (!isBinance) return null;
+        const candidate = sanitizeTicker(params.binanceBorrowTicker);
+        if (candidate && borrowRatesByTicker[candidate]) return candidate;
+        return borrowTickerList[0] || null;
+      }, [isBinance, params.binanceBorrowTicker, borrowRatesByTicker, borrowTickerList]);
+      const binanceBorrowInfo = binanceBorrowTicker ? borrowRatesByTicker[binanceBorrowTicker] : null;
+      const binanceBorrowAnnualRate = binanceBorrowInfo?.annual ?? 0;
+      const binanceBorrowHourlyRate = binanceBorrowInfo?.hourly ?? annualToHourly(binanceBorrowAnnualRate);
+      const binanceBorrowLabel = binanceBorrowInfo?.label || (binanceBorrowTicker || null);
+
       useEffect(() => {
         if (autoMasterRef.current) {
           autoMasterRef.current.indeterminate = !allAuto && someAuto;
@@ -1725,13 +1777,16 @@
       const lowCostHeadroom = useMemo(() => Math.max(0, capLowCost - loanAmount), [capLowCost, loanAmount]);
 
       const chosenAPR = useMemo(() => {
+        if (isBinance && binanceBorrowTicker && borrowRatesByTicker[binanceBorrowTicker]) {
+          return borrowRatesByTicker[binanceBorrowTicker].annual;
+        }
         const table = loanAmount <= recommendedLoanAtTarget ? aprDiscountTable : aprStandardTable;
         const aprFromTier = table?.[loyaltyTier];
         if (typeof aprFromTier === 'number') return aprFromTier;
         if (aprBaseTier && typeof table?.[aprBaseTier] === 'number') return table[aprBaseTier];
         if (loyalty?.baseLabel && typeof table?.[loyalty.baseLabel] === 'number') return table[loyalty.baseLabel];
         return aprBase;
-      }, [loanAmount, recommendedLoanAtTarget, aprDiscountTable, aprStandardTable, loyaltyTier, aprBaseTier, aprBase, loyalty?.baseLabel]);
+      }, [isBinance, binanceBorrowTicker, borrowRatesByTicker, loanAmount, recommendedLoanAtTarget, aprDiscountTable, aprStandardTable, loyaltyTier, aprBaseTier, aprBase, loyalty?.baseLabel]);
 
       const daysUntilRepay = useMemo(() => {
         const a = new Date(); const b = new Date(repayDate);
@@ -1814,7 +1869,7 @@
       const binanceRepayNeeded = Math.max(0, loanAmount - totals.totalCollateralValue * ltvHealthyThreshold);
       const binanceBufferToCaution = Math.max(0, totals.totalCollateralValue * ltvWarnThreshold - loanAmount);
       const binanceCautionLabel = ltvWarnThreshold > ltvHealthyThreshold ? `${toPct(ltvHealthyThreshold, 0)} – ${toPct(ltvWarnThreshold, 0)}` : `>${toPct(ltvHealthyThreshold, 0)}`;
-      const binanceHourlyInterest = loanAmount * (chosenAPR / 365 / 24);
+      const binanceHourlyInterest = loanAmount * (binanceBorrowHourlyRate || (chosenAPR / 365 / 24));
       const binanceLiquidationValue = marginCallLtv > 0 ? loanAmount / marginCallLtv : 0;
       const binanceLiquidationBuffer = totals.totalCollateralValue - binanceLiquidationValue;
       const binanceAdjustedLiquidationValue = marginCallLtv > 0 ? binanceLoanAfterRepay / marginCallLtv : 0;
@@ -1992,9 +2047,9 @@
                 { key: 'collateral-adjusted', title: 'Colateral tras ajuste', value: fmt(binanceCollateralAfterAdjust * rate, currency), subtle: binanceCollateralDelta !== 0 ? `${binanceCollateralDelta > 0 ? '+' : '−'}${fmt(Math.abs(binanceCollateralDelta) * rate, currency)}` : 'Sin cambios' },
                 { key: 'ltv-current', title: 'LTV inicial', value: toPct(overallLTVIfBorrow, 2), tone: ltvTone, subtle: 'Con colateral actual' },
                 { key: 'ltv-sim', title: 'LTV simulado', value: toPct(binanceLtvAfterAdjust, 2), tone: binanceLtvTone, subtle: (binanceCollateralDelta !== 0 || binanceRepaySim > 0) ? 'Tras ajustes' : 'Sin ajustes' },
-                { key: 'apr', title: 'Tasa anual (APR)', value: toPct(chosenAPR, 2) },
+                { key: 'apr', title: 'Tasa anual (APR)', value: toPct(chosenAPR, 2), subtle: binanceBorrowLabel || undefined },
                 { key: 'apr-net', title: 'Tasa anual neta', value: toPct(netAnnualRate, 2), subtle: totalEarnDuringPeriod > 0 ? `Earn proyectado ${fmt(totalEarnDuringPeriod * rate, currency)}` : undefined, tone: netAnnualRate <= chosenAPR ? 'ok' : undefined },
-                { key: 'hourly-interest', title: 'Interés estimado por hora', value: fmt(binanceHourlyInterest * rate, currency), subtle: toPct(chosenAPR / 365 / 24, 3) },
+                { key: 'hourly-interest', title: 'Interés estimado por hora', value: fmt(binanceHourlyInterest * rate, currency), subtle: binanceBorrowTicker ? `${binanceBorrowTicker} · ${toPct(binanceBorrowHourlyRate, 4)}` : toPct(binanceBorrowHourlyRate, 4) },
                 { key: 'liquidation', title: `Valor colateral (${toPct(marginCallLtv, 0)} margin call)`, value: fmt(binanceLiquidationValue * rate, currency), subtle: binanceLiquidationBuffer >= 0 ? `Buffer ${fmt(binanceLiquidationBuffer * rate, currency)}` : `Déficit ${fmt(Math.abs(binanceLiquidationBuffer) * rate, currency)}`, tone: binanceLiquidationBuffer >= 0 ? 'ok' : 'danger' },
                 { key: 'repay-total', title: 'Total a devolver', value: fmt(interestCalc.repayTotal * rate, currency) },
               ] : [
@@ -2140,7 +2195,7 @@
                       Para solicitar {fmt(loanAmount * rate, currency)} y mantener ≤{toPct(targetLtv, 0)} LTV se requieren {fmt(extraCollateralForTarget * rate, currency)} adicionales en colateral.
                     </li>
                     <li>
-                      APR estimado: <b>{toPct(chosenAPR, 2)}</b>. Interés hasta repago ({daysUntilRepay} días): {fmt(interestCalc.total * rate, currency)}.{interestCalc.early > 0 && <span> Incluye interés por "early rule".</span>}
+                      APR estimado: <b>{toPct(chosenAPR, 2)}</b>{isBinance && binanceBorrowLabel ? ` (${binanceBorrowLabel})` : ''}. Interés hasta repago ({daysUntilRepay} días): {fmt(interestCalc.total * rate, currency)}.{interestCalc.early > 0 && <span> Incluye interés por "early rule".</span>}
                     </li>
                     <li>
                       Earn (flex) mensual estimado {earnEligible ? (minBalancePerks > 0 ? "(tope)" : "") : (minBalancePerks > 0 ? "(requiere balance mínimo)" : "(no elegible)")}: <b>{fmt(earnMonthly * rate, currency)}</b>. Neto mensual: <b className={netMonthly>=0?"text-emerald-700":"text-rose-700"}>{fmt(netMonthly * rate, currency)}</b>.
@@ -2358,6 +2413,27 @@
                     </label>
                     {minBalancePerks > 0 && <span className="text-xs text-neutral-500">* Elegible si balance ≥ ${minBalancePerks}.</span>}
                   </div>
+
+                  {isBinance && borrowTickerList.length > 0 && (
+                    <div className="sm:col-span-2 rounded-2xl border border-neutral-200 p-3 flex flex-wrap items-center gap-3">
+                      <Field label="Activo del préstamo (Binance)" className="w-full sm:w-auto">
+                        <select
+                          value={binanceBorrowTicker || ''}
+                          onChange={(e) => setParams({ ...params, binanceBorrowTicker: sanitizeTicker(e.target.value) })}
+                          className={`w-full sm:w-64 rounded-2xl border border-neutral-300 px-3 py-2 focus:outline-none focus:ring-2 ${focusRingClass}`}
+                        >
+                          {borrowTickerList.map((ticker) => (
+                            <option key={`borrow-${ticker}`} value={ticker}>
+                              {borrowRatesByTicker[ticker]?.label || ticker} · {toPct(borrowRatesByTicker[ticker]?.annual ?? 0, 2)} APR
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <span className="text-xs text-neutral-500">
+                        Tasa vigente: APR {toPct(binanceBorrowAnnualRate, 2)} · Hora {toPct(binanceBorrowHourlyRate, 4)}
+                      </span>
+                    </div>
+                  )}
 
                   {isBinance && (
                     <div className="sm:col-span-2 rounded-2xl border border-neutral-200 p-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
