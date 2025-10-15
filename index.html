@@ -2150,6 +2150,9 @@
 
       const scheduledPrincipal = Math.max(0, cashflowDerived?.scheduledPrincipal || 0);
       const scheduledInterest = Math.max(0, cashflowDerived?.scheduledInterest || 0);
+      const paidPrincipal = Math.min(loanAmount, scheduledPrincipal);
+      const paidInterest = scheduledInterest;
+      const totalPaid = Math.max(0, paidPrincipal + paidInterest);
       const projectedFinalPayoff = Math.max(0, cashflowDerived?.projectedFinalPayoff || 0);
       const totalProjectedOutflows = Math.max(0, cashflowDerived?.totalCost || 0);
       const plannedOutstanding = Math.max(0, cashflowDerived?.outstandingAfterPlan ?? loanAmount);
@@ -2165,6 +2168,9 @@
       const ltvTone = ltvGaugeValue <= ltvHealthyThreshold ? "ok" : (ltvGaugeValue <= ltvWarnThreshold ? "warn" : "danger");
       const plannedCollateralChange = collateralAfterPlan - totals.totalCollateralValue;
       const binanceLoanAfterPlan = plannedOutstanding;
+      const binanceOutstandingRatio = loanAmount > 0
+        ? Math.max(0, Math.min(1, binanceLoanAfterPlan / loanAmount))
+        : 0;
       const binanceCollateralAfterPlan = collateralAfterPlan;
       const binanceLtvAfterPlan = plannedOverallLTV;
       const binanceLtvTone = binanceLtvAfterPlan <= ltvHealthyThreshold ? "ok" : (binanceLtvAfterPlan <= ltvWarnThreshold ? "warn" : "danger");
@@ -2212,6 +2218,9 @@
         const directLoanSum = directLoanActive
           ? Object.values(loanRequestsTotals).reduce((acc, value) => acc + value, 0)
           : 0;
+        const scaledDirectLoanSum = directLoanActive
+          ? directLoanSum * (binanceOutstandingRatio || 0)
+          : 0;
         const loanBase = Math.max(0, plannedOutstanding);
         const items = totals.withValue
           .filter((asset) => asset.useAsCollateral && asset.value > 0)
@@ -2220,7 +2229,8 @@
             const policyLTV = ltvByTicker[ticker] ?? asset.ltv ?? defaultLtv;
             const maxBorrowForAsset = asset.value * policyLTV;
             const share = asset.value / totalCollateral;
-            const mappedLoan = directLoanActive ? Math.max(0, loanRequestsTotals[ticker] || 0) : 0;
+            const mappedLoanRaw = directLoanActive ? Math.max(0, loanRequestsTotals[ticker] || 0) : 0;
+            const mappedLoan = directLoanActive ? mappedLoanRaw * (binanceOutstandingRatio || 0) : 0;
             const allocatedLoan = manualActive
               ? Math.max(0, asset.loanAssigned || 0)
               : (directLoanActive ? mappedLoan : loanBase * share);
@@ -2231,15 +2241,25 @@
             const baseNetApr = isBinance ? binanceBorrowNetAnnualRate : (chosenAPR - aprOffset);
             const netApr = Math.max(0, baseNetApr);
             let tone = "ok";
-            if (usageVsCap >= 1 || actualLtv >= policyLTV || plannedOverallLTV >= autoRepayLtv) {
-              tone = "danger";
-            } else if (usageVsCap > 0.75 || actualLtv > policyLTV * 0.9 || plannedOverallLTV >= marginCallLtv) {
-              tone = "warn";
+            if (isBinance) {
+              const warnCut = ltvHealthyThreshold || 0;
+              const dangerCut = ltvWarnThreshold > 0 ? ltvWarnThreshold : Math.max(warnCut, marginCallLtv);
+              if (dangerCut > 0 && actualLtv >= dangerCut) {
+                tone = "danger";
+              } else if (warnCut > 0 && actualLtv >= warnCut) {
+                tone = "warn";
+              }
+            } else {
+              if (usageVsCap >= 1 || actualLtv >= policyLTV || plannedOverallLTV >= autoRepayLtv) {
+                tone = "danger";
+              } else if (usageVsCap > 0.75 || actualLtv > policyLTV * 0.9 || plannedOverallLTV >= marginCallLtv) {
+                tone = "warn";
+              }
             }
             const loanShareDenom = manualActive
               ? manualTotal
               : directLoanActive
-                ? (directLoanSum > 0 ? directLoanSum : loanBase)
+                ? (scaledDirectLoanSum > 0 ? scaledDirectLoanSum : loanBase)
                 : loanBase;
             return {
               id: asset.id,
@@ -2264,7 +2284,7 @@
         const totalAllocated = manualActive
           ? manualTotal
           : directLoanActive
-            ? (directLoanSum || loanBase)
+            ? (scaledDirectLoanSum || loanBase)
             : items.reduce((acc, item) => acc + item.allocatedLoan, 0);
         const weightedAprOffset = isBinance
           ? binanceBorrowAdjustment
@@ -2281,11 +2301,19 @@
           weightedAprOffset,
           weightedNetApr,
         };
-      }, [autoRepayLtv, binanceBorrowAdjustment, binanceBorrowNetAnnualRate, defaultLtv, earnAprTop, isBinance, loanAmount, loanRequestsTotals, manualLoanAllocationEnabled, marginCallLtv, plannedOverallLTV, totals.totalCollateralValue, totals.withValue, ltvByTicker]);
+      }, [autoRepayLtv, binanceBorrowAdjustment, binanceBorrowNetAnnualRate, binanceOutstandingRatio, defaultLtv, earnAprTop, isBinance, loanAmount, loanRequestsTotals, manualLoanAllocationEnabled, marginCallLtv, plannedOverallLTV, totals.totalCollateralValue, totals.withValue, ltvByTicker, ltvHealthyThreshold, ltvWarnThreshold]);
 
-      const binanceNetAprOffset = isBinance ? (collateralBreakdown.weightedAprOffset || 0) : 0;
-      const binanceNetAnnualRate = isBinance ? (collateralBreakdown.weightedNetApr ?? chosenAPR) : 0;
+      const binanceNetAprOffset = isBinance ? Math.max(0, collateralBreakdown.weightedAprOffset || 0) : 0;
+      const binanceNetAprBase = isBinance ? Math.max(0, collateralBreakdown.weightedNetApr ?? chosenAPR) : 0;
+      const binanceNetAnnualRate = isBinance ? Math.max(0, binanceNetAprBase * (binanceOutstandingRatio || 0)) : 0;
       const netAnnualRate = isBinance ? binanceNetAnnualRate : standardNetAnnualRate;
+      const binanceNetAprSubtle = isBinance
+        ? (binanceOutstandingRatio < 0.999
+          ? `Saldo neto ${toPct(binanceOutstandingRatio, 0)} · net base ${toPct(binanceNetAprBase, 2)}`
+          : (binanceNetAprOffset > 0
+            ? `Préstamo ${toPct(chosenAPR, 2)} − ajuste ${toPct(binanceNetAprOffset, 2)}`
+            : `Préstamo ${toPct(chosenAPR, 2)}`))
+        : undefined;
 
       const extraCollateralForTarget = useMemo(() => {
         if (targetLtv <= 0) return 0;
@@ -2412,20 +2440,18 @@
           <div className="mx-auto max-w-7xl px-4 py-6">
             <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
               {(isBinance ? [
-                { key: 'loan-current', title: 'Préstamo vigente', value: fmt(loanAmount * rate, currency) },
-                { key: 'loan-plan', title: 'Préstamo tras pagos planificados', value: fmt(binanceLoanAfterPlan * rate, currency), subtle: scheduledPrincipal > 0 ? `Pagos programados ${fmt(Math.min(scheduledPrincipal, loanAmount) * rate, currency)}` : 'Sin pagos programados' },
+                { key: 'loan-current', title: 'Préstamo total', value: fmt(loanAmount * rate, currency), subtle: loanAmount > 0 ? 'Capital original' : '—' },
+                { key: 'loan-plan', title: 'Préstamo neto', value: fmt(binanceLoanAfterPlan * rate, currency), subtle: scheduledPrincipal > 0 ? `Pagos planificados ${fmt(paidPrincipal * rate, currency)}` : 'Sin pagos registrados' },
+                { key: 'loan-paid', title: 'Pagos hechos', value: fmt(totalPaid * rate, currency), subtle: totalPaid > 0 ? `Capital ${fmt(paidPrincipal * rate, currency)} · Interés ${fmt(paidInterest * rate, currency)}` : 'Sin pagos registrados' },
                 { key: 'collateral-current', title: 'Colateral actual', value: fmt(totals.totalCollateralValue * rate, currency) },
-                { key: 'collateral-plan', title: 'Colateral tras plan', value: fmt(binanceCollateralAfterPlan * rate, currency), subtle: Math.abs(plannedCollateralChange) > 1e-6 ? `${plannedCollateralChange > 0 ? '+' : '−'}${fmt(Math.abs(plannedCollateralChange) * rate, currency)}` : 'Sin cambios' },
-                { key: 'ltv-current', title: 'LTV inicial', value: toPct(currentOverallLTV, 2), tone: ltvTone, subtle: 'Con datos actuales' },
-                { key: 'ltv-plan', title: 'LTV proyectado (plan)', value: toPct(binanceLtvAfterPlan, 2), tone: binanceLtvTone, subtle: scheduledPrincipal > 0 || Math.abs(plannedCollateralChange) > 1e-6 ? 'Tras plan de cashflow' : 'Sin cambios' },
+                { key: 'ltv-current', title: 'LTV inicial', value: toPct(currentOverallLTV, 2), tone: ltvTone, subtle: 'Con datos originales' },
+                { key: 'ltv-plan', title: 'LTV neto', value: toPct(binanceLtvAfterPlan, 2), tone: binanceLtvTone, subtle: scheduledPrincipal > 0 || Math.abs(plannedCollateralChange) > 1e-6 ? 'Tras pagos y plan de cashflow' : 'Sin cambios' },
                 { key: 'apr', title: 'Tasa anual (APR)', value: toPct(chosenAPR, 2), subtle: binanceBorrowLabel || undefined },
                 {
                   key: 'apr-net',
                   title: 'Tasa anual neta',
                   value: toPct(netAnnualRate, 2),
-                  subtle: binanceNetAprOffset > 0
-                    ? `Préstamo ${toPct(chosenAPR, 2)} − ajuste ${toPct(binanceNetAprOffset, 2)}`
-                    : `Préstamo ${toPct(chosenAPR, 2)}`,
+                  subtle: binanceNetAprSubtle,
                   tone: netAnnualRate <= chosenAPR ? 'ok' : undefined,
                 },
                 {
@@ -2470,7 +2496,7 @@
               </section>
             )}
 
-            <section className="mb-10 grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+            <section className="mb-10 grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
               <div className="space-y-6">
                 <Card title="Préstamo & Repago">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 justify-items-center">
@@ -2636,9 +2662,9 @@
                   <div className="mt-4 space-y-2">
                     {isBinance ? (
                       <>
+                        <Line label="LTV inicial" value={toPct(currentOverallLTV, 2)} muted />
+                        <Line label="LTV neto" value={toPct(binanceLtvAfterPlan, 2)} tone={binanceLtvTone} />
                         <Line label="LTV proyectado (cashflow)" value={Number.isFinite(ltvGaugeValue) ? toPct(ltvGaugeValue, 2) : '∞'} tone={ltvTone} />
-                        <Line label="LTV actual" value={toPct(currentOverallLTV, 2)} muted />
-                        <Line label="LTV planificado" value={toPct(binanceLtvAfterPlan, 2)} tone={binanceLtvTone} />
                         <Line label="Rango saludable" value={`≤ ${toPct(ltvHealthyThreshold, 0)}`} muted />
                         <Line label="Riesgo medio" value={binanceCautionLabel} muted />
                         <Line label="Margin call" value={toPct(marginCallLtv, 0)} muted />
@@ -2657,6 +2683,44 @@
                       </>
                     )}
                   </div>
+                </Card>
+
+                <BenchmarkCeFiDeFi
+                  config={benchmarkConfig}
+                  onChange={updateBenchmarkConfig}
+                  fmt={fmt}
+                  currency={currency}
+                  rate={rate}
+                  loanAmount={loanAmount}
+                  chosenAPR={chosenAPR}
+                  daysUntilRepay={daysUntilRepay}
+                  scenarioName={ltvScenarioLabel}
+                  cashflowNet={cashflowDerived?.netBalanceFinal}
+                  defaultMatrix={baseBenchmarkConfig?.rateMatrix}
+                />
+
+                <Card title="Proyección del préstamo">
+                  <TrendChart data={timeline} currency={currency} rate={rate} />
+                </Card>
+
+                <Card title="Breakdown de colateral & LTV">
+                  <CollateralBreakdownCard
+                    breakdown={collateralBreakdown.items}
+                    currency={currency}
+                    rate={rate}
+                    totalCollateral={totals.totalCollateralValue}
+                    totalMaxBorrow={totals.maxBorrow}
+                    overallLTV={plannedOverallLTV}
+                    target={targetLtv}
+                    marginCall={marginCallLtv}
+                    autoRepay={autoRepayLtv}
+                    capLowCost={capLowCost}
+                    lowCostHeadroom={lowCostHeadroom}
+                    manualAllocationEnabled={collateralBreakdown.manualEnabled}
+                    manualAllocationActive={collateralBreakdown.manualActive}
+                    manualAllocationTotal={collateralBreakdown.manualTotal}
+                    loanAmount={plannedOutstanding}
+                  />
                 </Card>
 
                 {!isBinance && (
@@ -2692,32 +2756,6 @@
                   </ul>
                   </Card>
                 )}
-              </div>
-
-              <div className="space-y-6">
-                <Card title="Proyección del préstamo">
-                  <TrendChart data={timeline} currency={currency} rate={rate} />
-                </Card>
-
-                <Card title="Breakdown de colateral & LTV">
-                  <CollateralBreakdownCard
-                    breakdown={collateralBreakdown.items}
-                    currency={currency}
-                    rate={rate}
-                    totalCollateral={totals.totalCollateralValue}
-                    totalMaxBorrow={totals.maxBorrow}
-                    overallLTV={plannedOverallLTV}
-                    target={targetLtv}
-                    marginCall={marginCallLtv}
-                    autoRepay={autoRepayLtv}
-                    capLowCost={capLowCost}
-                    lowCostHeadroom={lowCostHeadroom}
-                    manualAllocationEnabled={collateralBreakdown.manualEnabled}
-                    manualAllocationActive={collateralBreakdown.manualActive}
-                    manualAllocationTotal={collateralBreakdown.manualTotal}
-                    loanAmount={plannedOutstanding}
-                  />
-                </Card>
               </div>
             </section>
 
@@ -2825,7 +2863,7 @@
               </div>
             </section>
 
-            <section className="mb-10 grid grid-cols-1 xl:grid-cols-2 gap-6">
+            <section className="mb-10">
               <CashflowPlanner
                 plan={cashflowPlan}
                 derived={cashflowDerived}
@@ -2848,23 +2886,6 @@
                 earnEligible={earnEligible}
                 minBalancePerks={minBalancePerks}
               />
-
-              <div className="flex flex-col gap-6">
-                <BenchmarkCeFiDeFi
-                  config={benchmarkConfig}
-                  onChange={updateBenchmarkConfig}
-                  fmt={fmt}
-                  currency={currency}
-                  rate={rate}
-                  loanAmount={loanAmount}
-                  chosenAPR={chosenAPR}
-                  daysUntilRepay={daysUntilRepay}
-                  scenarioName={ltvScenarioLabel}
-                  cashflowNet={cashflowDerived?.netBalanceFinal}
-                  defaultMatrix={baseBenchmarkConfig?.rateMatrix}
-                />
-
-              </div>
             </section>
 
             <section className="mb-10">
@@ -4177,7 +4198,7 @@
               <div className="text-[10px] text-neutral-500">Uso {formatPercent(item.actualLtv, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div>
             </div>
             <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">LTV inicial</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">LTV neto</div>
               <div className="text-sm font-semibold text-neutral-800">{formatPercent(item.actualLtv, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div>
               <div className="text-[10px] text-neutral-500">Tope {formatPercent(item.policyLTV, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
             </div>
