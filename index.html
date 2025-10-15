@@ -268,11 +268,18 @@
           if (typeof item === 'string') {
             return { id: `alert-${idx}`, tone: 'info', message: item };
           }
-          if (typeof item === 'object' && typeof item.message === 'string') {
+          if (typeof item === 'object') {
+            const rawMessage = item.message;
+            const message = typeof rawMessage === 'string'
+              ? rawMessage
+              : rawMessage != null
+                ? String(rawMessage)
+                : '';
+            if (!message) return null;
             return {
               id: item.id || `alert-${idx}`,
               tone: item.tone || 'info',
-              message: item.message,
+              message,
             };
           }
           return null;
