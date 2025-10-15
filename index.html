@@ -2177,6 +2177,17 @@
       const binanceLiquidationValue = marginCallLtv > 0 ? binanceLoanAfterPlan / marginCallLtv : 0;
       const binanceLiquidationBuffer = binanceCollateralAfterPlan - binanceLiquidationValue;
 
+      const formatBinanceBufferValue = (buffer) => {
+        if (!Number.isFinite(buffer)) return '—';
+        const formatted = fmt(Math.abs(buffer) * rate, currency);
+        return buffer >= 0 ? formatted : `Déficit ${formatted}`;
+      };
+
+      const toneForBinanceBuffer = (buffer) => {
+        if (!Number.isFinite(buffer)) return undefined;
+        return buffer >= 0 ? "ok" : "danger";
+      };
+
       const manualLoanAllocationEnabled = !!params.manualLoanAllocation;
 
       const collateralBreakdown = useMemo(() => {
@@ -2632,8 +2643,8 @@
                         <Line label="Riesgo medio" value={binanceCautionLabel} muted />
                         <Line label="Margin call" value={toPct(marginCallLtv, 0)} muted />
                         <Line label="Auto-liquidación" value={toPct(autoRepayLtv, 0)} muted />
-                        <Line label="Buffer actual" value={binanceLiquidationBuffer >= 0 ? fmt(binanceLiquidationBuffer * rate, currency) : `Déficit ${fmt(Math.abs(binanceLiquidationBuffer) * rate, currency)}`} tone={binanceLiquidationBuffer >= 0 ? "ok" : "danger"} />
-                        <Line label="Buffer simulado" value={binanceLiquidationBuffer >= 0 ? fmt(binanceLiquidationBuffer * rate, currency) : `Déficit ${fmt(Math.abs(binanceLiquidationBuffer) * rate, currency)}`} tone={binanceLiquidationBuffer >= 0 ? "ok" : "danger"} />
+                        <Line label="Buffer actual" value={formatBinanceBufferValue(currentLiquidationBuffer)} tone={toneForBinanceBuffer(currentLiquidationBuffer)} />
+                        <Line label="Buffer simulado" value={formatBinanceBufferValue(binanceLiquidationBuffer)} tone={toneForBinanceBuffer(binanceLiquidationBuffer)} />
                       </>
                     ) : (
                       <>
