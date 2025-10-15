@@ -243,8 +243,50 @@
       const earns = Array.isArray(plan?.earns) ? plan.earns : [];
       const manual = Array.isArray(plan?.manual) ? plan.manual : [];
 
+      const normalizeTicker = (value) => (typeof value === 'string' ? value.trim().toUpperCase() : '');
       const loanAmount = Math.max(0, Number(ctx?.loanAmount) || 0);
       const baseCollateral = Math.max(0, Number(ctx?.totalCollateralValue) || 0);
+
+      const loanByTickerRaw = ctx?.loanByTicker || {};
+      const loanByTicker = Object.entries(loanByTickerRaw).reduce((acc, [ticker, amount]) => {
+        const key = normalizeTicker(ticker);
+        const value = Math.max(0, Number(amount) || 0);
+        if (!key || !(value > 0)) return acc;
+        acc[key] = (acc[key] || 0) + value;
+        return acc;
+      }, {});
+      const hasLoanByTicker = Object.keys(loanByTicker).length > 0;
+      const outstandingByTicker = hasLoanByTicker
+        ? Object.keys(loanByTicker).reduce((acc, key) => {
+            acc[key] = loanByTicker[key];
+            return acc;
+          }, {})
+        : {};
+
+      const sumMap = (map) => Object.values(map).reduce((acc, value) => {
+        const num = Number(value);
+        return acc + (Number.isFinite(num) && num > 0 ? num : 0);
+      }, 0);
+
+      const applyProportionalReduction = (map, amount) => {
+        if (!(amount > 0)) return 0;
+        const keys = Object.keys(map);
+        if (!keys.length) return 0;
+        const totalBefore = sumMap(map);
+        if (!(totalBefore > 0)) return 0;
+        let applied = 0;
+        keys.forEach((key) => {
+          const current = Math.max(0, Number(map[key]) || 0);
+          if (!(current > 0)) return;
+          const share = current / totalBefore;
+          const delta = Math.min(current, amount * share);
+          if (delta > 0) {
+            map[key] = current - delta;
+            applied += delta;
+          }
+        });
+        return applied;
+      };
 
       const sumPositive = (items, prop) => items.reduce((acc, item) => {
         const raw = Number(item?.[prop]);
@@ -255,7 +297,39 @@
       const scheduledInterest = sumPositive(payments, 'interest');
       const plannedEarns = sumPositive(earns, 'amount');
 
-      const outstandingAfterPlan = Math.max(0, loanAmount - scheduledPrincipal - plannedEarns);
+      const scheduledPrincipalByTicker = {};
+      let generalPrincipal = 0;
+      payments.forEach((payment) => {
+        const principal = Math.max(0, Number(payment?.principal) || 0);
+        if (!(principal > 0)) return;
+        const key = normalizeTicker(payment?.ticker);
+        if (key && hasLoanByTicker) {
+          scheduledPrincipalByTicker[key] = (scheduledPrincipalByTicker[key] || 0) + principal;
+        } else {
+          generalPrincipal += principal;
+        }
+      });
+
+      if (hasLoanByTicker) {
+        Object.entries(scheduledPrincipalByTicker).forEach(([key, amount]) => {
+          const current = Math.max(0, Number(outstandingByTicker[key]) || 0);
+          const applied = Math.min(current, amount);
+          outstandingByTicker[key] = current - applied;
+          if (amount > applied) {
+            generalPrincipal += amount - applied;
+          }
+        });
+        if (generalPrincipal > 0) {
+          generalPrincipal -= applyProportionalReduction(outstandingByTicker, generalPrincipal);
+        }
+        if (plannedEarns > 0) {
+          applyProportionalReduction(outstandingByTicker, plannedEarns);
+        }
+      }
+
+      const outstandingAfterPlan = hasLoanByTicker
+        ? Math.max(0, sumMap(outstandingByTicker))
+        : Math.max(0, loanAmount - scheduledPrincipal - plannedEarns);
       const projectedFinalPayoff = outstandingAfterPlan;
       const totalCost = Math.max(0, scheduledInterest + projectedFinalPayoff);
 
@@ -307,12 +381,15 @@
         projectedFinalPayoff,
         totalCost,
         outstandingAfterPlan,
+        outstandingByTicker: hasLoanByTicker ? outstandingByTicker : undefined,
         collateralDeltaPlanned,
         collateralAfterPlan,
         ltvForGauge: Number.isFinite(ltvForGauge) ? Math.max(0, ltvForGauge) : 0,
         scenarioLabel,
         alerts,
         netBalanceFinal: Math.max(0, projectedFinalPayoff + scheduledInterest - plannedEarns),
+        loanByTicker: hasLoanByTicker ? loanByTicker : undefined,
+        scheduledPrincipalByTicker: Object.keys(scheduledPrincipalByTicker).length > 0 ? scheduledPrincipalByTicker : undefined,
       };
     }
 
@@ -2145,8 +2222,9 @@
           marginCallLtv,
           autoRepayLtv,
           scenarioShocks: cashflowPlan?.scenarioShocks,
+          loanByTicker: loanRequestsTotals,
         }),
-      [cashflowPlan, loanAmount, chosenAPR, repayDate, totals.totalCollateralValue, targetLtv, marginCallLtv, autoRepayLtv]);
+      [cashflowPlan, loanAmount, chosenAPR, repayDate, totals.totalCollateralValue, targetLtv, marginCallLtv, autoRepayLtv, loanRequestsTotals]);
 
       const scheduledPrincipal = Math.max(0, cashflowDerived?.scheduledPrincipal || 0);
       const scheduledInterest = Math.max(0, cashflowDerived?.scheduledInterest || 0);
@@ -2209,6 +2287,8 @@
             weightedNetApr: isBinance ? binanceBorrowNetAnnualRate : chosenAPR,
           };
         }
+        const outstandingMap = cashflowDerived?.outstandingByTicker || null;
+        const hasOutstandingMap = !!(outstandingMap && Object.keys(outstandingMap).length > 0);
         const manualTotal = totals.withValue
           .filter((asset) => asset.useAsCollateral && asset.loanAssigned > 0)
           .reduce((acc, asset) => acc + asset.loanAssigned, 0);
@@ -2221,6 +2301,12 @@
         const scaledDirectLoanSum = directLoanActive
           ? directLoanSum * (binanceOutstandingRatio || 0)
           : 0;
+        const outstandingDirectTotal = hasOutstandingMap
+          ? Object.values(outstandingMap).reduce((acc, value) => {
+              const num = Number(value);
+              return acc + (Number.isFinite(num) && num > 0 ? num : 0);
+            }, 0)
+          : scaledDirectLoanSum;
         const loanBase = Math.max(0, plannedOutstanding);
         const items = totals.withValue
           .filter((asset) => asset.useAsCollateral && asset.value > 0)
@@ -2230,7 +2316,11 @@
             const maxBorrowForAsset = asset.value * policyLTV;
             const share = asset.value / totalCollateral;
             const mappedLoanRaw = directLoanActive ? Math.max(0, loanRequestsTotals[ticker] || 0) : 0;
-            const mappedLoan = directLoanActive ? mappedLoanRaw * (binanceOutstandingRatio || 0) : 0;
+            const mappedLoan = directLoanActive
+              ? (hasOutstandingMap
+                ? Math.max(0, Number(outstandingMap?.[ticker]) || 0)
+                : mappedLoanRaw * (binanceOutstandingRatio || 0))
+              : 0;
             const allocatedLoan = manualActive
               ? Math.max(0, asset.loanAssigned || 0)
               : (directLoanActive ? mappedLoan : loanBase * share);
@@ -2259,7 +2349,9 @@
             const loanShareDenom = manualActive
               ? manualTotal
               : directLoanActive
-                ? (scaledDirectLoanSum > 0 ? scaledDirectLoanSum : loanBase)
+                ? (hasOutstandingMap
+                  ? (outstandingDirectTotal > 0 ? outstandingDirectTotal : loanBase)
+                  : (scaledDirectLoanSum > 0 ? scaledDirectLoanSum : loanBase))
                 : loanBase;
             return {
               id: asset.id,
@@ -2301,7 +2393,7 @@
           weightedAprOffset,
           weightedNetApr,
         };
-      }, [autoRepayLtv, binanceBorrowAdjustment, binanceBorrowNetAnnualRate, binanceOutstandingRatio, defaultLtv, earnAprTop, isBinance, loanAmount, loanRequestsTotals, manualLoanAllocationEnabled, marginCallLtv, plannedOverallLTV, totals.totalCollateralValue, totals.withValue, ltvByTicker, ltvHealthyThreshold, ltvWarnThreshold]);
+      }, [autoRepayLtv, binanceBorrowAdjustment, binanceBorrowNetAnnualRate, binanceOutstandingRatio, cashflowDerived?.outstandingByTicker, defaultLtv, earnAprTop, isBinance, loanAmount, loanRequestsTotals, manualLoanAllocationEnabled, marginCallLtv, plannedOverallLTV, totals.totalCollateralValue, totals.withValue, ltvByTicker, ltvHealthyThreshold, ltvWarnThreshold]);
 
       const binanceNetAprOffset = isBinance ? Math.max(0, collateralBreakdown.weightedAprOffset || 0) : 0;
       const binanceNetAprBase = isBinance ? Math.max(0, collateralBreakdown.weightedNetApr ?? chosenAPR) : 0;
@@ -2556,6 +2648,16 @@
                       Total cargado: {fmt(loanAmount * rate, currency)}
                     </span>
                   </div>
+                  {isBinance && (
+                    <p className="mt-6 text-sm text-neutral-500 text-center">
+                      Distribución actual: <span className="font-semibold text-neutral-700">{binanceBorrowLabel || '—'}</span>.{' '}
+                      {params.manualLoanAllocation
+                        ? 'Estás distribuyendo el préstamo manualmente entre los colaterales activos.'
+                        : (binanceActiveLoanEntries.length > 0
+                          ? 'Se respeta la asignación por cripto que agregaste en la lista.'
+                          : 'La herramienta reparte el préstamo de forma proporcional al valor del colateral.')}
+                    </p>
+                  )}
                   <div className="mt-4 w-full">
                     {loanRequests.length > 0 ? (
                       <div className="rounded-2xl border border-neutral-200 bg-white/70 p-3 shadow-inner">
@@ -2596,32 +2698,6 @@
                       </div>
                     ) : (
                       <p className="text-center text-sm text-neutral-500">No agregaste préstamos todavía.</p>
-                    )}
-                  </div>
-                  <div className="mt-6 space-y-3">
-                    {isBinance ? (
-                      <>
-                        <p className="text-sm text-neutral-500 text-center">
-                          Distribución actual: <span className="font-semibold text-neutral-700">{binanceBorrowLabel || '—'}</span>.{' '}
-                          {params.manualLoanAllocation
-                            ? 'Estás distribuyendo el préstamo manualmente entre los colaterales activos.'
-                            : (binanceActiveLoanEntries.length > 0
-                              ? 'Se respeta la asignación por cripto que agregaste en la lista.'
-                              : 'La herramienta reparte el préstamo de forma proporcional al valor del colateral.')}
-                        </p>
-                        <Pill label="LTV actual" value={toPct(currentOverallLTV, 2)} tone={ltvTone} />
-                        <Pill label="LTV proyectado" value={toPct(binanceLtvAfterPlan, 2)} tone={binanceLtvTone} />
-                        <Pill label={`Colateral extra para ≤${toPct(ltvHealthyThreshold, 0)}`} value={fmt(binanceExtraCollateralNeeded * rate, currency)} tone={binanceExtraCollateralNeeded > 0 ? "warn" : "ok"} />
-                        <Pill label={`Repago para ≤${toPct(ltvHealthyThreshold, 0)}`} value={fmt(binanceRepayNeeded * rate, currency)} tone={binanceRepayNeeded > 0 ? "warn" : "ok"} />
-                        <Pill label={`Buffer hasta ${toPct(ltvWarnThreshold, 0)}`} value={fmt(binanceBufferToCaution * rate, currency)} tone={binanceBufferToCaution > 0 ? "ok" : "danger"} />
-                      </>
-                    ) : (
-                      <>
-                        <Pill label="LTV si pides esto" value={toPct(plannedOverallLTV, 2)} tone={ltvTone} />
-                        <Pill label="≤20% LTV (fijo)" value={loanAmount <= recommendedLoanAtTarget ? "Sí" : "No"} tone={loanAmount <= recommendedLoanAtTarget ? "ok" : "warn"} />
-                        <Pill label="¿Califica Low-Cost?" value={meetsLowCost ? "Sí" : "No"} tone={meetsLowCost ? "ok" : "warn"} />
-                        <Pill label="Margen Low-Cost" value={fmt(lowCostHeadroom * rate, currency)} tone={lowCostHeadroom > 0 ? "ok" : "danger"} />
-                      </>
                     )}
                   </div>
                 </Card>
@@ -2954,6 +3030,29 @@
 
       const scenarioLabels = { base: 'Base', bear: 'Bajista', bull: 'Alcista' };
 
+      const normalizeTicker = (value) => (typeof value === 'string' ? value.trim().toUpperCase() : '');
+      const loanByTicker = derived?.loanByTicker || {};
+      const outstandingByTicker = derived?.outstandingByTicker || {};
+      const paymentTickerOptions = useMemo(() => {
+        const bucket = new Set();
+        Object.keys(loanByTicker || {}).forEach((ticker) => {
+          const key = normalizeTicker(ticker);
+          if (key) bucket.add(key);
+        });
+        Object.keys(outstandingByTicker || {}).forEach((ticker) => {
+          const key = normalizeTicker(ticker);
+          if (key) bucket.add(key);
+        });
+        (totals?.withValue || []).forEach((asset) => {
+          if (asset?.useAsCollateral && asset?.ticker) {
+            const key = normalizeTicker(asset.ticker);
+            if (key) bucket.add(key);
+          }
+        });
+        return Array.from(bucket).sort();
+      }, [loanByTicker, outstandingByTicker, totals?.withValue]);
+      const defaultPaymentTicker = paymentTickerOptions[0] || '';
+
       const setScenarioShock = (key, valuePct) => {
         const pct = Number(valuePct);
         if (!Number.isFinite(pct)) return;
@@ -2992,6 +3091,7 @@
             principal: loanAmount,
             interest: interestCalc?.total || 0,
             label: `Pago ${nextId}`,
+            ticker: defaultPaymentTicker,
           }],
         }));
       };
@@ -3115,7 +3215,7 @@
                   <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-500">No hay pagos definidos. Añade uno para proyectar obligaciones.</div>
                 )}
                 {(safePlan.payments || []).map((item) => (
-                  <div key={item.id} className="grid grid-cols-1 md:grid-cols-5 gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-xs">
+                  <div key={item.id} className="grid grid-cols-1 md:grid-cols-6 gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-xs">
                     <div>
                       <div className="text-[11px] uppercase text-neutral-400">Fecha</div>
                       <input type="date" value={item.date || ''} onChange={(e) => updateListItem('payments', item.id, { date: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
@@ -3139,6 +3239,19 @@
                         min={0}
                         className={`w-full rounded-full border border-neutral-300 px-2 py-1 text-right focus:outline-none focus:ring-2 ${focusRingClass}`}
                       />
+                    </div>
+                    <div>
+                      <div className="text-[11px] uppercase text-neutral-400">Cripto</div>
+                      <select
+                        value={item.ticker || ''}
+                        onChange={(e) => updateListItem('payments', item.id, { ticker: normalizeTicker(e.target.value) })}
+                        className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`}
+                      >
+                        <option value="">General / proporcional</option>
+                        {paymentTickerOptions.map((ticker) => (
+                          <option key={`payment-token-${ticker}`} value={ticker}>{ticker}</option>
+                        ))}
+                      </select>
                     </div>
                     <div className="md:col-span-1">
                       <div className="text-[11px] uppercase text-neutral-400">Nota</div>
@@ -4203,9 +4316,9 @@
               <div className="text-[10px] text-neutral-500">Tope {formatPercent(item.policyLTV, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
             </div>
             <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">APR colateral</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">APR Earn estimado</div>
               <div className="text-sm font-semibold text-neutral-800">{formatPercent(item.earnApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-              <div className="text-[10px] text-neutral-500">Ajuste {formatPercent(item.aprOffset, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div className="text-[10px] text-neutral-500">Ajuste aplicado {formatPercent(item.aprOffset, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
             </div>
           </div>
           <div className="mt-3">
