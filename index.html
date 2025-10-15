@@ -1543,7 +1543,7 @@
           } catch {}
           return baseAssets;
         });
-      }, [storageKeys.assets, baseAssets]);
+      }, [storageKeys.assets]);
 
       useEffect(() => {
         setParams(() => {
@@ -1556,7 +1556,7 @@
           } catch {}
           return baseParams;
         });
-      }, [storageKeys.params, baseParams]);
+      }, [storageKeys.params, platformId]);
 
       useEffect(() => {
         fetchOfficialFxRates();
