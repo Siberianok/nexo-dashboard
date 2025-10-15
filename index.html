@@ -238,6 +238,23 @@
 
     const DEFAULT_LOCALE = 'es-AR';
 
+    function computeCashflowProjectionsStub(plan, ctx = {}) {
+      return {
+        scheduledPrincipal: 0,
+        scheduledInterest: 0,
+        projectedFinalPayoff: 0,
+        totalCost: 0,
+        outstandingAfterPlan: ctx?.loanAmount ?? 0,
+        collateralDeltaPlanned: 0,
+        collateralAfterPlan: ctx?.totalCollateralValue ?? 0,
+        ltvForGauge: (ctx?.loanAmount || 0) / Math.max(1, ctx?.totalCollateralValue || 1),
+        scenarioLabel: 'base',
+        alerts: [],
+      };
+    }
+
+    let computeCashflowProjections = computeCashflowProjectionsStub;
+
     const formatDecimal = (value, {
       minimumFractionDigits = 2,
       maximumFractionDigits = 2,
@@ -3108,7 +3125,7 @@
       );
     }
 
-    function computeCashflowProjections(plan, context = {}) {
+    function computeCashflowProjectionsDetailed(plan, context = {}) {
       const {
         loanAmount = 0,
         apr = 0,
@@ -4161,6 +4178,8 @@
       );
     }
 
+    computeCashflowProjections = computeCashflowProjectionsDetailed;
+
     // Tests mínimos (no tocar a menos que estén mal) + 2 nuevos
     function approxEq(a, b, eps = 1e-6) { return Math.abs(a - b) <= eps; }
     function runDevTests() {
@@ -4186,7 +4205,11 @@
     }
     if (typeof window !== 'undefined') { try { runDevTests(); } catch (_) {} }
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
+    const container = document.getElementById('root');
+    if (!container) {
+      throw new Error('No se encontró el contenedor #root para montar la app.');
+    }
+    const root = ReactDOM.createRoot(container);
     root.render(<SimuladorPrestamos />);
   </script>
 </body>
