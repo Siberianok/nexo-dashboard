@@ -254,6 +254,32 @@
     ];
     const { useState, useEffect, useMemo, useRef, useCallback } = React;
 
+    const ALERT_TONE_STYLES = Object.freeze({
+      info: { border: 'border-sky-200', bg: 'bg-sky-50', text: 'text-sky-700' },
+      warn: { border: 'border-amber-200', bg: 'bg-amber-50', text: 'text-amber-700' },
+      danger: { border: 'border-rose-200', bg: 'bg-rose-50', text: 'text-rose-700' },
+    });
+
+    const normalizeAlertItems = (alerts) => {
+      if (!Array.isArray(alerts)) return [];
+      return alerts
+        .map((item, idx) => {
+          if (!item) return null;
+          if (typeof item === 'string') {
+            return { id: `alert-${idx}`, tone: 'info', message: item };
+          }
+          if (typeof item === 'object' && typeof item.message === 'string') {
+            return {
+              id: item.id || `alert-${idx}`,
+              tone: item.tone || 'info',
+              message: item.message,
+            };
+          }
+          return null;
+        })
+        .filter(Boolean);
+    };
+
     const LIVE_REFRESH_SECONDS = 5;
     const FX_REFRESH_MINUTES = 30;
 
@@ -2181,7 +2207,10 @@
         : (plannedOutstanding > 0 ? 1 : 0);
       const ltvGaugeValue = Number.isFinite(cashflowDerived?.ltvForGauge) ? Math.max(0, cashflowDerived.ltvForGauge) : plannedOverallLTV;
       const ltvScenarioLabel = cashflowDerived?.scenarioLabel;
-      const cashflowAlerts = cashflowDerived?.alerts ?? [];
+      const cashflowAlerts = useMemo(
+        () => normalizeAlertItems(cashflowDerived?.alerts),
+        [cashflowDerived],
+      );
       const ltvTone = ltvGaugeValue <= ltvHealthyThreshold ? "ok" : (ltvGaugeValue <= ltvWarnThreshold ? "warn" : "danger");
       const plannedCollateralChange = collateralAfterPlan - totals.totalCollateralValue;
       const binanceLoanAfterPlan = plannedOutstanding;
@@ -2670,11 +2699,17 @@
                   </div>
                   {cashflowAlerts.length > 0 && (
                     <div className="mt-3 space-y-2 text-xs">
-                      {cashflowAlerts.slice(0, 2).map((alert, idx) => (
-                        <div key={`ltv-alert-${idx}`} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
-                          {alert}
-                        </div>
-                      ))}
+                      {cashflowAlerts.slice(0, 2).map((alert) => {
+                        const tone = ALERT_TONE_STYLES[alert.tone] || ALERT_TONE_STYLES.info;
+                        return (
+                          <div
+                            key={alert.id}
+                            className={`rounded-xl border px-3 py-2 ${tone.border} ${tone.bg} ${tone.text}`}
+                          >
+                            {alert.message}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                   <div className="mt-4 space-y-2">
@@ -2961,7 +2996,10 @@
       const timeline = derived?.timeline || [];
       const chartData = derived?.chartData || [];
       const fundingGaps = derived?.fundingGaps || [];
-      const alerts = derived?.alerts || [];
+      const alerts = useMemo(
+        () => normalizeAlertItems(derived?.alerts),
+        [derived],
+      );
       const netFinal = derived?.netBalanceFinal ?? loanAmount;
       const minNet = derived?.minNetBalance ?? netFinal;
       const outstandingPlan = derived?.outstandingAfterPlan ?? loanAmount;
@@ -3106,8 +3144,18 @@
                 ))}
               </div>
               {alerts.length > 0 && (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 space-y-1">
-                  {alerts.map((msg, idx) => <div key={`cf-alert-${idx}`}>{msg}</div>)}
+                <div className="space-y-2 text-xs">
+                  {alerts.map((alert) => {
+                    const tone = ALERT_TONE_STYLES[alert.tone] || ALERT_TONE_STYLES.info;
+                    return (
+                      <div
+                        key={alert.id}
+                        className={`rounded-2xl border px-3 py-2 ${tone.border} ${tone.bg} ${tone.text}`}
+                      >
+                        {alert.message}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
