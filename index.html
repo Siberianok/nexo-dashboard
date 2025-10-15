@@ -2633,7 +2633,7 @@
                         <Line label="Margin call" value={toPct(marginCallLtv, 0)} muted />
                         <Line label="Auto-liquidación" value={toPct(autoRepayLtv, 0)} muted />
                         <Line label="Buffer actual" value={binanceLiquidationBuffer >= 0 ? fmt(binanceLiquidationBuffer * rate, currency) : `Déficit ${fmt(Math.abs(binanceLiquidationBuffer) * rate, currency)}`} tone={binanceLiquidationBuffer >= 0 ? "ok" : "danger"} />
-                        <Line label="Buffer simulado" value={binanceAdjustedLiquidationBuffer >= 0 ? fmt(binanceAdjustedLiquidationBuffer * rate, currency) : `Déficit ${fmt(Math.abs(binanceAdjustedLiquidationBuffer) * rate, currency)}`} tone={binanceAdjustedLiquidationBuffer >= 0 ? "ok" : "danger"} />
+                        <Line label="Buffer simulado" value={binanceLiquidationBuffer >= 0 ? fmt(binanceLiquidationBuffer * rate, currency) : `Déficit ${fmt(Math.abs(binanceLiquidationBuffer) * rate, currency)}`} tone={binanceLiquidationBuffer >= 0 ? "ok" : "danger"} />
                       </>
                     ) : (
                       <>
