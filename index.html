@@ -656,8 +656,6 @@
           refreshSec: LIVE_REFRESH_SECONDS,
           earnOptIn: true,
           earnOnCollateral: true,
-          binanceCollateralDelta: 0,
-          binanceRepaySim: 0,
           binanceBorrowTicker: "ADA",
         },
         previewSnapshot: {
@@ -1358,8 +1356,6 @@
           refreshSec: LIVE_REFRESH_SECONDS,
           earnOptIn: true,
           earnOnCollateral: true,
-          binanceCollateralDelta: 0,
-          binanceRepaySim: 0,
           manualLoanAllocation: false,
           loanRequests: [],
         };
@@ -1388,8 +1384,6 @@
         if (loyaltyModels.length && !loyaltyModels.some((m) => m.id === merged.loyaltyModel)) {
           merged.loyaltyModel = loyaltyModelFallback;
         }
-        merged.binanceCollateralDelta = Number(merged.binanceCollateralDelta) || 0;
-        merged.binanceRepaySim = Number(merged.binanceRepaySim) || 0;
         merged.manualLoanAllocation = !!merged.manualLoanAllocation;
         merged.loanRequests = sanitizeLoanRequests(merged.loanRequests);
         if (isBinance) {
@@ -2034,25 +2028,32 @@
         }),
       [cashflowPlan, loanAmount, chosenAPR, repayDate, totals.totalCollateralValue, targetLtv, marginCallLtv, autoRepayLtv]);
 
-      const overallLTVIfBorrow = useMemo(() => (totals.totalCollateralValue > 0 ? loanAmount / totals.totalCollateralValue : 0), [loanAmount, totals.totalCollateralValue]);
-      const ltvGaugeValue = Number.isFinite(cashflowDerived?.ltvForGauge) ? cashflowDerived.ltvForGauge : overallLTVIfBorrow;
+      const scheduledPrincipal = Math.max(0, cashflowDerived?.scheduledPrincipal || 0);
+      const scheduledInterest = Math.max(0, cashflowDerived?.scheduledInterest || 0);
+      const projectedFinalPayoff = Math.max(0, cashflowDerived?.projectedFinalPayoff || 0);
+      const totalProjectedOutflows = Math.max(0, cashflowDerived?.totalCost || 0);
+      const plannedOutstanding = Math.max(0, cashflowDerived?.outstandingAfterPlan ?? loanAmount);
+      const plannedCollateralDelta = cashflowDerived?.collateralDeltaPlanned ?? 0;
+      const collateralAfterPlan = Math.max(0, cashflowDerived?.collateralAfterPlan ?? (totals.totalCollateralValue + plannedCollateralDelta));
+      const currentOverallLTV = useMemo(() => (totals.totalCollateralValue > 0 ? loanAmount / totals.totalCollateralValue : 0), [loanAmount, totals.totalCollateralValue]);
+      const plannedOverallLTV = collateralAfterPlan > 0 ? plannedOutstanding / collateralAfterPlan : (plannedOutstanding > 0 ? Number.POSITIVE_INFINITY : 0);
+      const ltvGaugeValue = Number.isFinite(cashflowDerived?.ltvForGauge) ? cashflowDerived.ltvForGauge : plannedOverallLTV;
       const ltvScenarioLabel = cashflowDerived?.scenarioLabel;
       const cashflowAlerts = cashflowDerived?.alerts ?? [];
       const ltvTone = ltvGaugeValue <= ltvHealthyThreshold ? "ok" : (ltvGaugeValue <= ltvWarnThreshold ? "warn" : "danger");
-      const binanceCollateralDelta = Number(params.binanceCollateralDelta) || 0;
-      const binanceRepaySim = Math.max(0, Number(params.binanceRepaySim) || 0);
-      const binanceCollateralAfterAdjust = Math.max(0, totals.totalCollateralValue + binanceCollateralDelta);
-      const binanceLoanAfterRepay = Math.max(0, loanAmount - binanceRepaySim);
-      const binanceLtvAfterAdjust = binanceCollateralAfterAdjust > 0 ? binanceLoanAfterRepay / binanceCollateralAfterAdjust : 0;
-      const binanceLtvTone = binanceLtvAfterAdjust <= ltvHealthyThreshold ? "ok" : (binanceLtvAfterAdjust <= ltvWarnThreshold ? "warn" : "danger");
-      const binanceExtraCollateralNeeded = ltvHealthyThreshold > 0 ? Math.max(0, loanAmount / ltvHealthyThreshold - totals.totalCollateralValue) : 0;
-      const binanceRepayNeeded = Math.max(0, loanAmount - totals.totalCollateralValue * ltvHealthyThreshold);
-      const binanceBufferToCaution = Math.max(0, totals.totalCollateralValue * ltvWarnThreshold - loanAmount);
+      const plannedCollateralChange = collateralAfterPlan - totals.totalCollateralValue;
+      const binanceLoanAfterPlan = plannedOutstanding;
+      const binanceCollateralAfterPlan = collateralAfterPlan;
+      const binanceLtvAfterPlan = plannedOverallLTV;
+      const binanceLtvTone = binanceLtvAfterPlan <= ltvHealthyThreshold ? "ok" : (binanceLtvAfterPlan <= ltvWarnThreshold ? "warn" : "danger");
+      const binanceExtraCollateralNeeded = ltvHealthyThreshold > 0 ? Math.max(0, binanceLoanAfterPlan / ltvHealthyThreshold - binanceCollateralAfterPlan) : 0;
+      const binanceRepayNeeded = Math.max(0, binanceLoanAfterPlan - binanceCollateralAfterPlan * ltvHealthyThreshold);
+      const binanceBufferToCaution = Math.max(0, binanceCollateralAfterPlan * ltvWarnThreshold - binanceLoanAfterPlan);
       const binanceCautionLabel = ltvWarnThreshold > ltvHealthyThreshold ? `${toPct(ltvHealthyThreshold, 0)} – ${toPct(ltvWarnThreshold, 0)}` : `>${toPct(ltvHealthyThreshold, 0)}`;
-      const binanceLiquidationValue = marginCallLtv > 0 ? loanAmount / marginCallLtv : 0;
-      const binanceLiquidationBuffer = totals.totalCollateralValue - binanceLiquidationValue;
-      const binanceAdjustedLiquidationValue = marginCallLtv > 0 ? binanceLoanAfterRepay / marginCallLtv : 0;
-      const binanceAdjustedLiquidationBuffer = binanceCollateralAfterAdjust - binanceAdjustedLiquidationValue;
+      const currentLiquidationValue = marginCallLtv > 0 ? loanAmount / marginCallLtv : 0;
+      const currentLiquidationBuffer = totals.totalCollateralValue - currentLiquidationValue;
+      const binanceLiquidationValue = marginCallLtv > 0 ? binanceLoanAfterPlan / marginCallLtv : 0;
+      const binanceLiquidationBuffer = binanceCollateralAfterPlan - binanceLiquidationValue;
 
       const manualLoanAllocationEnabled = !!params.manualLoanAllocation;
 
@@ -2078,7 +2079,7 @@
         const directLoanSum = directLoanActive
           ? Object.values(loanRequestsTotals).reduce((acc, value) => acc + value, 0)
           : 0;
-        const loanBase = Math.max(0, loanAmount);
+        const loanBase = Math.max(0, plannedOutstanding);
         const items = totals.withValue
           .filter((asset) => asset.useAsCollateral && asset.value > 0)
           .map((asset) => {
@@ -2097,9 +2098,9 @@
             const baseNetApr = isBinance ? binanceBorrowNetAnnualRate : (chosenAPR - aprOffset);
             const netApr = Math.max(0, baseNetApr);
             let tone = "ok";
-            if (usageVsCap >= 1 || actualLtv >= policyLTV || overallLTVIfBorrow >= autoRepayLtv) {
+            if (usageVsCap >= 1 || actualLtv >= policyLTV || plannedOverallLTV >= autoRepayLtv) {
               tone = "danger";
-            } else if (usageVsCap > 0.75 || actualLtv > policyLTV * 0.9 || overallLTVIfBorrow >= marginCallLtv) {
+            } else if (usageVsCap > 0.75 || actualLtv > policyLTV * 0.9 || plannedOverallLTV >= marginCallLtv) {
               tone = "warn";
             }
             const loanShareDenom = manualActive
@@ -2147,7 +2148,7 @@
           weightedAprOffset,
           weightedNetApr,
         };
-      }, [autoRepayLtv, binanceBorrowAdjustment, binanceBorrowNetAnnualRate, defaultLtv, earnAprTop, isBinance, loanAmount, loanRequestsTotals, manualLoanAllocationEnabled, marginCallLtv, overallLTVIfBorrow, totals.totalCollateralValue, totals.withValue, ltvByTicker]);
+      }, [autoRepayLtv, binanceBorrowAdjustment, binanceBorrowNetAnnualRate, defaultLtv, earnAprTop, isBinance, loanAmount, loanRequestsTotals, manualLoanAllocationEnabled, marginCallLtv, plannedOverallLTV, totals.totalCollateralValue, totals.withValue, ltvByTicker]);
 
       const binanceNetAprOffset = isBinance ? (collateralBreakdown.weightedAprOffset || 0) : 0;
       const binanceNetAnnualRate = isBinance ? (collateralBreakdown.weightedNetApr ?? chosenAPR) : 0;
@@ -2191,7 +2192,6 @@
 
       const displayPlatformName = platformName || platformId;
 
-      const bipSources = Array.isArray(diagnosticSources?.bip) ? diagnosticSources.bip : [];
 
       useEffect(() => {
         document.title = `Simulador de Préstamos / ${displayPlatformName}`;
@@ -2280,11 +2280,11 @@
             <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
               {(isBinance ? [
                 { key: 'loan-current', title: 'Préstamo vigente', value: fmt(loanAmount * rate, currency) },
-                { key: 'loan-sim', title: 'Préstamo tras repago simulado', value: fmt(binanceLoanAfterRepay * rate, currency), subtle: binanceRepaySim > 0 ? `Repago simulado ${fmt(Math.min(binanceRepaySim, loanAmount) * rate, currency)}` : 'Sin repago' },
+                { key: 'loan-plan', title: 'Préstamo tras pagos planificados', value: fmt(binanceLoanAfterPlan * rate, currency), subtle: scheduledPrincipal > 0 ? `Pagos programados ${fmt(Math.min(scheduledPrincipal, loanAmount) * rate, currency)}` : 'Sin pagos programados' },
                 { key: 'collateral-current', title: 'Colateral actual', value: fmt(totals.totalCollateralValue * rate, currency) },
-                { key: 'collateral-adjusted', title: 'Colateral tras ajuste', value: fmt(binanceCollateralAfterAdjust * rate, currency), subtle: binanceCollateralDelta !== 0 ? `${binanceCollateralDelta > 0 ? '+' : '−'}${fmt(Math.abs(binanceCollateralDelta) * rate, currency)}` : 'Sin cambios' },
-                { key: 'ltv-current', title: 'LTV inicial', value: toPct(overallLTVIfBorrow, 2), tone: ltvTone, subtle: 'Con colateral actual' },
-                { key: 'ltv-sim', title: 'LTV simulado', value: toPct(binanceLtvAfterAdjust, 2), tone: binanceLtvTone, subtle: (binanceCollateralDelta !== 0 || binanceRepaySim > 0) ? 'Tras ajustes' : 'Sin ajustes' },
+                { key: 'collateral-plan', title: 'Colateral tras plan', value: fmt(binanceCollateralAfterPlan * rate, currency), subtle: Math.abs(plannedCollateralChange) > 1e-6 ? `${plannedCollateralChange > 0 ? '+' : '−'}${fmt(Math.abs(plannedCollateralChange) * rate, currency)}` : 'Sin cambios' },
+                { key: 'ltv-current', title: 'LTV inicial', value: toPct(currentOverallLTV, 2), tone: ltvTone, subtle: 'Con datos actuales' },
+                { key: 'ltv-plan', title: 'LTV proyectado (plan)', value: toPct(binanceLtvAfterPlan, 2), tone: binanceLtvTone, subtle: scheduledPrincipal > 0 || Math.abs(plannedCollateralChange) > 1e-6 ? 'Tras plan de cashflow' : 'Sin cambios' },
                 { key: 'apr', title: 'Tasa anual (APR)', value: toPct(chosenAPR, 2), subtle: binanceBorrowLabel || undefined },
                 {
                   key: 'apr-net',
@@ -2310,7 +2310,7 @@
                 { key: 'ltv-top', title: 'Tope por LTVs', value: fmt(totals.maxBorrow * rate, currency) },
                 { key: 'loan-target', title: 'Préstamo recomendado (≤20%)', value: fmt(recommendedLoanAtTarget * rate, currency) },
                 { key: 'interest-total', title: 'Interés hasta repago', value: fmt(interestCalc.total * rate, currency), subtle: `${daysUntilRepay} días` },
-                { key: 'repay-total', title: 'Total a devolver', value: fmt(interestCalc.repayTotal * rate, currency) },
+                { key: 'repay-total', title: 'Total a devolver', value: fmt(totalProjectedOutflows * rate, currency), subtle: projectedFinalPayoff > 0 ? `Pago final proyectado ${fmt(projectedFinalPayoff * rate, currency)}` : undefined },
                 { key: 'earn-monthly', title: 'Earn mensual (hasta)', value: fmt(earnMonthly * rate, currency), subtle: earnEligible ? (minBalancePerks > 0 ? `Savings ≥ US$${formatDecimal(minBalancePerks, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : undefined) : 'no elegible' },
               ]).map((item) => (
                 <KPI key={item.key} title={item.title} value={item.value} subtle={item.subtle} tone={item.tone} variant={item.variant || 'button'} />
@@ -2450,15 +2450,15 @@
                               ? 'Se respeta la asignación por cripto que agregaste en la lista.'
                               : 'La herramienta reparte el préstamo de forma proporcional al valor del colateral.')}
                         </p>
-                        <Pill label="LTV actual" value={toPct(overallLTVIfBorrow, 2)} tone={ltvTone} />
-                        <Pill label="LTV simulado" value={toPct(binanceLtvAfterAdjust, 2)} tone={binanceLtvTone} />
+                        <Pill label="LTV actual" value={toPct(currentOverallLTV, 2)} tone={ltvTone} />
+                        <Pill label="LTV proyectado" value={toPct(binanceLtvAfterPlan, 2)} tone={binanceLtvTone} />
                         <Pill label={`Colateral extra para ≤${toPct(ltvHealthyThreshold, 0)}`} value={fmt(binanceExtraCollateralNeeded * rate, currency)} tone={binanceExtraCollateralNeeded > 0 ? "warn" : "ok"} />
                         <Pill label={`Repago para ≤${toPct(ltvHealthyThreshold, 0)}`} value={fmt(binanceRepayNeeded * rate, currency)} tone={binanceRepayNeeded > 0 ? "warn" : "ok"} />
                         <Pill label={`Buffer hasta ${toPct(ltvWarnThreshold, 0)}`} value={fmt(binanceBufferToCaution * rate, currency)} tone={binanceBufferToCaution > 0 ? "ok" : "danger"} />
                       </>
                     ) : (
                       <>
-                        <Pill label="LTV si pides esto" value={toPct(overallLTVIfBorrow, 2)} tone={ltvTone} />
+                        <Pill label="LTV si pides esto" value={toPct(plannedOverallLTV, 2)} tone={ltvTone} />
                         <Pill label="≤20% LTV (fijo)" value={loanAmount <= recommendedLoanAtTarget ? "Sí" : "No"} tone={loanAmount <= recommendedLoanAtTarget ? "ok" : "warn"} />
                         <Pill label="¿Califica Low-Cost?" value={meetsLowCost ? "Sí" : "No"} tone={meetsLowCost ? "ok" : "warn"} />
                         <Pill label="Margen Low-Cost" value={fmt(lowCostHeadroom * rate, currency)} tone={lowCostHeadroom > 0 ? "ok" : "danger"} />
@@ -2504,8 +2504,8 @@
                     {isBinance ? (
                       <>
                         <Line label="LTV proyectado (cashflow)" value={Number.isFinite(ltvGaugeValue) ? toPct(ltvGaugeValue, 2) : '∞'} tone={ltvTone} />
-                        <Line label="LTV actual" value={toPct(overallLTVIfBorrow, 2)} muted />
-                        <Line label="LTV simulado" value={toPct(binanceLtvAfterAdjust, 2)} tone={binanceLtvTone} />
+                        <Line label="LTV actual" value={toPct(currentOverallLTV, 2)} muted />
+                        <Line label="LTV planificado" value={toPct(binanceLtvAfterPlan, 2)} tone={binanceLtvTone} />
                         <Line label="Rango saludable" value={`≤ ${toPct(ltvHealthyThreshold, 0)}`} muted />
                         <Line label="Riesgo medio" value={binanceCautionLabel} muted />
                         <Line label="Margin call" value={toPct(marginCallLtv, 0)} muted />
@@ -2516,7 +2516,7 @@
                     ) : (
                       <>
                         <Line label="LTV proyectado (cashflow)" value={Number.isFinite(ltvGaugeValue) ? toPct(ltvGaugeValue, 1) : '∞'} tone={ltvTone} />
-                        <Line label="LTV actual" value={toPct(overallLTVIfBorrow, 1)} muted />
+                        <Line label="LTV actual" value={toPct(currentOverallLTV, 1)} muted />
                         <Line label="Objetivo Low-Cost" value={toPct(targetLtv, 0)} muted />
                         <Line label="Margin call" value={toPct(marginCallLtv, 0)} muted />
                         <Line label="Auto-repay" value={toPct(autoRepayLtv, 0)} muted />
@@ -2526,7 +2526,8 @@
                   </div>
                 </Card>
 
-                <Card title="Diagnóstico & Sugerencias">
+                {!isBinance && (
+                  <Card title="Diagnóstico & Sugerencias">
                   <ul className="list-disc pl-5 space-y-2 text-sm">
                     {loyalty ? (
                       <li>
@@ -2556,33 +2557,8 @@
                       Earn (flex) mensual estimado {earnEligible ? (minBalancePerks > 0 ? "(tope)" : "") : (minBalancePerks > 0 ? "(requiere balance mínimo)" : "(no elegible)")}: <b>{fmt(earnMonthly * rate, currency)}</b>.
                     </li>
                   </ul>
-                  {bipSources.length > 0 && (
-                    <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50/70 p-3">
-                      <div className="text-xs font-semibold uppercase tracking-wide text-amber-700">Fuentes oficiales (BIP)</div>
-                      <ul className="mt-2 list-disc space-y-2 pl-4 text-xs text-amber-800">
-                        {bipSources.map((source) => {
-                          const codeLabel = source.code || source.title || 'BIP';
-                          const titleText = source.title && source.title !== source.code ? source.title : '';
-                          const labelContent = (
-                            <span className="font-semibold">{codeLabel}</span>
-                          );
-                          return (
-                            <li key={codeLabel} className="leading-relaxed">
-                              {source.url ? (
-                                <a href={source.url} target="_blank" rel="noreferrer" className="underline decoration-dotted">
-                                  {labelContent}
-                                </a>
-                              ) : (
-                                labelContent
-                              )}
-                              {titleText ? <span className="ml-1">— {titleText}</span> : null}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  )}
-                </Card>
+                  </Card>
+                )}
               </div>
 
               <div className="space-y-6">
@@ -2597,7 +2573,7 @@
                     rate={rate}
                     totalCollateral={totals.totalCollateralValue}
                     totalMaxBorrow={totals.maxBorrow}
-                    overallLTV={overallLTVIfBorrow}
+                    overallLTV={plannedOverallLTV}
                     target={targetLtv}
                     marginCall={marginCallLtv}
                     autoRepay={autoRepayLtv}
@@ -2606,7 +2582,7 @@
                     manualAllocationEnabled={collateralBreakdown.manualEnabled}
                     manualAllocationActive={collateralBreakdown.manualActive}
                     manualAllocationTotal={collateralBreakdown.manualTotal}
-                    loanAmount={loanAmount}
+                    loanAmount={plannedOutstanding}
                   />
                 </Card>
               </div>
@@ -2755,72 +2731,6 @@
                   defaultMatrix={baseBenchmarkConfig?.rateMatrix}
                 />
 
-                <Card title="Parámetros (solo entorno)">
-                  <div className="grid grid-cols-1 gap-4">
-                  {SUPPORTED_CURRENCIES.filter((option) => option.code !== 'USD').map((option) => (
-                    <NumberParam
-                      key={option.code}
-                      label={`USD→${option.code}`}
-                      value={params.exchangeRates?.[option.code] ?? baseExchangeRates[option.code] ?? DEFAULT_EXCHANGE_RATES[option.code] ?? 1}
-                      onChange={(v) => setParams({
-                        ...params,
-                        exchangeRates: { ...params.exchangeRates, [option.code]: v },
-                      })}
-                    />
-                  ))}
-
-                  <div className="sm:col-span-2 rounded-2xl border border-neutral-200 p-3 flex flex-wrap items-center gap-3">
-                    <div className="flex flex-wrap items-center gap-3 text-sm font-medium">
-                      <span className="inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700">Activo</span>
-                      <label className="flex items-center gap-2 text-sm font-medium">
-                        <input type="checkbox" className="h-4 w-4" checked={!!params.liveQuotes} onChange={(e)=> setParams({ ...params, liveQuotes: e.target.checked })} />
-                        Auto-actualizar precios de activos
-                      </label>
-                    </div>
-                    <span className="text-xs text-neutral-500">Frecuencia automática: cada {LIVE_REFRESH_SECONDS} segundos.</span>
-                    <button onClick={() => fetchLivePricesNow(true)} className="nx-btn text-sm">Actualizar ahora</button>
-                    <span className="text-xs text-neutral-500">{lastPriceTs ? `Últ. actualización: ${new Date(lastPriceTs).toLocaleTimeString()}` : '— sin actualizar —'}</span>
-                    {liveError && <span className="text-xs text-rose-600">Error: {liveError}</span>}
-                  </div>
-
-                  <div className="sm:col-span-2 rounded-2xl border border-neutral-200 p-3 flex flex-wrap items-center gap-3">
-                    <div className="flex flex-wrap items-center gap-3 text-sm font-medium">
-                      <span className="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">FX</span>
-                      <span>Actualización de tipos de cambio</span>
-                    </div>
-                    <span className="text-xs text-neutral-500">Frecuencia automática: cada {FX_REFRESH_MINUTES} minutos.</span>
-                    <button onClick={fetchOfficialFxRates} disabled={fxMeta.loading} className="nx-btn text-sm disabled:cursor-not-allowed disabled:opacity-60">
-                      {fxMeta.loading ? 'Actualizando…' : 'Actualizar tipos de cambio'}
-                    </button>
-                    <span className="text-xs text-neutral-500">{fxMeta.lastUpdated ? `Últ. actualización: ${new Date(fxMeta.lastUpdated).toLocaleTimeString()}` : '— sin actualizar —'}</span>
-                    {fxMeta.error && <span className="text-xs text-rose-600">Error: {fxMeta.error}</span>}
-                  </div>
-
-                  <div className="sm:col-span-2 rounded-2xl border border-neutral-200 p-3 flex flex-wrap items-center gap-3">
-                    <label className="flex items-center gap-2 text-sm font-medium">
-                      <input type="checkbox" className="h-5 w-5" checked={!!params.earnOptIn} onChange={(e)=> setParams({ ...params, earnOptIn: e.target.checked })} />
-                      Considerar intereses (Savings) y compounding
-                    </label>
-                    <label className="flex items-center gap-2 text-sm font-medium">
-                      <input type="checkbox" className="h-5 w-5" checked={!!params.earnOnCollateral} onChange={(e)=> setParams({ ...params, earnOnCollateral: e.target.checked })} />
-                      Incluir colateral en Earn
-                    </label>
-                    {minBalancePerks > 0 && <span className="text-xs text-neutral-500">* Elegible si balance ≥ ${minBalancePerks}.</span>}
-                  </div>
-
-                  {isBinance && (
-                    <div className="sm:col-span-2 rounded-2xl border border-neutral-200 p-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <NumberParam label="Ajuste colateral simulado (USD)" value={params.binanceCollateralDelta} onChange={(v)=> setParams({ ...params, binanceCollateralDelta: v })} />
-                      <NumberParam label="Repago simulado (USD)" value={params.binanceRepaySim} onChange={(v)=> setParams({ ...params, binanceRepaySim: Math.max(0, v) })} />
-                      <p className="sm:col-span-2 text-xs text-neutral-500">Usá estos campos para estimar cómo impactan los ajustes de colateral o repagos anticipados en el LTV y el precio de liquidación.</p>
-                    </div>
-                  )}
-
-                  <div className="sm:col-span-2 text-xs text-neutral-500">
-                    {isBinance ? 'LTV, rangos de salud y precios de liquidación se basan en las reglas flexibles de Binance. Ajusta valores para simular escenarios.' : '* LTV, APR por nivel y descuentos Low-Cost provienen de la plataforma elegida. Aquí solo ajustás parámetros de entorno (cambio, frecuencia, toggles).'}
-                  </div>
-                  </div>
-                </Card>
               </div>
             </section>
 
@@ -2882,7 +2792,11 @@
       const alerts = derived?.alerts || [];
       const netFinal = derived?.netBalanceFinal ?? loanAmount;
       const minNet = derived?.minNetBalance ?? netFinal;
-      const outstanding = derived?.lastOutstanding ?? 0;
+      const outstandingPlan = derived?.outstandingAfterPlan ?? loanAmount;
+      const scheduledPrincipalPlan = derived?.scheduledPrincipal ?? 0;
+      const scheduledInterestPlan = derived?.scheduledInterest ?? 0;
+      const projectedPayoffPlan = derived?.projectedFinalPayoff ?? Math.max(0, outstandingPlan);
+      const totalScheduledOutflows = scheduledPrincipalPlan + scheduledInterestPlan;
 
       const scenarioLabels = { base: 'Base', bear: 'Bajista', bull: 'Alcista' };
 
@@ -2963,9 +2877,10 @@
       const formatMoney = (value) => fmt(value * rate, currency);
 
       const summaryTiles = [
-        { label: 'Balance final proyectado', value: formatMoney(netFinal), tone: netFinal >= 0 ? 'text-emerald-600' : 'text-rose-600' },
-        { label: 'Mínimo del período', value: formatMoney(minNet), tone: minNet >= 0 ? 'text-neutral-700' : 'text-rose-600' },
-        { label: 'Capital pendiente', value: formatMoney(outstanding), tone: 'text-neutral-700' },
+        { label: 'Balance final proyectado', value: formatMoney(netFinal), tone: netFinal >= 0 ? 'text-emerald-600' : 'text-rose-600', hint: `Mínimo ${formatMoney(minNet)}` },
+        { label: 'Capital pendiente (plan)', value: formatMoney(outstandingPlan), tone: 'text-neutral-700' },
+        { label: 'Pagos programados', value: formatMoney(totalScheduledOutflows), tone: totalScheduledOutflows > 0 ? 'text-neutral-700' : 'text-neutral-500', hint: totalScheduledOutflows > 0 ? `Capital ${formatMoney(scheduledPrincipalPlan)} · Interés ${formatMoney(scheduledInterestPlan)}` : 'Sin pagos programados' },
+        { label: 'Pago final proyectado', value: formatMoney(projectedPayoffPlan), tone: projectedPayoffPlan >= 0 ? 'text-neutral-700' : 'text-rose-600', hint: outstandingPlan > 0 ? 'Restante tras plan' : 'Cubierto por plan' },
         { label: 'Earn mensual', value: formatMoney(earnMonthly), tone: 'text-neutral-700', hint: earnEligible ? 'Earn activo' : 'Earn inactivo' },
       ];
 
@@ -3279,7 +3194,11 @@
       let cumulativeCash = 0;
       let accruedInterest = 0;
       let totalEarn = 0;
-      let totalCost = 0;
+      let totalOutflows = 0;
+      let scheduledPrincipal = 0;
+      let scheduledInterest = 0;
+      let collateralDeltaTotal = 0;
+      let projectedFinalPayoff = 0;
       let minNet = Number.POSITIVE_INFINITY;
       const timeline = [];
       const alerts = [];
@@ -3323,7 +3242,7 @@
           netBalance,
           outstanding,
           scenarioStats,
-          totalCost,
+          totalCost: totalOutflows,
           totalEarn,
         });
         lastDate = event.date;
@@ -3334,19 +3253,23 @@
         if (deltaDays > 0 && outstanding > 0) {
           const interest = outstanding * (Math.pow(1 + apr / 365, deltaDays) - 1);
           accruedInterest += interest;
-          totalCost += interest;
         }
         cumulativeCash += event.amount || 0;
-        if ((event.amount || 0) >= 0) totalEarn += event.amount || 0; else totalCost += Math.abs(event.amount || 0);
+        if ((event.amount || 0) >= 0) totalEarn += event.amount || 0; else totalOutflows += Math.abs(event.amount || 0);
         if (event.principalImpact) {
-          outstanding = Math.max(0, outstanding - Number(event.principalImpact));
+          const principalPaid = Math.max(0, Math.min(outstanding, Number(event.principalImpact)));
+          scheduledPrincipal += principalPaid;
+          outstanding = Math.max(0, outstanding - principalPaid);
         }
         if (event.interestPortion) {
           const payInterest = Math.min(accruedInterest, Number(event.interestPortion) || 0);
+          scheduledInterest += payInterest;
           accruedInterest = Math.max(0, accruedInterest - payInterest);
         }
         if (event.collateralDelta) {
-          collateral = Math.max(0, collateral + Number(event.collateralDelta));
+          const delta = Number(event.collateralDelta) || 0;
+          collateralDeltaTotal += delta;
+          collateral = Math.max(0, collateral + delta);
         }
         addSnapshot(event);
       });
@@ -3356,15 +3279,19 @@
         if (deltaDays > 0) {
           const interest = outstanding * (Math.pow(1 + apr / 365, deltaDays) - 1);
           accruedInterest += interest;
-          totalCost += interest;
         }
         addSnapshot({ id: 'carry', type: 'carry', label: 'Interés acumulado', date: endDate, amount: 0 });
       }
 
+      const outstandingAfterPlan = outstanding;
+      const collateralAfterPlan = collateral;
+      const accruedAfterPlan = accruedInterest;
+
       if (outstanding > 0 || accruedInterest > 0) {
-        const payoff = -(outstanding + accruedInterest);
+        projectedFinalPayoff = outstanding + accruedInterest;
+        const payoff = -projectedFinalPayoff;
         cumulativeCash += payoff;
-        totalCost += Math.abs(payoff);
+        totalOutflows += Math.abs(payoff);
         outstanding = 0;
         accruedInterest = 0;
         addSnapshot({ id: 'closure', type: 'closure', label: 'Pago final proyectado', date: endDate, amount: payoff });
@@ -3390,7 +3317,16 @@
         fundingGaps,
         netBalanceFinal: timeline.length ? timeline[timeline.length - 1].netBalance : loanAmount,
         minNetBalance: Number.isFinite(minNet) ? minNet : loanAmount,
-        lastOutstanding: outstanding,
+        lastOutstanding: outstandingAfterPlan,
+        outstandingAfterPlan,
+        collateralAfterPlan,
+        collateralDeltaPlanned: collateralDeltaTotal,
+        scheduledPrincipal,
+        scheduledInterest,
+        totalCost: totalOutflows,
+        totalEarn,
+        projectedFinalPayoff,
+        accruedInterestAfterPlan: accruedAfterPlan,
         scenarioSummaries,
         scenarioShocks: baseScenarios,
         activeScenario,
