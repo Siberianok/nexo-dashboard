@@ -4823,9 +4823,8 @@
       const auto = Number.isFinite(autoRepayThreshold) ? autoRepayThreshold : 1;
       const overallTone = overallLTV <= healthy ? 'ok' : overallLTV <= warn ? 'warn' : 'danger';
       const overallLabel = overallTone === 'ok' ? 'Sano' : overallTone === 'warn' ? 'Vigilar' : 'Crítico';
-      const overallToneClass = overallTone === 'ok' ? 'text-emerald-600' : overallTone === 'warn' ? 'text-amber-600' : 'text-rose-600';
-      const toneBadge = { ok: 'bg-emerald-50 text-emerald-700', warn: 'bg-amber-50 text-amber-700', danger: 'bg-rose-50 text-rose-700' };
-      const remainingShare = Math.max(0, 1 - accShare);
+        const overallToneClass = overallTone === 'ok' ? 'text-emerald-600' : overallTone === 'warn' ? 'text-amber-600' : 'text-rose-600';
+        const toneBadge = { ok: 'bg-emerald-50 text-emerald-700', warn: 'bg-amber-50 text-amber-700', danger: 'bg-rose-50 text-rose-700' };
 
       return (
         <div className="rounded-2xl border border-amber-100 bg-white/80 p-4 shadow-sm flex flex-col gap-4">
@@ -4852,30 +4851,18 @@
             </div>
           </div>
           <div className="space-y-2 text-xs text-neutral-600">
-            {segments.map((seg, idx) => (
-              <div key={`${seg.ticker || seg.name}-${idx}`} className="flex items-center justify-between gap-3">
+            {[...segments, leftoverShape].filter(Boolean).map((seg, idx) => (
+              <div key={`${seg.ticker || seg.name || 'segment'}-${idx}`} className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: seg.color || '#60a5fa' }} />
-                  <span className="font-medium text-neutral-800">{seg.name}</span>
+                  <span className={`${seg.isPlaceholder ? 'text-neutral-500' : 'font-medium text-neutral-800'}`}>{seg.name}</span>
                 </div>
                 <div className="flex flex-col items-end">
-                  <span className="font-semibold text-neutral-800">{formatPercent(seg.share, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+                  <span className={`${seg.isPlaceholder ? 'text-neutral-500' : 'font-semibold text-neutral-800'}`}>{formatPercent(seg.share, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
                   <span className="text-[10px] text-neutral-500">{fmt(seg.share * Math.max(0, loanAmount) * rate, currency)}</span>
                 </div>
               </div>
             ))}
-            {remainingShare > 1e-4 && (
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-neutral-500">
-                  <span className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
-                  <span>No asignado</span>
-                </div>
-                <div className="flex flex-col items-end text-neutral-500">
-                  <span>{formatPercent(remainingShare, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
-                  <span className="text-[10px]">{fmt(remainingShare * Math.max(0, loanAmount) * rate, currency)}</span>
-                </div>
-              </div>
-            )}
           </div>
           <div className="flex flex-wrap gap-2 text-[10px] text-neutral-500">
             <span className="flex items-center gap-1"><span className="h-2 w-3 rounded-full" style={{ backgroundColor: toneColors.ok }} />Sano ≤ {formatPercent(healthy, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
