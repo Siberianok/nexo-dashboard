@@ -4902,7 +4902,7 @@
                 </div>
                 <div className="flex flex-col items-end">
                   <span className="font-semibold text-neutral-800">{formatPercent(seg.share, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
-                  <span className="text-[10px] text-neutral-500">{fmt(seg.share * Math.max(0, loanAmount) * rate, currency)}</span>
+                  <span className="text-[10px] text-neutral-500">{fmt(seg.amount * rate, currency)}</span>
                 </div>
               </div>
             ))}
