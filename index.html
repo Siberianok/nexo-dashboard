@@ -357,6 +357,7 @@
       const scheduledPrincipal = scheduledPayments;
       const scheduledInterest = 0;
       const plannedEarns = sumPositive(earns, 'amount');
+      let earnApplied = 0;
 
       const scheduledPrincipalByTicker = {};
       let generalPrincipal = 0;
@@ -381,17 +382,25 @@
           }
         });
         if (generalPrincipal > 0) {
-          generalPrincipal -= applyProportionalReduction(outstandingByTicker, generalPrincipal);
+          applyProportionalReduction(outstandingByTicker, generalPrincipal);
         }
         if (plannedEarns > 0) {
-          applyProportionalReduction(outstandingByTicker, plannedEarns);
+          earnApplied = applyProportionalReduction(outstandingByTicker, plannedEarns);
         }
       }
 
-      const outstandingAfterPlan = hasLoanByTicker
-        ? Math.max(0, sumMap(outstandingByTicker))
-        : Math.max(0, loanAmount - scheduledPayments - plannedEarns);
-      const projectedFinalPayoff = outstandingAfterPlan;
+      let outstandingAfterPlan;
+      if (hasLoanByTicker) {
+        outstandingAfterPlan = Math.max(0, sumMap(outstandingByTicker));
+      } else {
+        const outstandingBeforeEarn = Math.max(0, loanAmount - scheduledPayments);
+        if (plannedEarns > 0 && outstandingBeforeEarn > 0) {
+          earnApplied = Math.min(outstandingBeforeEarn, plannedEarns);
+        }
+        outstandingAfterPlan = Math.max(0, outstandingBeforeEarn - earnApplied);
+      }
+      const netOutstandingAfterPlan = Math.max(0, outstandingAfterPlan + scheduledInterest);
+      const projectedFinalPayoff = netOutstandingAfterPlan;
       const totalCost = Math.max(0, scheduledPayments + projectedFinalPayoff);
 
       const collateralDeltaPlanned = manual.reduce((acc, item) => {
@@ -405,8 +414,8 @@
 
       const denominator = collateralAfterPlan > 0 ? collateralAfterPlan : baseCollateral;
       const ltvForGauge = denominator > 0
-        ? outstandingAfterPlan / denominator
-        : (outstandingAfterPlan > 0 ? 1 : 0);
+        ? netOutstandingAfterPlan / denominator
+        : (netOutstandingAfterPlan > 0 ? 1 : 0);
 
       const scenarioLabel = typeof plan?.activeScenario === 'string' ? plan.activeScenario : 'base';
 
@@ -441,14 +450,14 @@
         scheduledInterest,
         projectedFinalPayoff,
         totalCost,
-        outstandingAfterPlan,
+        outstandingAfterPlan: netOutstandingAfterPlan,
         outstandingByTicker: hasLoanByTicker ? outstandingByTicker : undefined,
         collateralDeltaPlanned,
         collateralAfterPlan,
         ltvForGauge: Number.isFinite(ltvForGauge) ? Math.max(0, ltvForGauge) : 0,
         scenarioLabel,
         alerts,
-        netBalanceFinal: Math.max(0, projectedFinalPayoff + scheduledInterest - plannedEarns),
+        netBalanceFinal: Math.max(0, netOutstandingAfterPlan - Math.max(0, plannedEarns - earnApplied)),
         loanByTicker: hasLoanByTicker ? loanByTicker : undefined,
         scheduledPrincipalByTicker: Object.keys(scheduledPrincipalByTicker).length > 0 ? scheduledPrincipalByTicker : undefined,
       };
