@@ -4627,29 +4627,17 @@
     function BinanceAssetCard({ item, currency, rate, chosenAPR }) {
       const toneBadge = { ok: 'bg-emerald-50 text-emerald-700', warn: 'bg-amber-50 text-amber-700', danger: 'bg-rose-50 text-rose-700' };
       const toneBar = { ok: '#10b981', warn: '#f97316', danger: '#ef4444' };
-      const loanShareLabel = item.loanShare > 0 ? formatPercent(item.loanShare, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '0%';
       const tickerUpper = (item.ticker || '').toUpperCase();
       const highlightEtbDetails = tickerUpper === 'ADA' || tickerUpper === 'ALGO';
       const usagePct = item.policyLTV > 0 ? Math.min(100, (item.actualLtv / item.policyLTV) * 100) : Math.min(100, item.actualLtv * 100);
       const annualApr = Number.isFinite(item.annualApr) ? item.annualApr : chosenAPR;
       const netTone = item.netApr < 0 ? 'text-emerald-600' : item.netApr <= annualApr ? 'text-neutral-900' : 'text-amber-600';
       const ledger = item.ledger || {};
-      const paidTotal = Number.isFinite(item.paidTotal) ? Math.max(0, item.paidTotal) : 0;
       const interestAccrued = Number.isFinite(item.interestAccrued) ? Math.max(0, item.interestAccrued) : 0;
-      const originalPrincipal = Number.isFinite(item.originalPrincipal) ? Math.max(0, item.originalPrincipal) : Math.max(0, item.allocatedLoan + paidTotal - interestAccrued);
-      const paidLabel = paidTotal > 0 ? fmt(paidTotal * rate, currency) : '—';
       const interestLabel = interestAccrued > 0 ? fmt(interestAccrued * rate, currency) : '—';
-      const originalLabel = fmt(originalPrincipal * rate, currency);
-      const currentPrice = Number.isFinite(item.currentPrice) && item.currentPrice > 0 ? item.currentPrice : null;
       const liquidationPrice = Number.isFinite(item.liquidationPrice) && item.liquidationPrice > 0 ? item.liquidationPrice : null;
-      const priceDigits = currentPrice != null && currentPrice < 1 ? { minimumFractionDigits: 5, maximumFractionDigits: 8 } : { minimumFractionDigits: 3, maximumFractionDigits: 6 };
       const liquidationDigits = liquidationPrice != null && liquidationPrice < 0.1 ? { minimumFractionDigits: 6, maximumFractionDigits: 8 } : { minimumFractionDigits: 4, maximumFractionDigits: 6 };
-      const currentPriceLabel = currentPrice != null ? `$${formatDecimal(currentPrice, priceDigits)}` : '—';
       const liquidationPriceLabel = liquidationPrice != null ? `$${formatDecimal(liquidationPrice, liquidationDigits)}` : '—';
-      const liquidationBufferLabel = Number.isFinite(item.liquidationBufferPct)
-        ? `${formatPercent(item.liquidationBufferPct, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} · ${fmt((item.liquidationBufferValue ?? 0) * rate, currency)}`
-        : '—';
-      const qtyLabel = Number.isFinite(item.qty) ? formatDecimal(item.qty, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '—';
       const borrowDate = ledger.borrowDate;
       const lastUpdated = ledger.lastUpdated;
       return (
@@ -4657,7 +4645,7 @@
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-neutral-900">{item.name}</div>
-              <div className="text-xs text-neutral-500">{item.ticker || '—'} · {loanShareLabel} del préstamo</div>
+              <div className="text-xs text-neutral-500">{item.ticker || '—'}</div>
             </div>
             <span className={`rounded-full px-2 py-1 text-xs font-semibold ${toneBadge[item.tone] || toneBadge.ok}`}>
               {item.tone === 'ok' ? 'Sano' : item.tone === 'warn' ? 'Vigilar' : 'Riesgo'}
@@ -4668,16 +4656,10 @@
               <div>
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Colateral</div>
                 <div className="text-sm font-semibold text-neutral-800">{fmt(item.value * rate, currency)}</div>
-                <div className="text-[10px] text-neutral-500">Cap {fmt(item.maxBorrowForAsset * rate, currency)} · Cant. {qtyLabel}</div>
-                <div className="text-[10px] text-neutral-500">Precio spot {currentPriceLabel}</div>
               </div>
               <div>
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">{highlightEtbDetails ? 'ETB neto asignado' : 'Préstamo & flujos'}</div>
                 <div className="text-sm font-semibold text-neutral-800">{fmt(item.allocatedLoan * rate, currency)}</div>
-                {highlightEtbDetails && (
-                  <div className="text-[10px] text-neutral-500">Participación del préstamo {loanShareLabel}</div>
-                )}
-                <div className="text-[10px] text-neutral-500">Original {originalLabel} · Pagos {paidLabel}</div>
                 <div className="text-[10px] text-neutral-500">Interés devengado {interestLabel}</div>
               </div>
             </div>
@@ -4685,19 +4667,11 @@
               <div>
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">LTV neto</div>
                 <div className="text-sm font-semibold text-neutral-800">{formatPercent(item.actualLtv, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div>
-                <div className="text-[10px] text-neutral-500">Tope {formatPercent(item.policyLTV, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} · Share {loanShareLabel}</div>
               </div>
               <div>
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Tasas Binance</div>
                 <div className="text-sm font-semibold text-neutral-800">{formatPercent(annualApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} APR</div>
-                <div className="text-[10px] text-neutral-500">Neta {formatPercent(item.netApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · Ajuste {formatPercent(item.aprOffset, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                {highlightEtbDetails
-                  ? (
-                    <div className="text-[10px] text-neutral-500">Precio liquidación estimado {liquidationPriceLabel}</div>
-                  )
-                  : (
-                    <div className="text-[10px] text-neutral-500">Earn estimado {formatPercent(item.earnApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                  )}
+                <div className="text-[10px] text-neutral-500">Precio de liquidación estimada {liquidationPriceLabel}</div>
               </div>
             </div>
           </div>
@@ -4710,17 +4684,9 @@
               <span>Tope</span>
             </div>
           </div>
-          {(liquidationPrice || currentPrice) && (
-            <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-2 text-[11px] text-amber-800">
-              <div className="flex justify-between"><span>Precio actual</span><span>{currentPriceLabel}</span></div>
-              <div className="flex justify-between"><span>Precio liquidación (margin call)</span><span>{liquidationPriceLabel}</span></div>
-              <div className="mt-1 flex justify-between text-[10px]"><span>Buffer hasta margin call</span><span>{liquidationBufferLabel}</span></div>
-            </div>
-          )}
           <div className="mt-3">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">APR neta Binance</div>
             <div className={`text-base font-semibold ${netTone}`}>{formatPercent(item.netApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            <div className="text-[11px] text-neutral-500">{`Préstamo ${formatPercent(annualApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} − ajuste ${formatPercent(item.aprOffset, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</div>
             {(borrowDate || lastUpdated) && (
               <div className="mt-1 text-[10px] text-neutral-500">
                 {borrowDate && <div>Inicio préstamo: {borrowDate}</div>}
