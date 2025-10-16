@@ -2161,21 +2161,14 @@
           return acc;
         }, { original: 0, outstanding: 0, interest: 0, paid: 0, initialCollateral: 0 });
       }, [isBinance, binanceLoanLedger, loanAmount, ltvByTicker, defaultLtv]);
-      const binanceLedgerPaymentsCount = useMemo(() => {
-        if (!isBinance) return 0;
-        return Object.values(binanceLoanLedger).reduce((acc, entry) => {
-          const count = Array.isArray(entry?.payments) ? entry.payments.length : 0;
-          return acc + count;
-        }, 0);
-      }, [isBinance, binanceLoanLedger]);
       const binanceOriginalPrincipalTotal = binanceLedgerTotals.original;
       const binanceInterestAccruedTotal = binanceLedgerTotals.interest;
       const binancePaidLedgerTotal = binanceLedgerTotals.paid;
       const binanceInitialCollateralTotal = binanceLedgerTotals.initialCollateral;
-      const binanceNetOutstandingTotal = binanceLedgerTotals.outstanding > 0
-        ? binanceLedgerTotals.outstanding
-        : Math.max(0, binanceOriginalPrincipalTotal + binanceInterestAccruedTotal - binancePaidLedgerTotal);
-      const binanceNetLoanValue = Math.max(0, binanceNetOutstandingTotal);
+      const binanceNetLoanValue = Math.max(
+        0,
+        binanceOriginalPrincipalTotal + binanceInterestAccruedTotal - binancePaidLedgerTotal,
+      );
       const binanceTotalToRepay = Math.max(0, binanceOriginalPrincipalTotal + binanceInterestAccruedTotal);
       const binanceInitialLtv = binanceInitialCollateralTotal > 0
         ? binanceOriginalPrincipalTotal / binanceInitialCollateralTotal
@@ -2562,7 +2555,11 @@
       const plannedOutstanding = Math.max(0, cashflowDerived?.outstandingAfterPlan ?? loanAmount);
       const plannedCollateralDelta = cashflowDerived?.collateralDeltaPlanned ?? 0;
       const collateralAfterPlan = Math.max(0, cashflowDerived?.collateralAfterPlan ?? (totals.totalCollateralValue + plannedCollateralDelta));
-      const currentOverallLTV = useMemo(() => (totals.totalCollateralValue > 0 ? loanAmount / totals.totalCollateralValue : 0), [loanAmount, totals.totalCollateralValue]);
+      const currentOverallLTV = useMemo(() => {
+        if (!(totals.totalCollateralValue > 0)) return 0;
+        const netLoanBase = isBinance ? binanceNetLoanValue : loanAmount;
+        return netLoanBase / totals.totalCollateralValue;
+      }, [isBinance, binanceNetLoanValue, loanAmount, totals.totalCollateralValue]);
       const plannedOverallLTV = collateralAfterPlan > 0 && Number.isFinite(plannedOutstanding / collateralAfterPlan)
         ? plannedOutstanding / collateralAfterPlan
         : (plannedOutstanding > 0 ? 1 : 0);
@@ -2594,7 +2591,7 @@
         binancePaidLedgerTotal > 0 ? `Pagos ${fmt(binancePaidLedgerTotal * rate, currency)}` : null,
       ].filter(Boolean).join(' · ') || 'Sin movimientos registrados';
       const binancePaidSubtle = binancePaidLedgerTotal > 0
-        ? `${binanceLedgerPaymentsCount} ${binanceLedgerPaymentsCount === 1 ? 'pago' : 'pagos'} registrados`
+        ? 'Total pagado a la fecha'
         : 'Sin pagos registrados';
       const binanceInitialCollateralSubtle = binanceInitialCollateralTotal > 0
         ? `Colateral inicial ${fmt(binanceInitialCollateralTotal * rate, currency)}`
