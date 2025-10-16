@@ -4872,6 +4872,9 @@
       const overallTone = overallLTV <= healthy ? 'ok' : overallLTV <= warn ? 'warn' : 'danger';
       const overallLabel = overallTone === 'ok' ? 'Sano' : overallTone === 'warn' ? 'Vigilar' : 'Crítico';
       const toneBadge = { ok: 'bg-emerald-50 text-emerald-700', warn: 'bg-amber-50 text-amber-700', danger: 'bg-rose-50 text-rose-700' };
+      const toneText = { ok: 'text-emerald-600', warn: 'text-amber-600', danger: 'text-rose-600' };
+      const consideredLoanLabel = formatLoan(consideredLoan);
+      const overallLtvLabel = formatPercent(overallLTV, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
       return (
         <div className="rounded-2xl border border-amber-100 bg-white/80 p-4 shadow-sm flex flex-col gap-4">
@@ -4887,10 +4890,15 @@
                 boxShadow: '0 16px 36px rgba(15,30,70,0.12), inset 0 0 0 6px rgba(255,255,255,0.9)'
               }}
             >
-              <div className="absolute inset-10 rounded-full bg-white shadow" aria-hidden="true" />
+              <div className="absolute inset-10 flex flex-col items-center justify-center gap-1 rounded-full bg-white px-4 text-center shadow">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">ETB total</div>
+                <div className="text-sm font-semibold text-neutral-900">{consideredLoanLabel}</div>
+                <div className="text-xs font-semibold text-neutral-500">{overallLtvLabel}</div>
+                <div className={`text-[10px] font-semibold uppercase tracking-wide ${toneText[overallTone]}`}>{overallLabel}</div>
+              </div>
             </div>
             <div className="text-xs text-neutral-500 text-center">
-              Préstamo considerado: <span className="font-semibold text-neutral-700">{fmt(consideredLoan * rate, currency)}</span>
+              Préstamo considerado: <span className="font-semibold text-neutral-700">{consideredLoanLabel}</span>
             </div>
           </div>
           <div className="space-y-2 text-xs text-neutral-600">
@@ -4902,7 +4910,7 @@
                 </div>
                 <div className="flex flex-col items-end">
                   <span className="font-semibold text-neutral-800">{formatPercent(seg.share, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
-                  <span className="text-[10px] text-neutral-500">{fmt(seg.share * Math.max(0, loanAmount) * rate, currency)}</span>
+                  <span className="text-[10px] text-neutral-500">{formatLoan(seg.amount)}</span>
                 </div>
               </div>
             ))}
