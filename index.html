@@ -903,27 +903,6 @@
           lowCostEligibleTiers: ["VIP 2", "VIP 3"],
           baseTier: "Estándar",
         },
-        loyalty: {
-          tokenTicker: "BNB",
-          baseLabel: "VIP 0",
-          belowMinimumLabel: "VIP 0",
-          tierThresholds: [
-            { label: "VIP 9", minRatio: 0.25 },
-            { label: "VIP 8", minRatio: 0.20 },
-            { label: "VIP 7", minRatio: 0.16 },
-            { label: "VIP 6", minRatio: 0.12 },
-            { label: "VIP 5", minRatio: 0.08 },
-            { label: "VIP 4", minRatio: 0.06 },
-            { label: "VIP 3", minRatio: 0.04 },
-            { label: "VIP 2", minRatio: 0.02 },
-            { label: "VIP 1", minRatio: 0.01 },
-          ],
-          models: [
-            { id: "vsTotal", label: "vs total (BNB holdings)" },
-          ],
-          kpiLabel: "Nivel VIP",
-          ratioLabel: "ratio BNB",
-        },
         ltvHealth: {
           zones: [
             { label: "Saludable", max: 0.75, color: "#22c55e", legend: "0-75%", tone: "ok" },
@@ -970,7 +949,6 @@
         ],
         defaultParams: {
           exchangeRates: { ...DEFAULT_EXCHANGE_RATES },
-          loyaltyModel: "vsTotal",
           liveQuotes: true,
           refreshSec: LIVE_REFRESH_SECONDS,
           earnOptIn: true,
@@ -987,7 +965,6 @@
           currency: "USD",
           params: {
             exchangeRates: { ...DEFAULT_EXCHANGE_RATES, ARS: 1050 },
-            loyaltyModel: "vsTotal",
             liveQuotes: true,
             earnOptIn: true,
             earnOnCollateral: true,
@@ -3176,7 +3153,9 @@
                         </React.Fragment>
                       ))
                     ) : (
-                      <p className="text-sm text-neutral-500">Esta plataforma no tiene un programa de niveles ligado a un token específico.</p>
+                      !isBinance && (
+                        <p className="text-sm text-neutral-500">Esta plataforma no tiene un programa de niveles ligado a un token específico.</p>
+                      )
                     )}
                     <div className="h-px bg-neutral-200 my-1" />
                     <Line label={`Colateral extra para ≤${toPct(targetLtv, 0)}`} value={formatUsd(extraCollateralForTarget)} tone={extraCollateralForTarget <= 0 ? "ok" : "warn"} />
@@ -3608,7 +3587,7 @@
 
             <div>
               <h4 className="mb-2 text-sm font-semibold text-neutral-700">Curva de saldo neto</h4>
-              <TrendChart data={chartData} currency={currency} rate={loanRate} />
+              <TrendChart data={chartData} currency={currency} rate={rate} />
             </div>
 
             <div className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-4">
@@ -4810,6 +4789,122 @@
       );
     }
 
+    function LoanDistributionDonut({ segments, size = 160 }) {
+      const fallbackColors = ['#ef6784', '#4b8fda', '#f5b64d', '#38c5b8'];
+      const center = size / 2;
+      const outerRadius = center - 8;
+      const innerRadius = outerRadius * 0.6;
+
+      const degToRad = (deg) => (deg * Math.PI) / 180;
+      const polarToCartesian = (angleDeg, radius) => {
+        const rad = degToRad(angleDeg);
+        return {
+          x: center + radius * Math.cos(rad),
+          y: center + radius * Math.sin(rad),
+        };
+      };
+
+      const createSegmentPath = (startAngle, endAngle) => {
+        const sweep = endAngle - startAngle;
+        if (!Number.isFinite(sweep) || sweep <= 0.0001) {
+          return '';
+        }
+
+        const notch = Math.min(Math.max(sweep * 0.18, 4), 18);
+        const clippedStart = startAngle + notch;
+        const clippedEnd = endAngle - notch;
+
+        const largeArc = sweep > 180 ? 1 : 0;
+
+        if (clippedEnd <= clippedStart) {
+          const outerStart = polarToCartesian(startAngle, outerRadius);
+          const outerEnd = polarToCartesian(endAngle, outerRadius);
+          const innerEnd = polarToCartesian(endAngle, innerRadius);
+          const innerStart = polarToCartesian(startAngle, innerRadius);
+          return [
+            `M ${outerStart.x.toFixed(2)} ${outerStart.y.toFixed(2)}`,
+            `A ${outerRadius.toFixed(2)} ${outerRadius.toFixed(2)} 0 ${largeArc} 1 ${outerEnd.x.toFixed(2)} ${outerEnd.y.toFixed(2)}`,
+            `L ${innerEnd.x.toFixed(2)} ${innerEnd.y.toFixed(2)}`,
+            `A ${innerRadius.toFixed(2)} ${innerRadius.toFixed(2)} 0 ${largeArc} 0 ${innerStart.x.toFixed(2)} ${innerStart.y.toFixed(2)}`,
+            'Z',
+          ].join(' ');
+        }
+
+        const startOuter = polarToCartesian(clippedStart, outerRadius);
+        const endOuter = polarToCartesian(clippedEnd, outerRadius);
+        const startTip = polarToCartesian(startAngle + notch * 0.35, outerRadius * 0.94);
+        const endTip = polarToCartesian(endAngle - notch * 0.35, outerRadius * 0.94);
+        const innerEnd = polarToCartesian(endAngle - notch * 0.45, innerRadius);
+        const innerStart = polarToCartesian(startAngle + notch * 0.45, innerRadius);
+
+        return [
+          `M ${startTip.x.toFixed(2)} ${startTip.y.toFixed(2)}`,
+          `L ${startOuter.x.toFixed(2)} ${startOuter.y.toFixed(2)}`,
+          `A ${outerRadius.toFixed(2)} ${outerRadius.toFixed(2)} 0 ${largeArc} 1 ${endOuter.x.toFixed(2)} ${endOuter.y.toFixed(2)}`,
+          `L ${endTip.x.toFixed(2)} ${endTip.y.toFixed(2)}`,
+          `L ${innerEnd.x.toFixed(2)} ${innerEnd.y.toFixed(2)}`,
+          `A ${innerRadius.toFixed(2)} ${innerRadius.toFixed(2)} 0 ${largeArc} 0 ${innerStart.x.toFixed(2)} ${innerStart.y.toFixed(2)}`,
+          'Z',
+        ].join(' ');
+      };
+
+      let currentAngle = -90;
+      const shapes = segments.map((seg, idx) => {
+        const sweep = (Number.isFinite(seg.share) ? seg.share : 0) * 360;
+        const start = currentAngle;
+        const end = currentAngle + sweep;
+        currentAngle = end;
+        const path = createSegmentPath(start, end);
+        return {
+          path,
+          color: seg.color || fallbackColors[idx % fallbackColors.length],
+          key: `${seg.ticker || seg.name || 'segment'}-${idx}`,
+        };
+      }).filter((shape) => shape.path);
+
+      if (shapes.length === 0) {
+        return (
+          <div className="relative flex h-36 w-36 items-center justify-center rounded-full bg-slate-100">
+            <div className="h-20 w-20 rounded-full bg-white shadow-inner" />
+          </div>
+        );
+      }
+
+      return (
+        <svg
+          viewBox={`0 0 ${size} ${size}`}
+          className="h-36 w-36"
+          role="img"
+          aria-label="Distribución visual del préstamo"
+        >
+          <defs>
+            <filter id="donutShadow" x="-20%" y="-20%" width="140%" height="140%">
+              <feDropShadow dx="0" dy="8" stdDeviation="8" floodColor="rgba(15,30,70,0.18)" />
+            </filter>
+          </defs>
+          <g filter="url(#donutShadow)">
+            {shapes.map((shape) => (
+              <path
+                key={shape.key}
+                d={shape.path}
+                fill={shape.color}
+                stroke="rgba(255,255,255,0.9)"
+                strokeWidth="1.5"
+              />
+            ))}
+          </g>
+          <circle
+            cx={center}
+            cy={center}
+            r={innerRadius - 4}
+            fill="#ffffff"
+            stroke="rgba(15,30,70,0.08)"
+            strokeWidth="2"
+          />
+        </svg>
+      );
+    }
+
     function CollateralLoanShareCard({ breakdown, currency, formatUsd, formatLoan, loanAmount, overallLTV, healthyThreshold, warnThreshold, autoRepayThreshold }) {
       const items = (breakdown || []).map((item) => {
         const share = item.loanShare > 0 ? item.loanShare : item.share;
@@ -4858,14 +4953,6 @@
         const color = assetPalette[idx % assetPalette.length];
         return { start, end, tone: item.tone, name: item.name, ticker: item.ticker, share, color, amount: item.amount };
       });
-      const gradientPieces = segments.map((seg) => {
-        const startPct = (seg.start * 100).toFixed(2);
-        const endPct = (seg.end * 100).toFixed(2);
-        return `${seg.color || '#60a5fa'} ${startPct}% ${endPct}%`;
-      });
-      const gradient = gradientPieces.length
-        ? `conic-gradient(${gradientPieces.join(', ')})`
-        : 'conic-gradient(#e2e8f0 0% 100%)';
       const healthy = Number.isFinite(healthyThreshold) ? healthyThreshold : 0.2;
       const warn = Number.isFinite(warnThreshold) ? warnThreshold : Math.max(healthy + 0.2, healthy);
       const auto = Number.isFinite(autoRepayThreshold) ? autoRepayThreshold : 1;
@@ -4880,17 +4967,9 @@
             <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${toneBadge[overallTone]}`}>{overallLabel}</span>
           </div>
           <div className="flex flex-col items-center gap-4">
-            <div
-              className="relative h-36 w-36 rounded-full"
-              style={{
-                background: gradient,
-                boxShadow: '0 16px 36px rgba(15,30,70,0.12), inset 0 0 0 6px rgba(255,255,255,0.9)'
-              }}
-            >
-              <div className="absolute inset-10 rounded-full bg-white shadow" aria-hidden="true" />
-            </div>
+            <LoanDistributionDonut segments={segments} />
             <div className="text-xs text-neutral-500 text-center">
-              Préstamo considerado: <span className="font-semibold text-neutral-700">{fmt(consideredLoan * rate, currency)}</span>
+              Préstamo considerado: <span className="font-semibold text-neutral-700">{formatLoan(consideredLoan)}</span>
             </div>
           </div>
           <div className="space-y-2 text-xs text-neutral-600">
@@ -4902,7 +4981,7 @@
                 </div>
                 <div className="flex flex-col items-end">
                   <span className="font-semibold text-neutral-800">{formatPercent(seg.share, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
-                  <span className="text-[10px] text-neutral-500">{fmt(seg.amount * rate, currency)}</span>
+                  <span className="text-[10px] text-neutral-500">{formatLoan(seg.share * Math.max(0, loanAmount))}</span>
                 </div>
               </div>
             ))}
