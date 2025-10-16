@@ -4795,13 +4795,38 @@
 
       const toneColors = { ok: '#34d399', warn: '#facc15', danger: '#fb7185' };
       const assetPalette = ['#2563eb', '#f97316', '#10b981', '#8b5cf6', '#ec4899', '#14b8a6', '#facc15', '#0ea5e9', '#ef4444', '#22d3ee'];
+      const distribution = items.map((item) => {
+        const ledger = item.ledger || {};
+        const ledgerOriginal = Number.isFinite(ledger.originalPrincipal) ? Math.max(0, ledger.originalPrincipal) : 0;
+        const ledgerInterest = Number.isFinite(ledger.interestAccrued) ? Math.max(0, ledger.interestAccrued) : 0;
+        const ledgerPaid = Number.isFinite(ledger.paidTotal) ? Math.max(0, ledger.paidTotal) : 0;
+        const ledgerOutstanding = Math.max(0, ledgerOriginal + ledgerInterest - ledgerPaid);
+        const recordedOutstanding = Number.isFinite(ledger.outstanding) ? Math.max(0, ledger.outstanding) : 0;
+        const fallbackOutstanding = Number.isFinite(item.allocatedLoan) ? Math.max(0, item.allocatedLoan) : 0;
+        const amount = ledgerOutstanding > 0
+          ? ledgerOutstanding
+          : (recordedOutstanding > 0 ? recordedOutstanding : fallbackOutstanding);
+        return { ...item, amount };
+      }).filter((item) => item.amount > 0);
+      if (distribution.length === 0) {
+        return (
+          <div className="rounded-2xl border border-amber-100 bg-white/80 p-4 shadow-sm text-sm text-neutral-500">
+            Activa al menos un colateral con préstamo asignado para ver la distribución.
+          </div>
+        );
+      }
+
+      const totalOutstanding = distribution.reduce((acc, item) => acc + item.amount, 0);
+      const consideredLoan = totalOutstanding > 0 ? totalOutstanding : Math.max(0, loanAmount);
+      const denominator = totalOutstanding > 0 ? totalOutstanding : (consideredLoan > 0 ? consideredLoan : 1);
       let accShare = 0;
-      const segments = items.map((item, idx) => {
+      const segments = distribution.map((item, idx) => {
+        const share = denominator > 0 ? item.amount / denominator : 0;
         const start = accShare;
-        accShare += item.share;
+        accShare += share;
         const end = Math.min(1, accShare);
         const color = assetPalette[idx % assetPalette.length];
-        return { start, end, tone: item.tone, name: item.name, ticker: item.ticker, share: item.share, color };
+        return { start, end, tone: item.tone, name: item.name, ticker: item.ticker, share, color, amount: item.amount };
       });
       const covered = Math.min(1, accShare);
       const gapPct = segments.length > 1 ? 1.2 : 0;
@@ -4840,8 +4865,7 @@
       const auto = Number.isFinite(autoRepayThreshold) ? autoRepayThreshold : 1;
       const overallTone = overallLTV <= healthy ? 'ok' : overallLTV <= warn ? 'warn' : 'danger';
       const overallLabel = overallTone === 'ok' ? 'Sano' : overallTone === 'warn' ? 'Vigilar' : 'Crítico';
-        const overallToneClass = overallTone === 'ok' ? 'text-emerald-600' : overallTone === 'warn' ? 'text-amber-600' : 'text-rose-600';
-        const toneBadge = { ok: 'bg-emerald-50 text-emerald-700', warn: 'bg-amber-50 text-amber-700', danger: 'bg-rose-50 text-rose-700' };
+      const toneBadge = { ok: 'bg-emerald-50 text-emerald-700', warn: 'bg-amber-50 text-amber-700', danger: 'bg-rose-50 text-rose-700' };
 
       return (
         <div className="rounded-2xl border border-amber-100 bg-white/80 p-4 shadow-sm flex flex-col gap-4">
@@ -4857,14 +4881,10 @@
                 boxShadow: '0 16px 36px rgba(15,30,70,0.12), inset 0 0 0 6px rgba(255,255,255,0.9)'
               }}
             >
-              <div className="absolute inset-10 rounded-full bg-white shadow flex flex-col items-center justify-center text-center">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">LTV total</span>
-                <span className="text-lg font-bold text-neutral-900">{formatPercent(overallLTV, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
-                <span className={`mt-1 text-xs font-semibold ${overallToneClass}`}>{overallLabel}</span>
-              </div>
+              <div className="absolute inset-10 rounded-full bg-white shadow" aria-hidden="true" />
             </div>
             <div className="text-xs text-neutral-500 text-center">
-              Préstamo considerado: <span className="font-semibold text-neutral-700">{fmt(Math.max(0, loanAmount) * rate, currency)}</span>
+              Préstamo considerado: <span className="font-semibold text-neutral-700">{fmt(consideredLoan * rate, currency)}</span>
             </div>
           </div>
           <div className="space-y-2 text-xs text-neutral-600">
@@ -4876,7 +4896,7 @@
                 </div>
                 <div className="flex flex-col items-end">
                   <span className={`${seg.isPlaceholder ? 'text-neutral-500' : 'font-semibold text-neutral-800'}`}>{formatPercent(seg.share, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
-                  <span className="text-[10px] text-neutral-500">{fmt(seg.share * Math.max(0, loanAmount) * rate, currency)}</span>
+                  <span className="text-[10px] text-neutral-500">{fmt((seg.amount ?? seg.share * consideredLoan) * rate, currency)}</span>
                 </div>
               </div>
             ))}
