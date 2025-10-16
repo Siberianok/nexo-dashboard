@@ -2559,6 +2559,15 @@
       const paidPrincipal = Math.min(loanAmount, scheduledPrincipal);
       const paidInterest = scheduledInterest;
       const totalPaid = Math.max(0, paidPrincipal + paidInterest);
+      const hasCashflowPlanPayments = useMemo(() => {
+        if (!Array.isArray(cashflowPlan?.payments)) return false;
+        return cashflowPlan.payments.some((item) => {
+          const amount = Number(item?.amount ?? item?.principal ?? 0);
+          const interest = Number(item?.interest ?? 0);
+          return (Number.isFinite(amount) && amount > 0) || (Number.isFinite(interest) && interest > 0);
+        });
+      }, [cashflowPlan]);
+      const binancePlanPaidTotal = hasCashflowPlanPayments ? totalPaid : 0;
       const projectedFinalPayoff = Math.max(0, cashflowDerived?.projectedFinalPayoff || 0);
       const totalProjectedOutflows = Math.max(0, cashflowDerived?.totalCost || 0);
       const plannedOutstanding = Math.max(0, cashflowDerived?.outstandingAfterPlan ?? loanAmount);
@@ -2595,13 +2604,15 @@
       const binanceLtvAfterPlan = plannedOverallLTV;
       const binanceInitialLtvTone = toneForLtvValue(binanceInitialLtv);
       const binanceCurrentLtvTone = toneForLtvValue(currentOverallLTV);
+      const binancePaidDisplayTotal = hasCashflowPlanPayments ? binancePlanPaidTotal : binancePaidLedgerTotal;
+      const binancePaidLabel = hasCashflowPlanPayments ? 'Pagos planificados' : 'Pagos';
       const binanceLoanNetSubtle = [
         binanceInterestAccruedTotal > 0 ? `Interés ${fmt(binanceInterestAccruedTotal * rate, currency)}` : null,
-        binancePaidLedgerTotal > 0 ? `Pagos ${fmt(binancePaidLedgerTotal * rate, currency)}` : null,
+        binancePaidDisplayTotal > 0 ? `${binancePaidLabel} ${fmt(binancePaidDisplayTotal * rate, currency)}` : null,
       ].filter(Boolean).join(' · ') || 'Sin movimientos registrados';
-      const binancePaidSubtle = binancePaidLedgerTotal > 0
-        ? 'Total pagado a la fecha'
-        : 'Sin pagos registrados';
+      const binancePaidSubtle = hasCashflowPlanPayments
+        ? (binancePaidDisplayTotal > 0 ? 'Pagos planificados desde Cashflow' : 'Sin pagos planificados')
+        : (binancePaidLedgerTotal > 0 ? 'Pagos registrados en ledger' : 'Sin pagos registrados');
       const binanceInitialCollateralSubtle = binanceInitialCollateralTotal > 0
         ? `Colateral inicial ${fmt(binanceInitialCollateralTotal * rate, currency)}`
         : '—';
@@ -2929,7 +2940,7 @@
               {(isBinance ? [
                 { key: 'loan-current', title: 'Préstamo total', value: fmt(binanceOriginalPrincipalTotal * rate, currency), subtle: binanceOriginalPrincipalTotal > 0 ? 'Capital original' : '—' },
                 { key: 'loan-plan', title: 'Préstamo neto', value: fmt(binanceNetLoanValue * rate, currency), subtle: binanceLoanNetSubtle },
-                { key: 'loan-paid', title: 'Pagos hechos', value: fmt(binancePaidLedgerTotal * rate, currency), subtle: binancePaidSubtle },
+                { key: 'loan-paid', title: 'Pagos hechos', value: fmt(binancePaidDisplayTotal * rate, currency), subtle: binancePaidSubtle },
                 { key: 'collateral-current', title: 'Colateral actual', value: fmt(totals.totalCollateralValue * rate, currency) },
                 { key: 'ltv-current', title: 'LTV inicial', value: toPct(binanceInitialLtv, 2), tone: binanceInitialLtvTone, subtle: binanceInitialCollateralSubtle },
                 { key: 'ltv-plan', title: 'LTV neto', value: toPct(currentOverallLTV, 2), tone: binanceCurrentLtvTone, subtle: binanceNetLtvSubtle },
