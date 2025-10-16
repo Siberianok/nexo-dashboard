@@ -4524,11 +4524,6 @@
         danger: { text: 'text-rose-500', bg: 'bg-rose-100/70', dot: '#ef4444' },
       };
       const statusTone = toneStyles[toneKey] ?? toneStyles.warn;
-      const thresholds = (markers.length ? markers : [])
-        .map((marker, idx) => ({ pct: clamp(marker.pct), label: marker.label ?? `${Math.round(clamp(marker.pct) * 100)}%`, key: `marker-${idx}` }))
-        .filter((marker, idx, arr) => marker.pct > 0 && marker.pct <= 1 && idx === arr.findIndex((m) => m.pct === marker.pct));
-      const tickOuter = radius + 6;
-      const tickInner = radius - ring + 6;
       const valueLabelY = center + radius * 0.44;
       const statusLabelY = valueLabelY + 24;
       return (
@@ -4572,15 +4567,6 @@
                 />
               );
             })}
-            {thresholds.map((t) => {
-              const outer = polarPoint(t.pct, tickOuter);
-              const inner = polarPoint(t.pct, tickInner);
-              return (
-                <g key={t.key ?? t.label ?? `marker-${Math.round(t.pct * 1000)}`}>
-                  <line x1={outer.x} y1={outer.y} x2={inner.x} y2={inner.y} stroke="#0f172a" strokeOpacity="0.18" strokeWidth="2" strokeLinecap="round" />
-                </g>
-              );
-            })}
             <g filter="url(#pointerShadow)">
               <path d={pointerPath} fill="#0f172a" opacity="0.92" />
             </g>
@@ -4593,7 +4579,7 @@
               className="fill-slate-700"
               style={{ fontWeight: 700, fontSize: '24px' }}
             >
-              {formatPercent(valuePct, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+              {formatPercent(valuePct, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </text>
             <text
               x={center}
