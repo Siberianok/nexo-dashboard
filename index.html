@@ -4719,6 +4719,8 @@
       const toneBadge = { ok: 'bg-emerald-50 text-emerald-700', warn: 'bg-amber-50 text-amber-700', danger: 'bg-rose-50 text-rose-700' };
       const toneBar = { ok: '#10b981', warn: '#f97316', danger: '#ef4444' };
       const loanShareLabel = item.loanShare > 0 ? formatPercent(item.loanShare, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '0%';
+      const tickerUpper = (item.ticker || '').toUpperCase();
+      const highlightEtbDetails = tickerUpper === 'ADA' || tickerUpper === 'ALGO';
       const usagePct = item.policyLTV > 0 ? Math.min(100, (item.actualLtv / item.policyLTV) * 100) : Math.min(100, item.actualLtv * 100);
       const annualApr = Number.isFinite(item.annualApr) ? item.annualApr : chosenAPR;
       const netTone = item.netApr < 0 ? 'text-emerald-600' : item.netApr <= annualApr ? 'text-neutral-900' : 'text-amber-600';
@@ -4761,8 +4763,11 @@
                 <div className="text-[10px] text-neutral-500">Precio spot {currentPriceLabel}</div>
               </div>
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Préstamo & flujos</div>
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">{highlightEtbDetails ? 'ETB neto asignado' : 'Préstamo & flujos'}</div>
                 <div className="text-sm font-semibold text-neutral-800">{fmt(item.allocatedLoan * rate, currency)}</div>
+                {highlightEtbDetails && (
+                  <div className="text-[10px] text-neutral-500">Participación del préstamo {loanShareLabel}</div>
+                )}
                 <div className="text-[10px] text-neutral-500">Original {originalLabel} · Pagos {paidLabel}</div>
                 <div className="text-[10px] text-neutral-500">Interés devengado {interestLabel}</div>
               </div>
@@ -4777,7 +4782,13 @@
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Tasas Binance</div>
                 <div className="text-sm font-semibold text-neutral-800">{formatPercent(annualApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} APR</div>
                 <div className="text-[10px] text-neutral-500">Neta {formatPercent(item.netApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · Ajuste {formatPercent(item.aprOffset, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-                <div className="text-[10px] text-neutral-500">Earn estimado {formatPercent(item.earnApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                {highlightEtbDetails
+                  ? (
+                    <div className="text-[10px] text-neutral-500">Precio liquidación estimado {liquidationPriceLabel}</div>
+                  )
+                  : (
+                    <div className="text-[10px] text-neutral-500">Earn estimado {formatPercent(item.earnApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  )}
               </div>
             </div>
           </div>
