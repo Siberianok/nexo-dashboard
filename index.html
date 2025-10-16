@@ -4818,6 +4818,18 @@
         gradientPieces.push(`rgba(148,163,184,0.25) ${(covered * 100).toFixed(2)}% 100%`);
       }
       const gradient = `conic-gradient(${gradientPieces.join(', ')})`;
+      const leftoverShare = Math.max(0, 1 - covered);
+      const leftoverShape = leftoverShare > 0
+        ? {
+            start: covered,
+            end: 1,
+            share: leftoverShare,
+            color: 'rgba(148,163,184,0.6)',
+            name: 'Disponible sin asignar',
+            ticker: '',
+            isPlaceholder: true
+          }
+        : null;
       const healthy = Number.isFinite(healthyThreshold) ? healthyThreshold : 0.2;
       const warn = Number.isFinite(warnThreshold) ? warnThreshold : Math.max(healthy + 0.2, healthy);
       const auto = Number.isFinite(autoRepayThreshold) ? autoRepayThreshold : 1;
