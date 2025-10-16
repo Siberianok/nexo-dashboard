@@ -903,27 +903,6 @@
           lowCostEligibleTiers: ["VIP 2", "VIP 3"],
           baseTier: "Estándar",
         },
-        loyalty: {
-          tokenTicker: "BNB",
-          baseLabel: "VIP 0",
-          belowMinimumLabel: "VIP 0",
-          tierThresholds: [
-            { label: "VIP 9", minRatio: 0.25 },
-            { label: "VIP 8", minRatio: 0.20 },
-            { label: "VIP 7", minRatio: 0.16 },
-            { label: "VIP 6", minRatio: 0.12 },
-            { label: "VIP 5", minRatio: 0.08 },
-            { label: "VIP 4", minRatio: 0.06 },
-            { label: "VIP 3", minRatio: 0.04 },
-            { label: "VIP 2", minRatio: 0.02 },
-            { label: "VIP 1", minRatio: 0.01 },
-          ],
-          models: [
-            { id: "vsTotal", label: "vs total (BNB holdings)" },
-          ],
-          kpiLabel: "Nivel VIP",
-          ratioLabel: "ratio BNB",
-        },
         ltvHealth: {
           zones: [
             { label: "Saludable", max: 0.75, color: "#22c55e", legend: "0-75%", tone: "ok" },
@@ -970,7 +949,6 @@
         ],
         defaultParams: {
           exchangeRates: { ...DEFAULT_EXCHANGE_RATES },
-          loyaltyModel: "vsTotal",
           liveQuotes: true,
           refreshSec: LIVE_REFRESH_SECONDS,
           earnOptIn: true,
@@ -987,7 +965,6 @@
           currency: "USD",
           params: {
             exchangeRates: { ...DEFAULT_EXCHANGE_RATES, ARS: 1050 },
-            loyaltyModel: "vsTotal",
             liveQuotes: true,
             earnOptIn: true,
             earnOnCollateral: true,
@@ -3176,7 +3153,9 @@
                         </React.Fragment>
                       ))
                     ) : (
-                      <p className="text-sm text-neutral-500">Esta plataforma no tiene un programa de niveles ligado a un token específico.</p>
+                      !isBinance && (
+                        <p className="text-sm text-neutral-500">Esta plataforma no tiene un programa de niveles ligado a un token específico.</p>
+                      )
                     )}
                     <div className="h-px bg-neutral-200 my-1" />
                     <Line label={`Colateral extra para ≤${toPct(targetLtv, 0)}`} value={formatUsd(extraCollateralForTarget)} tone={extraCollateralForTarget <= 0 ? "ok" : "warn"} />
