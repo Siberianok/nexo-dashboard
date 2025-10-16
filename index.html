@@ -4722,16 +4722,65 @@
         return { start, end, tone: item.tone, name: item.name, ticker: item.ticker, share: item.share, color };
       });
       const covered = Math.min(1, accShare);
-      const gradientStops = segments.map((seg) => `${seg.color || '#60a5fa'} ${(seg.start * 100).toFixed(2)}% ${(seg.end * 100).toFixed(2)}%`).join(', ');
-      const gradient = `conic-gradient(${gradientStops}${covered < 1 ? `, rgba(148,163,184,0.25) ${(covered * 100).toFixed(2)}% 100%` : ''})`;
+      const viewBoxSize = 220;
+      const center = viewBoxSize / 2;
+      const outerRadius = 96;
+      const innerRadius = 62;
+      const segmentGap = segments.length > 1 ? 3 : 0; // gap en grados para separar segmentos
+      const leftoverColor = 'rgba(148,163,184,0.28)';
+
+      const polarToCartesian = (cx, cy, radius, angleInDegrees) => {
+        const radians = ((angleInDegrees - 90) * Math.PI) / 180;
+        return {
+          x: cx + radius * Math.cos(radians),
+          y: cy + radius * Math.sin(radians),
+        };
+      };
+
+      const buildSegmentPath = (startAngle, endAngle, innerR, outerR) => {
+        if (endAngle <= startAngle) return '';
+        const startOuter = polarToCartesian(center, center, outerR, startAngle);
+        const endOuter = polarToCartesian(center, center, outerR, endAngle);
+        const startInner = polarToCartesian(center, center, innerR, endAngle);
+        const endInner = polarToCartesian(center, center, innerR, startAngle);
+        const largeArc = endAngle - startAngle <= 180 ? '0' : '1';
+        return [
+          'M', startOuter.x.toFixed(3), startOuter.y.toFixed(3),
+          'A', outerR, outerR, 0, largeArc, 1, endOuter.x.toFixed(3), endOuter.y.toFixed(3),
+          'L', startInner.x.toFixed(3), startInner.y.toFixed(3),
+          'A', innerR, innerR, 0, largeArc, 0, endInner.x.toFixed(3), endInner.y.toFixed(3),
+          'Z',
+        ].join(' ');
+      };
+
+      const segmentShapes = segments.map((seg, idx) => {
+        const shareDegrees = Math.max(0, (seg.end - seg.start) * 360);
+        const halfGap = segmentGap / 2;
+        const startTrim = idx === 0 ? 0 : Math.min(halfGap, shareDegrees * 0.4);
+        const endTrim = idx === segments.length - 1 ? 0 : Math.min(halfGap, shareDegrees * 0.4);
+        const startAngle = seg.start * 360 + startTrim;
+        const endAngle = seg.end * 360 - endTrim;
+        return { ...seg, path: buildSegmentPath(startAngle, endAngle, innerRadius, outerRadius) };
+      }).filter((seg) => seg.path);
+
+      const remainingShare = Math.max(0, 1 - accShare);
+
+      const leftoverShape = remainingShare > 1e-4
+        ? {
+            name: 'No asignado',
+            share: remainingShare,
+            color: leftoverColor,
+            isPlaceholder: true,
+            path: buildSegmentPath(covered * 360 + (segments.length > 0 ? Math.min(segmentGap / 2, (1 - covered) * 360 * 0.4) : 0), 360, innerRadius, outerRadius),
+          }
+        : null;
       const healthy = Number.isFinite(healthyThreshold) ? healthyThreshold : 0.2;
       const warn = Number.isFinite(warnThreshold) ? warnThreshold : Math.max(healthy + 0.2, healthy);
       const auto = Number.isFinite(autoRepayThreshold) ? autoRepayThreshold : 1;
       const overallTone = overallLTV <= healthy ? 'ok' : overallLTV <= warn ? 'warn' : 'danger';
       const overallLabel = overallTone === 'ok' ? 'Sano' : overallTone === 'warn' ? 'Vigilar' : 'Crítico';
-      const overallToneClass = overallTone === 'ok' ? 'text-emerald-600' : overallTone === 'warn' ? 'text-amber-600' : 'text-rose-600';
-      const toneBadge = { ok: 'bg-emerald-50 text-emerald-700', warn: 'bg-amber-50 text-amber-700', danger: 'bg-rose-50 text-rose-700' };
-      const remainingShare = Math.max(0, 1 - accShare);
+        const overallToneClass = overallTone === 'ok' ? 'text-emerald-600' : overallTone === 'warn' ? 'text-amber-600' : 'text-rose-600';
+        const toneBadge = { ok: 'bg-emerald-50 text-emerald-700', warn: 'bg-amber-50 text-amber-700', danger: 'bg-rose-50 text-rose-700' };
 
       return (
         <div className="rounded-2xl border border-amber-100 bg-white/80 p-4 shadow-sm flex flex-col gap-4">
@@ -4740,10 +4789,32 @@
             <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${toneBadge[overallTone]}`}>{overallLabel}</span>
           </div>
           <div className="flex flex-col items-center gap-4">
-            <div className="relative h-36 w-36 rounded-full shadow-inner" style={{ background: gradient }}>
-              <div className="absolute inset-10 rounded-full bg-white shadow flex flex-col items-center justify-center text-center">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">LTV total</span>
-                <span className="text-lg font-bold text-neutral-900">{formatPercent(overallLTV, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+            <div className="relative flex h-48 w-48 items-center justify-center">
+              <svg
+                viewBox={`0 0 ${viewBoxSize} ${viewBoxSize}`}
+                className="h-full w-full"
+                style={{ filter: 'drop-shadow(0 18px 32px rgba(15,30,70,0.16))' }}
+              >
+                <defs>
+                  <radialGradient id="loanDonutBase" cx="50%" cy="50%" r="65%">
+                    <stop offset="55%" stopColor="#ffffff" />
+                    <stop offset="100%" stopColor="#e2e8f0" />
+                  </radialGradient>
+                  <linearGradient id="loanDonutInner" x1="0%" x2="0%" y1="0%" y2="100%">
+                    <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
+                    <stop offset="100%" stopColor="#e5e7eb" stopOpacity="0.85" />
+                  </linearGradient>
+                </defs>
+                <circle cx={center} cy={center} r={outerRadius} fill="url(#loanDonutBase)" />
+                {[...segmentShapes, leftoverShape].filter(Boolean).map((seg, idx) => (
+                  <path key={`${seg.ticker || seg.name || 'segment'}-${idx}`} d={seg.path} fill={seg.color || '#60a5fa'} />
+                ))}
+                <circle cx={center} cy={center} r={innerRadius} fill="url(#loanDonutInner)" />
+                <circle cx={center} cy={center} r={innerRadius - 6} fill="#ffffff" />
+              </svg>
+              <div className="absolute flex h-28 w-28 flex-col items-center justify-center rounded-full bg-white/90 text-center shadow-inner">
+                <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">LTV total</span>
+                <span className="text-xl font-bold text-neutral-900">{formatPercent(overallLTV, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
                 <span className={`mt-1 text-xs font-semibold ${overallToneClass}`}>{overallLabel}</span>
               </div>
             </div>
@@ -4752,30 +4823,18 @@
             </div>
           </div>
           <div className="space-y-2 text-xs text-neutral-600">
-            {segments.map((seg, idx) => (
-              <div key={`${seg.ticker || seg.name}-${idx}`} className="flex items-center justify-between gap-3">
+            {[...segments, leftoverShape].filter(Boolean).map((seg, idx) => (
+              <div key={`${seg.ticker || seg.name || 'segment'}-${idx}`} className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: seg.color || '#60a5fa' }} />
-                  <span className="font-medium text-neutral-800">{seg.name}</span>
+                  <span className={`${seg.isPlaceholder ? 'text-neutral-500' : 'font-medium text-neutral-800'}`}>{seg.name}</span>
                 </div>
                 <div className="flex flex-col items-end">
-                  <span className="font-semibold text-neutral-800">{formatPercent(seg.share, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+                  <span className={`${seg.isPlaceholder ? 'text-neutral-500' : 'font-semibold text-neutral-800'}`}>{formatPercent(seg.share, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
                   <span className="text-[10px] text-neutral-500">{fmt(seg.share * Math.max(0, loanAmount) * rate, currency)}</span>
                 </div>
               </div>
             ))}
-            {remainingShare > 1e-4 && (
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-neutral-500">
-                  <span className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
-                  <span>No asignado</span>
-                </div>
-                <div className="flex flex-col items-end text-neutral-500">
-                  <span>{formatPercent(remainingShare, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
-                  <span className="text-[10px]">{fmt(remainingShare * Math.max(0, loanAmount) * rate, currency)}</span>
-                </div>
-              </div>
-            )}
           </div>
           <div className="flex flex-wrap gap-2 text-[10px] text-neutral-500">
             <span className="flex items-center gap-1"><span className="h-2 w-3 rounded-full" style={{ backgroundColor: toneColors.ok }} />Sano ≤ {formatPercent(healthy, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</span>
