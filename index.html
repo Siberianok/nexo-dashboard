@@ -918,6 +918,26 @@
             { pct: 0.90, label: "Auto-liquidación" },
           ],
         },
+        loanLedger: {
+          ADA: {
+            originalPrincipal: 10300,
+            outstanding: 10471.01,
+            interestAccrued: 171.01,
+            annualRate: 0.0503283,
+            netAnnualRate: 0.04464082,
+          },
+          ALGO: {
+            originalPrincipal: 7026,
+            outstanding: 1201.78,
+            interestAccrued: 69.58,
+            annualRate: 0.0503283,
+            netAnnualRate: 0.04464082,
+            payments: [
+              { id: "algo-payment-1", amount: 5890.97, date: "2024-03-12", note: "Pago capital" },
+              { id: "algo-payment-2", amount: 2.77, date: "2024-03-12", note: "Pago interés" },
+            ],
+          },
+        },
         defaultAssets: [
           { id: 1, name: "Bitcoin", ticker: "BTC", qty: 0, price: 0, priceAuto: true, useAsCollateral: true },
           { id: 2, name: "Ethereum", ticker: "ETH", qty: 0, price: 0, priceAuto: true, useAsCollateral: true },
@@ -925,9 +945,9 @@
           { id: 4, name: "Tether", ticker: "USDT", qty: 0, price: 1, priceAuto: true, useAsCollateral: true },
           { id: 5, name: "USD Coin", ticker: "USDC", qty: 0, price: 1, priceAuto: true, useAsCollateral: true },
           { id: 6, name: "BUSD", ticker: "BUSD", qty: 0, price: 1, priceAuto: true, useAsCollateral: true },
-          { id: 7, name: "Cardano", ticker: "ADA", qty: 0, price: 0, priceAuto: true, useAsCollateral: false },
+          { id: 7, name: "Cardano", ticker: "ADA", qty: 0, price: 0, priceAuto: true, useAsCollateral: true },
           { id: 8, name: "XRP", ticker: "XRP", qty: 0, price: 0, priceAuto: true, useAsCollateral: false },
-          { id: 9, name: "Algorand", ticker: "ALGO", qty: 0, price: 0, priceAuto: true, useAsCollateral: false },
+          { id: 9, name: "Algorand", ticker: "ALGO", qty: 0, price: 0, priceAuto: true, useAsCollateral: true },
         ],
         defaultParams: {
           exchangeRates: { ...DEFAULT_EXCHANGE_RATES },
@@ -937,9 +957,13 @@
           earnOptIn: true,
           earnOnCollateral: true,
           binanceBorrowTicker: "ADA",
+          loanRequests: [
+            { id: "loan-bin-ada", ticker: "ADA", amount: 10471.01 },
+            { id: "loan-bin-algo", ticker: "ALGO", amount: 1201.78 },
+          ],
         },
         previewSnapshot: {
-          loanAmount: 12000,
+          loanAmount: 11672.79,
           repayInDays: 90,
           currency: "USD",
           params: {
@@ -950,16 +974,20 @@
             earnOnCollateral: true,
             refreshSec: LIVE_REFRESH_SECONDS,
             binanceBorrowTicker: "ADA",
+            loanRequests: [
+              { id: "loan-preview-ada", ticker: "ADA", amount: 10471.01 },
+              { id: "loan-preview-algo", ticker: "ALGO", amount: 1201.78 },
+            ],
           },
           assets: [
-            { id: 1, name: "Bitcoin", ticker: "BTC", qty: 0.8, price: 42000, priceAuto: false, useAsCollateral: true },
-            { id: 2, name: "Ethereum", ticker: "ETH", qty: 6, price: 2000, priceAuto: false, useAsCollateral: true },
-            { id: 3, name: "BNB", ticker: "BNB", qty: 150, price: 230, priceAuto: false, useAsCollateral: true },
-            { id: 4, name: "USD Coin", ticker: "USDC", qty: 2000, price: 1, priceAuto: false, useAsCollateral: true },
-            { id: 5, name: "BUSD", ticker: "BUSD", qty: 1000, price: 1, priceAuto: false, useAsCollateral: true },
-            { id: 6, name: "Cardano", ticker: "ADA", qty: 4000, price: 0.4, priceAuto: false, useAsCollateral: false },
-            { id: 7, name: "XRP", ticker: "XRP", qty: 5000, price: 0.5, priceAuto: false, useAsCollateral: false },
-            { id: 8, name: "Algorand", ticker: "ALGO", qty: 6000, price: 0.14, priceAuto: false, useAsCollateral: false },
+            { id: 1, name: "Bitcoin", ticker: "BTC", qty: 0.5, price: 42000, priceAuto: false, useAsCollateral: true },
+            { id: 2, name: "Ethereum", ticker: "ETH", qty: 4, price: 2050, priceAuto: false, useAsCollateral: true },
+            { id: 3, name: "BNB", ticker: "BNB", qty: 120, price: 230, priceAuto: false, useAsCollateral: true },
+            { id: 4, name: "USD Coin", ticker: "USDC", qty: 1500, price: 1, priceAuto: false, useAsCollateral: true },
+            { id: 5, name: "BUSD", ticker: "BUSD", qty: 800, price: 1, priceAuto: false, useAsCollateral: true },
+            { id: 6, name: "Cardano", ticker: "ADA", qty: 70000, price: 0.61, priceAuto: false, useAsCollateral: true },
+            { id: 7, name: "XRP", ticker: "XRP", qty: 3000, price: 0.52, priceAuto: false, useAsCollateral: false },
+            { id: 8, name: "Algorand", ticker: "ALGO", qty: 65800, price: 0.182, priceAuto: false, useAsCollateral: true },
           ],
         },
         exportPrefix: "binance_dashboard",
@@ -1337,6 +1365,7 @@
         policies = {},
         apr: aprConfig = {},
         borrowRates = {},
+        loanLedger: platformLoanLedger = {},
         loyalty,
         ltvHealth,
         previewSnapshot,
@@ -1670,6 +1699,61 @@
           .filter(Boolean);
       }, []);
 
+      const sanitizeLoanLedger = useCallback((rawLedger) => {
+        if (!isBinance || !rawLedger || typeof rawLedger !== 'object') return {};
+        const fallbackDate = todayISO();
+        return Object.entries(rawLedger).reduce((acc, [ticker, entry = {}]) => {
+          const key = sanitizeTicker(ticker);
+          if (!key) return acc;
+          const original = Math.max(0, Number(entry.originalPrincipal) || 0);
+          const outstanding = Math.max(0, Number(entry.outstanding) || 0);
+          const payments = Array.isArray(entry.payments)
+            ? entry.payments
+                .map((payment, idx) => {
+                  const amount = Math.max(0, Number(payment?.amount) || 0);
+                  if (!(amount > 0)) return null;
+                  const date = typeof payment?.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(payment.date)
+                    ? payment.date
+                    : null;
+                  return {
+                    id: typeof payment?.id === 'string' && payment.id ? payment.id : `${key}-payment-${idx + 1}`,
+                    amount,
+                    date,
+                    note: typeof payment?.note === 'string' ? payment.note : '',
+                  };
+                })
+                .filter(Boolean)
+            : [];
+          const paidTotal = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+          const rawInterest = Number(entry.interestAccrued);
+          const computedInterest = Math.max(0, outstanding - Math.max(0, original - paidTotal));
+          const interestAccrued = Number.isFinite(rawInterest) && rawInterest >= 0 ? rawInterest : computedInterest;
+          const annualRate = Number(entry.annualRate);
+          const netAnnualRate = Number(entry.netAnnualRate);
+          const liquidationPriceHint = Number(entry.liquidationPriceHint);
+          const borrowDate = typeof entry.borrowDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(entry.borrowDate)
+            ? entry.borrowDate
+            : null;
+          const lastUpdated = typeof entry.lastUpdated === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(entry.lastUpdated)
+            ? entry.lastUpdated
+            : fallbackDate;
+          acc[key] = {
+            originalPrincipal: original > 0 ? original : Math.max(0, outstanding + paidTotal - interestAccrued),
+            outstanding: outstanding > 0 ? outstanding : Math.max(0, original - paidTotal + interestAccrued),
+            payments,
+            paidTotal,
+            interestAccrued,
+            annualRate: Number.isFinite(annualRate) && annualRate > 0 ? annualRate : null,
+            netAnnualRate: Number.isFinite(netAnnualRate) && netAnnualRate > 0 ? netAnnualRate : null,
+            liquidationPriceHint: Number.isFinite(liquidationPriceHint) && liquidationPriceHint > 0 ? liquidationPriceHint : null,
+            borrowDate,
+            lastUpdated,
+            notes: typeof entry.notes === 'string' ? entry.notes : '',
+          };
+          return acc;
+        }, {});
+      }, [isBinance, sanitizeTicker]);
+
       const baseParams = useMemo(() => {
         const fallback = {
           exchangeRates: { ...baseExchangeRates },
@@ -1700,6 +1784,10 @@
       const baseBenchmarkConfig = useMemo(
         () => sanitizeBenchmarkConfig(previewSnapshot?.benchmark),
         [previewSnapshot]
+      );
+      const baseLoanLedger = useMemo(
+        () => sanitizeLoanLedger(platformLoanLedger),
+        [sanitizeLoanLedger, platformLoanLedger]
       );
       const sanitizeParams = (raw) => {
         const merged = { ...baseParams, ...(raw || {}) };
@@ -2017,7 +2105,6 @@
 
       const currency = selectedCurrency;
       const rate = params.exchangeRates?.[currency] ?? 1;
-      const loanAmount = useMemo(() => loanRequests.reduce((acc, item) => acc + (Number(item.amount) || 0), 0), [loanRequests]);
       const loanRequestsTotals = useMemo(() => {
         const totals = {};
         loanRequests.forEach((item) => {
@@ -2025,8 +2112,57 @@
           if (!ticker) return;
           totals[ticker] = (totals[ticker] || 0) + item.amount;
         });
+        if (Object.keys(totals).length === 0 && isBinance) {
+          Object.entries(baseLoanLedger).forEach(([ticker, entry = {}]) => {
+            const amount = Math.max(0, Number(entry.outstanding) || 0);
+            if (!(amount > 0)) return;
+            totals[ticker] = amount;
+          });
+        }
         return totals;
-      }, [loanRequests]);
+      }, [loanRequests, isBinance, baseLoanLedger]);
+      const loanAmount = useMemo(
+        () => Object.values(loanRequestsTotals).reduce((acc, amount) => acc + (Number(amount) || 0), 0),
+        [loanRequestsTotals]
+      );
+      const binanceLoanLedger = useMemo(() => {
+        if (!isBinance) return {};
+        const clone = Object.entries(baseLoanLedger).reduce((acc, [ticker, entry]) => {
+          acc[ticker] = {
+            ...entry,
+            payments: Array.isArray(entry?.payments) ? entry.payments.map((p) => ({ ...p })) : [],
+          };
+          return acc;
+        }, {});
+        Object.entries(loanRequestsTotals).forEach(([ticker, amount]) => {
+          const key = sanitizeTicker(ticker);
+          if (!key) return;
+          const outstanding = Math.max(0, Number(amount) || 0);
+          const current = clone[key] || { payments: [], paidTotal: 0, interestAccrued: 0, originalPrincipal: outstanding };
+          const paidTotal = Number(current.paidTotal) || (current.payments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+          const baseOriginal = current.originalPrincipal > 0 ? current.originalPrincipal : Math.max(0, outstanding + paidTotal - (Number(current.interestAccrued) || 0));
+          const interestAccrued = Number.isFinite(current.interestAccrued)
+            ? Math.max(0, Number(current.interestAccrued))
+            : Math.max(0, outstanding - Math.max(0, baseOriginal - paidTotal));
+          const annualRate = current.annualRate ?? borrowRatesByTicker[key]?.annual ?? null;
+          const netAnnualRate = current.netAnnualRate ?? borrowRatesByTicker[key]?.netAnnual ?? annualRate;
+          clone[key] = {
+            ...current,
+            payments: Array.isArray(current.payments) ? current.payments.map((p) => ({ ...p })) : [],
+            outstanding,
+            paidTotal,
+            originalPrincipal: baseOriginal,
+            interestAccrued,
+            annualRate,
+            netAnnualRate,
+          };
+        });
+        return clone;
+      }, [isBinance, baseLoanLedger, loanRequestsTotals, borrowRatesByTicker]);
+      const binanceLedgerOutstandingTotal = useMemo(() => {
+        if (!isBinance) return 0;
+        return Object.values(binanceLoanLedger).reduce((acc, entry) => acc + (Math.max(0, Number(entry?.outstanding) || 0)), 0);
+      }, [isBinance, binanceLoanLedger]);
       const pct = (value, digits = 1) => formatPercent(Number(value), {
         minimumFractionDigits: digits,
         maximumFractionDigits: digits,
@@ -2470,20 +2606,17 @@
           .reduce((acc, asset) => acc + asset.loanAssigned, 0);
         const manualEnabled = manualLoanAllocationEnabled;
         const manualActive = manualEnabled && manualTotal > 0;
-        const directLoanActive = isBinance && Object.keys(loanRequestsTotals).length > 0;
-        const directLoanSum = directLoanActive
-          ? Object.values(loanRequestsTotals).reduce((acc, value) => acc + value, 0)
-          : 0;
-        const scaledDirectLoanSum = directLoanActive
-          ? directLoanSum * (binanceOutstandingRatio || 0)
-          : 0;
+        const directLoanActive = isBinance ? Object.keys(loanRequestsTotals).length > 0 : loanAmount > 0;
+        const directLoanSum = Object.values(loanRequestsTotals).reduce((acc, value) => acc + value, 0);
         const outstandingDirectTotal = hasOutstandingMap
           ? Object.values(outstandingMap).reduce((acc, value) => {
               const num = Number(value);
               return acc + (Number.isFinite(num) && num > 0 ? num : 0);
             }, 0)
-          : scaledDirectLoanSum;
-        const loanBase = Math.max(0, plannedOutstanding);
+          : (isBinance ? directLoanSum : directLoanSum * (binanceOutstandingRatio || 0));
+        const loanBase = isBinance
+          ? (binanceLedgerOutstandingTotal > 0 ? binanceLedgerOutstandingTotal : Math.max(0, directLoanSum || plannedOutstanding))
+          : Math.max(0, plannedOutstanding);
         const items = totals.withValue
           .filter((asset) => asset.useAsCollateral && asset.value > 0)
           .map((asset) => {
@@ -2495,17 +2628,32 @@
             const mappedLoan = directLoanActive
               ? (hasOutstandingMap
                 ? Math.max(0, Number(outstandingMap?.[ticker]) || 0)
-                : mappedLoanRaw * (binanceOutstandingRatio || 0))
+                : mappedLoanRaw)
               : 0;
-            const allocatedLoan = manualActive
+            const ledgerEntry = isBinance ? binanceLoanLedger[ticker] : null;
+            let allocatedLoan = manualActive
               ? Math.max(0, asset.loanAssigned || 0)
               : (directLoanActive ? mappedLoan : loanBase * share);
+            if (isBinance && ledgerEntry?.outstanding > 0) {
+              allocatedLoan = ledgerEntry.outstanding;
+            }
             const usageVsCap = maxBorrowForAsset > 0 ? allocatedLoan / maxBorrowForAsset : 0;
             const actualLtv = asset.value > 0 ? allocatedLoan / asset.value : 0;
             const earnApr = earnAprTop[ticker] ?? 0;
-            const aprOffset = isBinance ? binanceBorrowAdjustment : (actualLtv > 0 ? earnApr / actualLtv : 0);
-            const baseNetApr = isBinance ? binanceBorrowNetAnnualRate : (chosenAPR - aprOffset);
-            const netApr = Math.max(0, baseNetApr);
+            const baseOffset = actualLtv > 0 ? earnApr / actualLtv : 0;
+            const borrowInfo = isBinance ? borrowRatesByTicker[ticker] || {} : {};
+            const annualApr = isBinance
+              ? (Number.isFinite(ledgerEntry?.annualRate) && ledgerEntry.annualRate > 0
+                ? ledgerEntry.annualRate
+                : (borrowInfo.annual ?? binanceBorrowAnnualRate))
+              : chosenAPR;
+            const netAprRaw = isBinance
+              ? (Number.isFinite(ledgerEntry?.netAnnualRate) && ledgerEntry.netAnnualRate >= 0
+                ? ledgerEntry.netAnnualRate
+                : (borrowInfo.netAnnual ?? borrowInfo.annual ?? annualApr))
+              : Math.max(0, chosenAPR - baseOffset);
+            const netApr = Math.max(0, netAprRaw);
+            const aprOffset = isBinance ? Math.max(0, annualApr - netApr) : baseOffset;
             let tone = "ok";
             if (isBinance) {
               const warnCut = ltvHealthyThreshold || 0;
@@ -2522,13 +2670,31 @@
                 tone = "warn";
               }
             }
-            const loanShareDenom = manualActive
-              ? manualTotal
-              : directLoanActive
-                ? (hasOutstandingMap
-                  ? (outstandingDirectTotal > 0 ? outstandingDirectTotal : loanBase)
-                  : (scaledDirectLoanSum > 0 ? scaledDirectLoanSum : loanBase))
-                : loanBase;
+            const loanShareDenom = isBinance && binanceLedgerOutstandingTotal > 0
+              ? binanceLedgerOutstandingTotal
+              : manualActive
+                ? manualTotal
+                : directLoanActive
+                  ? (hasOutstandingMap
+                    ? (outstandingDirectTotal > 0 ? outstandingDirectTotal : loanBase)
+                    : (directLoanSum > 0 ? directLoanSum : loanBase))
+                  : loanBase;
+            const paidTotal = Math.max(0, Number(ledgerEntry?.paidTotal) || 0);
+            const interestAccrued = Math.max(0, Number(ledgerEntry?.interestAccrued) || 0);
+            const originalPrincipal = Number.isFinite(ledgerEntry?.originalPrincipal) && ledgerEntry.originalPrincipal > 0
+              ? ledgerEntry.originalPrincipal
+              : Math.max(0, allocatedLoan + paidTotal - interestAccrued);
+            const liquidationValue = marginCallLtv > 0 ? allocatedLoan / marginCallLtv : null;
+            const qty = Number(asset.qty) || 0;
+            const computedLiquidationPrice = marginCallLtv > 0 && qty > 0 ? (allocatedLoan / marginCallLtv) / qty : null;
+            const liquidationPrice = Number.isFinite(ledgerEntry?.liquidationPriceHint) && ledgerEntry.liquidationPriceHint > 0
+              ? ledgerEntry.liquidationPriceHint
+              : computedLiquidationPrice;
+            const currentPrice = Number(asset.price) > 0 ? asset.price : null;
+            const liquidationBufferValue = Number.isFinite(liquidationValue) ? asset.value - liquidationValue : null;
+            const liquidationBufferPct = currentPrice && liquidationPrice && currentPrice > 0
+              ? Math.max(0, (currentPrice - liquidationPrice) / currentPrice)
+              : null;
             return {
               id: asset.id,
               name: asset.name || ticker || `Activo ${asset.id}`,
@@ -2546,20 +2712,31 @@
               netApr,
               loanShare: loanShareDenom > 0 ? allocatedLoan / loanShareDenom : 0,
               tone,
+              annualApr,
+              ledger: ledgerEntry ? { ...ledgerEntry, payments: Array.isArray(ledgerEntry.payments) ? ledgerEntry.payments.map((p) => ({ ...p })) : [] } : null,
+              paidTotal,
+              interestAccrued,
+              originalPrincipal,
+              liquidationPrice,
+              liquidationBufferPct,
+              liquidationBufferValue,
+              currentPrice,
+              qty,
+              liquidationValue,
             };
           })
           .sort((a, b) => b.value - a.value);
         const totalAllocated = manualActive
           ? manualTotal
           : directLoanActive
-            ? (scaledDirectLoanSum || loanBase)
+            ? (isBinance ? (binanceLedgerOutstandingTotal || directLoanSum || loanBase) : (loanBase))
             : items.reduce((acc, item) => acc + item.allocatedLoan, 0);
-        const weightedAprOffset = isBinance
-          ? binanceBorrowAdjustment
-          : (totalAllocated > 0
-            ? items.reduce((acc, item) => acc + item.aprOffset * (item.allocatedLoan / totalAllocated), 0)
-            : 0);
-        const weightedNetApr = isBinance ? binanceBorrowNetAnnualRate : Math.max(0, chosenAPR - weightedAprOffset);
+        const weightedAprOffset = totalAllocated > 0
+          ? items.reduce((acc, item) => acc + Math.max(0, item.aprOffset || 0) * (item.allocatedLoan / totalAllocated), 0)
+          : (isBinance ? binanceBorrowAdjustment : 0);
+        const weightedNetApr = totalAllocated > 0
+          ? items.reduce((acc, item) => acc + (item.netApr ?? chosenAPR) * (item.allocatedLoan / totalAllocated), 0)
+          : (isBinance ? binanceBorrowNetAnnualRate : Math.max(0, chosenAPR - weightedAprOffset));
         return {
           items,
           manualActive,
@@ -2569,15 +2746,15 @@
           weightedAprOffset,
           weightedNetApr,
         };
-      }, [autoRepayLtv, binanceBorrowAdjustment, binanceBorrowNetAnnualRate, binanceOutstandingRatio, cashflowDerived?.outstandingByTicker, defaultLtv, earnAprTop, isBinance, loanAmount, loanRequestsTotals, manualLoanAllocationEnabled, marginCallLtv, plannedOverallLTV, totals.totalCollateralValue, totals.withValue, ltvByTicker, ltvHealthyThreshold, ltvWarnThreshold]);
+      }, [autoRepayLtv, binanceBorrowAdjustment, binanceBorrowNetAnnualRate, binanceOutstandingRatio, binanceLoanLedger, binanceLedgerOutstandingTotal, borrowRatesByTicker, cashflowDerived?.outstandingByTicker, defaultLtv, earnAprTop, isBinance, loanAmount, loanRequestsTotals, manualLoanAllocationEnabled, marginCallLtv, plannedOverallLTV, totals.totalCollateralValue, totals.withValue, ltvByTicker, ltvHealthyThreshold, ltvWarnThreshold]);
 
       const binanceNetAprOffset = isBinance ? Math.max(0, collateralBreakdown.weightedAprOffset || 0) : 0;
       const binanceNetAprBase = isBinance ? Math.max(0, collateralBreakdown.weightedNetApr ?? chosenAPR) : 0;
-      const binanceNetAnnualRate = isBinance ? Math.max(0, binanceNetAprBase * (binanceOutstandingRatio || 0)) : 0;
+      const binanceNetAnnualRate = isBinance ? Math.max(0, binanceNetAprBase) : 0;
       const netAnnualRate = isBinance ? binanceNetAnnualRate : standardNetAnnualRate;
       const binanceNetAprSubtle = isBinance
         ? (binanceOutstandingRatio < 0.999
-          ? `Saldo neto ${toPct(binanceOutstandingRatio, 0)} · net base ${toPct(binanceNetAprBase, 2)}`
+          ? `Saldo neto ${toPct(binanceOutstandingRatio, 0)} · tasa neta ${toPct(binanceNetAprBase, 2)}`
           : (binanceNetAprOffset > 0
             ? `Préstamo ${toPct(chosenAPR, 2)} − ajuste ${toPct(binanceNetAprOffset, 2)}`
             : `Préstamo ${toPct(chosenAPR, 2)}`))
@@ -4542,7 +4719,27 @@
       const toneBar = { ok: '#10b981', warn: '#f97316', danger: '#ef4444' };
       const loanShareLabel = item.loanShare > 0 ? formatPercent(item.loanShare, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '0%';
       const usagePct = item.policyLTV > 0 ? Math.min(100, (item.actualLtv / item.policyLTV) * 100) : Math.min(100, item.actualLtv * 100);
-      const netTone = item.netApr < 0 ? 'text-emerald-600' : item.netApr <= chosenAPR ? 'text-neutral-900' : 'text-amber-600';
+      const annualApr = Number.isFinite(item.annualApr) ? item.annualApr : chosenAPR;
+      const netTone = item.netApr < 0 ? 'text-emerald-600' : item.netApr <= annualApr ? 'text-neutral-900' : 'text-amber-600';
+      const ledger = item.ledger || {};
+      const paidTotal = Number.isFinite(item.paidTotal) ? Math.max(0, item.paidTotal) : 0;
+      const interestAccrued = Number.isFinite(item.interestAccrued) ? Math.max(0, item.interestAccrued) : 0;
+      const originalPrincipal = Number.isFinite(item.originalPrincipal) ? Math.max(0, item.originalPrincipal) : Math.max(0, item.allocatedLoan + paidTotal - interestAccrued);
+      const paidLabel = paidTotal > 0 ? fmt(paidTotal * rate, currency) : '—';
+      const interestLabel = interestAccrued > 0 ? fmt(interestAccrued * rate, currency) : '—';
+      const originalLabel = fmt(originalPrincipal * rate, currency);
+      const currentPrice = Number.isFinite(item.currentPrice) && item.currentPrice > 0 ? item.currentPrice : null;
+      const liquidationPrice = Number.isFinite(item.liquidationPrice) && item.liquidationPrice > 0 ? item.liquidationPrice : null;
+      const priceDigits = currentPrice != null && currentPrice < 1 ? { minimumFractionDigits: 5, maximumFractionDigits: 8 } : { minimumFractionDigits: 3, maximumFractionDigits: 6 };
+      const liquidationDigits = liquidationPrice != null && liquidationPrice < 0.1 ? { minimumFractionDigits: 6, maximumFractionDigits: 8 } : { minimumFractionDigits: 4, maximumFractionDigits: 6 };
+      const currentPriceLabel = currentPrice != null ? `$${formatDecimal(currentPrice, priceDigits)}` : '—';
+      const liquidationPriceLabel = liquidationPrice != null ? `$${formatDecimal(liquidationPrice, liquidationDigits)}` : '—';
+      const liquidationBufferLabel = Number.isFinite(item.liquidationBufferPct)
+        ? `${formatPercent(item.liquidationBufferPct, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} · ${fmt((item.liquidationBufferValue ?? 0) * rate, currency)}`
+        : '—';
+      const qtyLabel = Number.isFinite(item.qty) ? formatDecimal(item.qty, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '—';
+      const borrowDate = ledger.borrowDate;
+      const lastUpdated = ledger.lastUpdated;
       return (
         <div className="rounded-2xl border border-amber-100 bg-white/80 p-4 shadow-sm">
           <div className="flex items-start justify-between gap-3">
@@ -4554,26 +4751,33 @@
               {item.tone === 'ok' ? 'Sano' : item.tone === 'warn' ? 'Vigilar' : 'Riesgo'}
             </span>
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-3 text-xs text-neutral-600">
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Colateral</div>
-              <div className="text-sm font-semibold text-neutral-800">{fmt(item.value * rate, currency)}</div>
-              <div className="text-[10px] text-neutral-500">Cap {fmt(item.maxBorrowForAsset * rate, currency)}</div>
+          <div className="mt-3 space-y-3 text-xs text-neutral-600">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Colateral</div>
+                <div className="text-sm font-semibold text-neutral-800">{fmt(item.value * rate, currency)}</div>
+                <div className="text-[10px] text-neutral-500">Cap {fmt(item.maxBorrowForAsset * rate, currency)} · Cant. {qtyLabel}</div>
+                <div className="text-[10px] text-neutral-500">Precio spot {currentPriceLabel}</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Préstamo & flujos</div>
+                <div className="text-sm font-semibold text-neutral-800">{fmt(item.allocatedLoan * rate, currency)}</div>
+                <div className="text-[10px] text-neutral-500">Original {originalLabel} · Pagos {paidLabel}</div>
+                <div className="text-[10px] text-neutral-500">Interés devengado {interestLabel}</div>
+              </div>
             </div>
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Préstamo asignado</div>
-              <div className="text-sm font-semibold text-neutral-800">{fmt(item.allocatedLoan * rate, currency)}</div>
-              <div className="text-[10px] text-neutral-500">Uso {formatPercent(item.actualLtv, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div>
-            </div>
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">LTV neto</div>
-              <div className="text-sm font-semibold text-neutral-800">{formatPercent(item.actualLtv, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div>
-              <div className="text-[10px] text-neutral-500">Tope {formatPercent(item.policyLTV, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
-            </div>
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">APR Earn estimado</div>
-              <div className="text-sm font-semibold text-neutral-800">{formatPercent(item.earnApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-              <div className="text-[10px] text-neutral-500">Ajuste aplicado {formatPercent(item.aprOffset, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">LTV neto</div>
+                <div className="text-sm font-semibold text-neutral-800">{formatPercent(item.actualLtv, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div>
+                <div className="text-[10px] text-neutral-500">Tope {formatPercent(item.policyLTV, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} · Share {loanShareLabel}</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Tasas Binance</div>
+                <div className="text-sm font-semibold text-neutral-800">{formatPercent(annualApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} APR</div>
+                <div className="text-[10px] text-neutral-500">Neta {formatPercent(item.netApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · Ajuste {formatPercent(item.aprOffset, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                <div className="text-[10px] text-neutral-500">Earn estimado {formatPercent(item.earnApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              </div>
             </div>
           </div>
           <div className="mt-3">
@@ -4585,10 +4789,23 @@
               <span>Tope</span>
             </div>
           </div>
+          {(liquidationPrice || currentPrice) && (
+            <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-2 text-[11px] text-amber-800">
+              <div className="flex justify-between"><span>Precio actual</span><span>{currentPriceLabel}</span></div>
+              <div className="flex justify-between"><span>Precio liquidación (margin call)</span><span>{liquidationPriceLabel}</span></div>
+              <div className="mt-1 flex justify-between text-[10px]"><span>Buffer hasta margin call</span><span>{liquidationBufferLabel}</span></div>
+            </div>
+          )}
           <div className="mt-3">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">APR neta Binance</div>
             <div className={`text-base font-semibold ${netTone}`}>{formatPercent(item.netApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            <div className="text-[11px] text-neutral-500">{`Préstamo ${formatPercent(chosenAPR, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} − ajuste ${formatPercent(item.aprOffset, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</div>
+            <div className="text-[11px] text-neutral-500">{`Préstamo ${formatPercent(annualApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} − ajuste ${formatPercent(item.aprOffset, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</div>
+            {(borrowDate || lastUpdated) && (
+              <div className="mt-1 text-[10px] text-neutral-500">
+                {borrowDate && <div>Inicio préstamo: {borrowDate}</div>}
+                {lastUpdated && <div>Última actualización: {lastUpdated}</div>}
+              </div>
+            )}
           </div>
         </div>
       );
