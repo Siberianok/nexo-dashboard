@@ -114,8 +114,6 @@
       MXN: 17.2,
     };
 
-    const BINANCE_LOAN_DATA_URL = 'https://www.binance.com/es-LA/loan/data/flexibleInterestRate';
-
     const THEME_TOKENS = Object.freeze({
       nexo: {
         '--theme-surface-soft': 'linear-gradient(180deg,#eef3ff 0%, #f6f9ff 100%)',
@@ -1464,46 +1462,6 @@
         }, {});
       }, [borrowRates]);
       const borrowTickerList = useMemo(() => Object.keys(borrowRatesByTicker), [borrowRatesByTicker]);
-      const binanceBorrowCatalog = useMemo(() => {
-        if (!isBinance) return [];
-        return borrowTickerList
-          .map((ticker) => {
-            const info = borrowRatesByTicker[ticker];
-            if (!info) return null;
-            const loanAssetRaw = typeof info.loanAsset === 'string' ? info.loanAsset.trim() : '';
-            const loanAsset = loanAssetRaw ? loanAssetRaw.toUpperCase() : ticker;
-            const limit = info.loanLimit;
-            let limitLabel = '';
-            if (typeof limit === 'number' && Number.isFinite(limit) && limit > 0) {
-              const decimals = limit >= 1000 ? 0 : 2;
-              limitLabel = `${formatDecimal(limit, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })} ${loanAsset}`;
-            } else if (limit && typeof limit === 'object') {
-              const amount = Number(limit.amount);
-              const currencyRaw = typeof limit.currency === 'string' ? limit.currency.trim() : '';
-              const currency = currencyRaw ? currencyRaw.toUpperCase() : loanAsset;
-              if (Number.isFinite(amount) && amount > 0) {
-                const decimals = amount >= 1000 ? 0 : 2;
-                const baseLabel = `${formatDecimal(amount, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })} ${currency}`;
-                limitLabel = typeof limit.note === 'string' && limit.note.trim() ? `${baseLabel} · ${limit.note.trim()}` : baseLabel;
-              } else if (typeof limit.note === 'string' && limit.note.trim()) {
-                limitLabel = limit.note.trim();
-              }
-            }
-            if (!limitLabel) {
-              const note = typeof info.limitNote === 'string' && info.limitNote.trim();
-              limitLabel = note || 'Dinámico (ver tabla oficial)';
-            }
-            return {
-              ticker,
-              label: info.label || ticker,
-              loanAsset,
-              annual: Number.isFinite(info.annual) ? info.annual : 0,
-              netAnnual: Number.isFinite(info.netAnnual) ? info.netAnnual : null,
-              limitLabel,
-            };
-          })
-          .filter(Boolean);
-      }, [isBinance, borrowTickerList, borrowRatesByTicker]);
       const toNumber = (value) => {
         const n = Number(value);
         return Number.isFinite(n) ? n : 0;
@@ -2918,55 +2876,6 @@
                 <KPI key={item.key} title={item.title} value={item.value} subtle={item.subtle} tone={item.tone} variant={item.variant || 'button'} />
               ))}
             </section>
-
-            {isBinance && binanceBorrowCatalog.length > 0 && (
-              <section className="mb-8">
-                <Card title="Activos prestables (Binance Loans)">
-                  <div className="flex h-full flex-col gap-4">
-                    <p className="text-sm text-neutral-500 text-center">
-                      Catálogo de criptomonedas disponibles para préstamos flexibles. Los datos se basan en la tabla oficial de{' '}
-                      <a
-                        href={BINANCE_LOAN_DATA_URL}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-semibold text-amber-600 hover:text-amber-500"
-                      >
-                        Binance Loans Flexible
-                      </a>
-                      . Actualiza los límites según tu nivel VIP y disponibilidad diaria.
-                    </p>
-                    <div className="grow overflow-x-auto">
-                      <table className="min-w-full divide-y divide-amber-200 text-sm">
-                        <thead className="bg-amber-50/80 text-amber-700">
-                          <tr>
-                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide">Cripto prestable</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide">APR anual</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide">APR neta</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide">Límite préstamo</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-amber-100 bg-white/70">
-                          {binanceBorrowCatalog.map((row) => (
-                            <tr key={`borrowable-${row.ticker}`} className="text-neutral-800">
-                              <td className="px-4 py-3 align-top">
-                                <div className="font-semibold text-neutral-900">{row.label}</div>
-                                <div className="text-xs text-neutral-500">Ticker préstamo: {row.loanAsset}</div>
-                              </td>
-                              <td className="px-4 py-3 font-semibold text-neutral-900">{toPct(row.annual, 2)}</td>
-                              <td className="px-4 py-3 text-neutral-700">{row.netAnnual != null ? toPct(row.netAnnual, 2) : '—'}</td>
-                              <td className="px-4 py-3 text-neutral-700">{row.limitLabel}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    <p className="text-xs text-neutral-500 text-center">
-                      * Límite referencial. Binance puede modificar montos máximos, tokens admitidos y tasas sin previo aviso.
-                    </p>
-                  </div>
-                </Card>
-              </section>
-            )}
 
             {isBinance && collateralBreakdown.items.length > 0 && (
               <section className="mb-8">
