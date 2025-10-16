@@ -3152,28 +3152,6 @@
                   <TrendChart data={timeline} currency={currency} rate={rate} />
                 </Card>
 
-                <CashflowPlanner
-                  plan={cashflowPlan}
-                  derived={cashflowDerived}
-                  onPlanChange={updateCashflowPlan}
-                  currency={currency}
-                  rate={rate}
-                  fmt={fmt}
-                  loanAmount={loanAmount}
-                  chosenAPR={chosenAPR}
-                  interestCalc={interestCalc}
-                  daysUntilRepay={daysUntilRepay}
-                  repayDate={repayDate}
-                  totals={totals}
-                  targetLtv={targetLtv}
-                  marginCallLtv={marginCallLtv}
-                  autoRepayLtv={autoRepayLtv}
-                  scenarioDefaults={cashflowPlan?.scenarioShocks}
-                  focusRingClass={focusRingClass}
-                  earnMonthly={earnMonthly}
-                  earnEligible={earnEligible}
-                  minBalancePerks={minBalancePerks}
-                />
               </div>
 
               <div className="space-y-6">
@@ -3235,6 +3213,29 @@
                   scenarioName={ltvScenarioLabel}
                   cashflowNet={cashflowDerived?.netBalanceFinal}
                   defaultMatrix={baseBenchmarkConfig?.rateMatrix}
+                />
+
+                <CashflowPlanner
+                  plan={cashflowPlan}
+                  derived={cashflowDerived}
+                  onPlanChange={updateCashflowPlan}
+                  currency={currency}
+                  rate={rate}
+                  fmt={fmt}
+                  loanAmount={loanAmount}
+                  chosenAPR={chosenAPR}
+                  interestCalc={interestCalc}
+                  daysUntilRepay={daysUntilRepay}
+                  repayDate={repayDate}
+                  totals={totals}
+                  targetLtv={targetLtv}
+                  marginCallLtv={marginCallLtv}
+                  autoRepayLtv={autoRepayLtv}
+                  scenarioDefaults={cashflowPlan?.scenarioShocks}
+                  focusRingClass={focusRingClass}
+                  earnMonthly={earnMonthly}
+                  earnEligible={earnEligible}
+                  minBalancePerks={minBalancePerks}
                 />
 
                 {!isBinance && (
