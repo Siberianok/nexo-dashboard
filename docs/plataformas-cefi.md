@@ -4,7 +4,7 @@ El siguiente listado recopila opciones centralizadas (CeFi) que ofrecen producto
 
 ## Plataformas ya cubiertas en el simulador
 - **Nexo** – Préstamos flexibles con loyalty token NEXO y cálculo automático de tasas según nivel.
-- **Binance Loans** – Modelo VIP con márgenes elevados (LTV 75-85%) y liquidaciones automáticas.
+- **Binance Loans** – Modelo VIP con márgenes elevados (LTV 75-85%), liquidaciones automáticas y catálogo de activos prestables con límites dinámicos según [tabla flexible de tasas](https://www.binance.com/es-LA/loan/data/flexibleInterestRate).
 - **YouHodler** – LTV agresivo (hasta 90% en stablecoins) y funciones Turbocharge para apalancar.
 - **Ledn** – Préstamos auditados orientados a institucionales y resguardos en BTC/USDC.
 

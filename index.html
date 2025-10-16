@@ -114,6 +114,8 @@
       MXN: 17.2,
     };
 
+    const BINANCE_LOAN_DATA_URL = 'https://www.binance.com/es-LA/loan/data/flexibleInterestRate';
+
     const THEME_TOKENS = Object.freeze({
       nexo: {
         '--theme-surface-soft': 'linear-gradient(180deg,#eef3ff 0%, #f6f9ff 100%)',
@@ -770,6 +772,8 @@
             hourly: annualToHourly(0.0507),
             netAnnual: 0.0476,
             adjustmentAnnual: 0.0031,
+            loanAsset: "ADA",
+            limitNote: "Depende del colateral y nivel VIP (ver tabla oficial)",
           },
           ALGO: {
             label: "Algorand (ALGO)",
@@ -777,46 +781,64 @@
             hourly: annualToHourly(0.0507),
             netAnnual: 0.0415,
             adjustmentAnnual: 0.0092,
+            loanAsset: "ALGO",
+            limitNote: "Depende del colateral y nivel VIP (ver tabla oficial)",
           },
           BNB: {
             label: "BNB (BNB)",
             annual: 0.0612,
             hourly: annualToHourly(0.0612),
+            loanAsset: "BNB",
+            limitNote: "Depende del colateral y nivel VIP (ver tabla oficial)",
           },
           BTC: {
             label: "Bitcoin (BTC)",
             annual: 0.0725,
             hourly: annualToHourly(0.0725),
+            loanAsset: "BTC",
+            limitNote: "Depende del colateral y nivel VIP (ver tabla oficial)",
           },
           ETH: {
             label: "Ethereum (ETH)",
             annual: 0.0684,
             hourly: annualToHourly(0.0684),
+            loanAsset: "ETH",
+            limitNote: "Depende del colateral y nivel VIP (ver tabla oficial)",
           },
           USDT: {
             label: "Tether (USDT)",
             annual: 0.0595,
             hourly: annualToHourly(0.0595),
+            loanAsset: "USDT",
+            limitNote: "Depende del colateral y nivel VIP (ver tabla oficial)",
           },
           USDC: {
             label: "USD Coin (USDC)",
             annual: 0.0589,
             hourly: annualToHourly(0.0589),
+            loanAsset: "USDC",
+            limitNote: "Depende del colateral y nivel VIP (ver tabla oficial)",
           },
           BUSD: {
             label: "Binance USD (BUSD)",
             annual: 0.055,
             hourly: annualToHourly(0.055),
+            loanAsset: "BUSD",
+            limitNote: "Depende del colateral y nivel VIP (ver tabla oficial)",
           },
           XRP: {
             label: "XRP (XRP)",
             annual: 0.063,
             hourly: annualToHourly(0.063),
+            loanAsset: "XRP",
+            limitNote: "Depende del colateral y nivel VIP (ver tabla oficial)",
           },
           SOL: {
             label: "Solana (SOL)",
             annual: 0.071,
             hourly: annualToHourly(0.071),
+            loanAsset: "SOL",
+            limitNote: "Depende del colateral y nivel VIP (ver tabla oficial)",
           },
         },
         diagnosticSources: {
@@ -942,7 +964,7 @@
         },
         exportPrefix: "binance_dashboard",
         disclaimers: {
-          finePrint: "* Este simulador es orientativo. Verifica términos/tasas vigentes en Binance.",
+          finePrint: "* Este simulador es orientativo. Verifica términos/tasas vigentes en Binance (Loans Flexible).",
         },
       },
       youhodler: {
@@ -1413,6 +1435,46 @@
         }, {});
       }, [borrowRates]);
       const borrowTickerList = useMemo(() => Object.keys(borrowRatesByTicker), [borrowRatesByTicker]);
+      const binanceBorrowCatalog = useMemo(() => {
+        if (!isBinance) return [];
+        return borrowTickerList
+          .map((ticker) => {
+            const info = borrowRatesByTicker[ticker];
+            if (!info) return null;
+            const loanAssetRaw = typeof info.loanAsset === 'string' ? info.loanAsset.trim() : '';
+            const loanAsset = loanAssetRaw ? loanAssetRaw.toUpperCase() : ticker;
+            const limit = info.loanLimit;
+            let limitLabel = '';
+            if (typeof limit === 'number' && Number.isFinite(limit) && limit > 0) {
+              const decimals = limit >= 1000 ? 0 : 2;
+              limitLabel = `${formatDecimal(limit, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })} ${loanAsset}`;
+            } else if (limit && typeof limit === 'object') {
+              const amount = Number(limit.amount);
+              const currencyRaw = typeof limit.currency === 'string' ? limit.currency.trim() : '';
+              const currency = currencyRaw ? currencyRaw.toUpperCase() : loanAsset;
+              if (Number.isFinite(amount) && amount > 0) {
+                const decimals = amount >= 1000 ? 0 : 2;
+                const baseLabel = `${formatDecimal(amount, { minimumFractionDigits: decimals, maximumFractionDigits: decimals })} ${currency}`;
+                limitLabel = typeof limit.note === 'string' && limit.note.trim() ? `${baseLabel} · ${limit.note.trim()}` : baseLabel;
+              } else if (typeof limit.note === 'string' && limit.note.trim()) {
+                limitLabel = limit.note.trim();
+              }
+            }
+            if (!limitLabel) {
+              const note = typeof info.limitNote === 'string' && info.limitNote.trim();
+              limitLabel = note || 'Dinámico (ver tabla oficial)';
+            }
+            return {
+              ticker,
+              label: info.label || ticker,
+              loanAsset,
+              annual: Number.isFinite(info.annual) ? info.annual : 0,
+              netAnnual: Number.isFinite(info.netAnnual) ? info.netAnnual : null,
+              limitLabel,
+            };
+          })
+          .filter(Boolean);
+      }, [isBinance, borrowTickerList, borrowRatesByTicker]);
       const toNumber = (value) => {
         const n = Number(value);
         return Number.isFinite(n) ? n : 0;
@@ -2680,6 +2742,55 @@
               ))}
             </section>
 
+            {isBinance && binanceBorrowCatalog.length > 0 && (
+              <section className="mb-8">
+                <Card title="Activos prestables (Binance Loans)">
+                  <div className="flex h-full flex-col gap-4">
+                    <p className="text-sm text-neutral-500 text-center">
+                      Catálogo de criptomonedas disponibles para préstamos flexibles. Los datos se basan en la tabla oficial de{' '}
+                      <a
+                        href={BINANCE_LOAN_DATA_URL}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-semibold text-amber-600 hover:text-amber-500"
+                      >
+                        Binance Loans Flexible
+                      </a>
+                      . Actualiza los límites según tu nivel VIP y disponibilidad diaria.
+                    </p>
+                    <div className="grow overflow-x-auto">
+                      <table className="min-w-full divide-y divide-amber-200 text-sm">
+                        <thead className="bg-amber-50/80 text-amber-700">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide">Cripto prestable</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide">APR anual</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide">APR neta</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide">Límite préstamo</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-amber-100 bg-white/70">
+                          {binanceBorrowCatalog.map((row) => (
+                            <tr key={`borrowable-${row.ticker}`} className="text-neutral-800">
+                              <td className="px-4 py-3 align-top">
+                                <div className="font-semibold text-neutral-900">{row.label}</div>
+                                <div className="text-xs text-neutral-500">Ticker préstamo: {row.loanAsset}</div>
+                              </td>
+                              <td className="px-4 py-3 font-semibold text-neutral-900">{toPct(row.annual, 2)}</td>
+                              <td className="px-4 py-3 text-neutral-700">{row.netAnnual != null ? toPct(row.netAnnual, 2) : '—'}</td>
+                              <td className="px-4 py-3 text-neutral-700">{row.limitLabel}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="text-xs text-neutral-500 text-center">
+                      * Límite referencial. Binance puede modificar montos máximos, tokens admitidos y tasas sin previo aviso.
+                    </p>
+                  </div>
+                </Card>
+              </section>
+            )}
+
             {isBinance && collateralBreakdown.items.length > 0 && (
               <section className="mb-8">
                 <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -3103,10 +3214,14 @@
               </Card>
             </section>
 
-      <footer className="text-xs text-neutral-500 space-y-1 text-center md:text-left">
-        <p>© {new Date().getFullYear()} – Demo técnica. Estilos y métricas se adaptan según la plataforma elegida.</p>
-        <p>Activos digitales: actualización automática cada {LIVE_REFRESH_SECONDS} segundos (fuente CoinGecko). Tipos de cambio oficiales: actualización cada {FX_REFRESH_MINUTES} minutos (exchangerate.host).</p>
-      </footer>
+            {disclaimers?.finePrint && (
+              <p className="mb-6 text-xs text-neutral-500 text-center">{disclaimers.finePrint}</p>
+            )}
+
+            <footer className="text-xs text-neutral-500 space-y-1 text-center md:text-left">
+              <p>© {new Date().getFullYear()} – Demo técnica. Estilos y métricas se adaptan según la plataforma elegida.</p>
+              <p>Activos digitales: actualización automática cada {LIVE_REFRESH_SECONDS} segundos (fuente CoinGecko). Tipos de cambio oficiales: actualización cada {FX_REFRESH_MINUTES} minutos (exchangerate.host).</p>
+            </footer>
       </div>
     </div>
   );
