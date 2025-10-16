@@ -922,14 +922,16 @@
             outstanding: 10471.01,
             interestAccrued: 171.01,
             annualRate: 0.0503283,
-            netAnnualRate: 0.04464082,
+            netAnnualRate: 0.0484,
+            initialLtv: 0.46,
           },
           ALGO: {
             originalPrincipal: 7026,
             outstanding: 1201.78,
             interestAccrued: 69.58,
             annualRate: 0.0503283,
-            netAnnualRate: 0.04464082,
+            netAnnualRate: 0.045,
+            initialLtv: 0.45,
             payments: [
               { id: "algo-payment-1", amount: 5890.97, date: "2024-03-12", note: "Pago capital" },
               { id: "algo-payment-2", amount: 2.77, date: "2024-03-12", note: "Pago interés" },
@@ -1689,6 +1691,8 @@
           const annualRate = Number(entry.annualRate);
           const netAnnualRate = Number(entry.netAnnualRate);
           const liquidationPriceHint = Number(entry.liquidationPriceHint);
+          const initialLtv = Number(entry.initialLtv);
+          const initialCollateralValueRaw = Number(entry.initialCollateralValue ?? entry.initialCollateralUsd ?? entry.initialCollateral);
           const borrowDate = typeof entry.borrowDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(entry.borrowDate)
             ? entry.borrowDate
             : null;
@@ -1707,6 +1711,8 @@
             borrowDate,
             lastUpdated,
             notes: typeof entry.notes === 'string' ? entry.notes : '',
+            initialLtv: Number.isFinite(initialLtv) && initialLtv > 0 ? initialLtv : null,
+            initialCollateralValue: Number.isFinite(initialCollateralValueRaw) && initialCollateralValueRaw > 0 ? initialCollateralValueRaw : null,
           };
           return acc;
         }, {});
@@ -2121,6 +2127,52 @@
         if (!isBinance) return 0;
         return Object.values(binanceLoanLedger).reduce((acc, entry) => acc + (Math.max(0, Number(entry?.outstanding) || 0)), 0);
       }, [isBinance, binanceLoanLedger]);
+      const binanceLedgerTotals = useMemo(() => {
+        if (!isBinance) {
+          return {
+            original: 0,
+            outstanding: loanAmount,
+            interest: 0,
+            paid: 0,
+            initialCollateral: 0,
+          };
+        }
+        return Object.entries(binanceLoanLedger).reduce((acc, [ticker, entry]) => {
+          const original = Math.max(0, Number(entry?.originalPrincipal) || 0);
+          const outstanding = Math.max(0, Number(entry?.outstanding) || 0);
+          const interest = Math.max(0, Number(entry?.interestAccrued) || 0);
+          const paid = Math.max(0, Number(entry?.paidTotal) || 0);
+          const initialCollateralValue = Number(entry?.initialCollateralValue);
+          const initialLtv = Number(entry?.initialLtv);
+          let collateralBase = 0;
+          if (Number.isFinite(initialCollateralValue) && initialCollateralValue > 0) {
+            collateralBase = initialCollateralValue;
+          } else if (Number.isFinite(initialLtv) && initialLtv > 0) {
+            collateralBase = initialLtv > 0 ? original / initialLtv : 0;
+          } else {
+            const policy = ltvByTicker[ticker] ?? defaultLtv;
+            collateralBase = policy > 0 ? original / policy : 0;
+          }
+          acc.original += original;
+          acc.outstanding += outstanding;
+          acc.interest += interest;
+          acc.paid += paid;
+          acc.initialCollateral += Number.isFinite(collateralBase) && collateralBase > 0 ? collateralBase : 0;
+          return acc;
+        }, { original: 0, outstanding: 0, interest: 0, paid: 0, initialCollateral: 0 });
+      }, [isBinance, binanceLoanLedger, loanAmount, ltvByTicker, defaultLtv]);
+      const binanceOriginalPrincipalTotal = binanceLedgerTotals.original;
+      const binanceInterestAccruedTotal = binanceLedgerTotals.interest;
+      const binancePaidLedgerTotal = binanceLedgerTotals.paid;
+      const binanceInitialCollateralTotal = binanceLedgerTotals.initialCollateral;
+      const binanceNetLoanValue = Math.max(
+        0,
+        binanceOriginalPrincipalTotal + binanceInterestAccruedTotal - binancePaidLedgerTotal,
+      );
+      const binanceTotalToRepay = Math.max(0, binanceOriginalPrincipalTotal + binanceInterestAccruedTotal);
+      const binanceInitialLtv = binanceInitialCollateralTotal > 0
+        ? binanceOriginalPrincipalTotal / binanceInitialCollateralTotal
+        : 0;
       const pct = (value, digits = 1) => formatPercent(Number(value), {
         minimumFractionDigits: digits,
         maximumFractionDigits: digits,
@@ -2503,7 +2555,11 @@
       const plannedOutstanding = Math.max(0, cashflowDerived?.outstandingAfterPlan ?? loanAmount);
       const plannedCollateralDelta = cashflowDerived?.collateralDeltaPlanned ?? 0;
       const collateralAfterPlan = Math.max(0, cashflowDerived?.collateralAfterPlan ?? (totals.totalCollateralValue + plannedCollateralDelta));
-      const currentOverallLTV = useMemo(() => (totals.totalCollateralValue > 0 ? loanAmount / totals.totalCollateralValue : 0), [loanAmount, totals.totalCollateralValue]);
+      const currentOverallLTV = useMemo(() => {
+        if (!(totals.totalCollateralValue > 0)) return 0;
+        const netLoanBase = isBinance ? binanceNetLoanValue : loanAmount;
+        return netLoanBase / totals.totalCollateralValue;
+      }, [isBinance, binanceNetLoanValue, loanAmount, totals.totalCollateralValue]);
       const plannedOverallLTV = collateralAfterPlan > 0 && Number.isFinite(plannedOutstanding / collateralAfterPlan)
         ? plannedOutstanding / collateralAfterPlan
         : (plannedOutstanding > 0 ? 1 : 0);
@@ -2513,7 +2569,14 @@
         () => normalizeAlertItems(cashflowDerived?.alerts),
         [cashflowDerived],
       );
-      const ltvTone = ltvGaugeValue <= ltvHealthyThreshold ? "ok" : (ltvGaugeValue <= ltvWarnThreshold ? "warn" : "danger");
+      const toneForLtvValue = (value) => {
+        if (!Number.isFinite(value)) return undefined;
+        if (ltvHealthyThreshold > 0 && value <= ltvHealthyThreshold) return "ok";
+        if (ltvWarnThreshold > 0 && value <= ltvWarnThreshold) return "warn";
+        if (value > 0) return "danger";
+        return undefined;
+      };
+      const ltvTone = toneForLtvValue(ltvGaugeValue);
       const plannedCollateralChange = collateralAfterPlan - totals.totalCollateralValue;
       const binanceLoanAfterPlan = plannedOutstanding;
       const binanceOutstandingRatio = loanAmount > 0
@@ -2521,7 +2584,21 @@
         : 0;
       const binanceCollateralAfterPlan = collateralAfterPlan;
       const binanceLtvAfterPlan = plannedOverallLTV;
-      const binanceLtvTone = binanceLtvAfterPlan <= ltvHealthyThreshold ? "ok" : (binanceLtvAfterPlan <= ltvWarnThreshold ? "warn" : "danger");
+      const binanceInitialLtvTone = toneForLtvValue(binanceInitialLtv);
+      const binanceCurrentLtvTone = toneForLtvValue(currentOverallLTV);
+      const binanceLoanNetSubtle = [
+        binanceInterestAccruedTotal > 0 ? `Interés ${fmt(binanceInterestAccruedTotal * rate, currency)}` : null,
+        binancePaidLedgerTotal > 0 ? `Pagos ${fmt(binancePaidLedgerTotal * rate, currency)}` : null,
+      ].filter(Boolean).join(' · ') || 'Sin movimientos registrados';
+      const binancePaidSubtle = binancePaidLedgerTotal > 0
+        ? 'Total pagado a la fecha'
+        : 'Sin pagos registrados';
+      const binanceInitialCollateralSubtle = binanceInitialCollateralTotal > 0
+        ? `Colateral inicial ${fmt(binanceInitialCollateralTotal * rate, currency)}`
+        : '—';
+      const binanceNetLtvSubtle = totals.totalCollateralValue > 0
+        ? `Colateral actual ${fmt(totals.totalCollateralValue * rate, currency)}`
+        : 'Sin colateral';
       const binanceExtraCollateralNeeded = ltvHealthyThreshold > 0 ? Math.max(0, binanceLoanAfterPlan / ltvHealthyThreshold - binanceCollateralAfterPlan) : 0;
       const binanceRepayNeeded = Math.max(0, binanceLoanAfterPlan - binanceCollateralAfterPlan * ltvHealthyThreshold);
       const binanceBufferToCaution = Math.max(0, binanceCollateralAfterPlan * ltvWarnThreshold - binanceLoanAfterPlan);
@@ -2841,12 +2918,12 @@
           <div className="mx-auto max-w-7xl px-4 py-6">
             <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
               {(isBinance ? [
-                { key: 'loan-current', title: 'Préstamo total', value: fmt(loanAmount * rate, currency), subtle: loanAmount > 0 ? 'Capital original' : '—' },
-                { key: 'loan-plan', title: 'Préstamo neto', value: fmt(binanceLoanAfterPlan * rate, currency), subtle: scheduledPrincipal > 0 ? `Pagos planificados ${fmt(paidPrincipal * rate, currency)}` : 'Sin pagos registrados' },
-                { key: 'loan-paid', title: 'Pagos hechos', value: fmt(totalPaid * rate, currency), subtle: totalPaid > 0 ? `Capital ${fmt(paidPrincipal * rate, currency)} · Interés ${fmt(paidInterest * rate, currency)}` : 'Sin pagos registrados' },
+                { key: 'loan-current', title: 'Préstamo total', value: fmt(binanceOriginalPrincipalTotal * rate, currency), subtle: binanceOriginalPrincipalTotal > 0 ? 'Capital original' : '—' },
+                { key: 'loan-plan', title: 'Préstamo neto', value: fmt(binanceNetLoanValue * rate, currency), subtle: binanceLoanNetSubtle },
+                { key: 'loan-paid', title: 'Pagos hechos', value: fmt(binancePaidLedgerTotal * rate, currency), subtle: binancePaidSubtle },
                 { key: 'collateral-current', title: 'Colateral actual', value: fmt(totals.totalCollateralValue * rate, currency) },
-                { key: 'ltv-current', title: 'LTV inicial', value: toPct(currentOverallLTV, 2), tone: ltvTone, subtle: 'Con datos originales' },
-                { key: 'ltv-plan', title: 'LTV neto', value: toPct(binanceLtvAfterPlan, 2), tone: binanceLtvTone, subtle: scheduledPrincipal > 0 || Math.abs(plannedCollateralChange) > 1e-6 ? 'Tras pagos y plan de cashflow' : 'Sin cambios' },
+                { key: 'ltv-current', title: 'LTV inicial', value: toPct(binanceInitialLtv, 2), tone: binanceInitialLtvTone, subtle: binanceInitialCollateralSubtle },
+                { key: 'ltv-plan', title: 'LTV neto', value: toPct(currentOverallLTV, 2), tone: binanceCurrentLtvTone, subtle: binanceNetLtvSubtle },
                 { key: 'apr', title: 'Tasa anual (APR)', value: toPct(chosenAPR, 2), subtle: binanceBorrowLabel || undefined },
                 {
                   key: 'apr-net',
@@ -2861,7 +2938,7 @@
                   value: fmt(monthlyLoanCost * rate, currency),
                   subtle: `${toPct(chosenAPR, 2)} APR base`,
                 },
-                { key: 'repay-total', title: 'Total a devolver', value: fmt(interestCalc.repayTotal * rate, currency) },
+                { key: 'repay-total', title: 'Total a devolver', value: fmt(binanceTotalToRepay * rate, currency) },
               ] : [
                 { key: 'balance', title: 'Balance total', value: fmt(totals.total * rate, currency) },
                 { key: 'loyalty', title: loyalty ? (loyalty.kpiLabel || 'Loyalty Tier') : 'Programa', value: loyalty ? loyaltyTier : '—', subtle: loyalty && totals.total < minBalancePerks ? '(balance < mínimo)' : undefined },
@@ -3087,8 +3164,8 @@
                   <div className="mt-4 space-y-2">
                     {isBinance ? (
                       <>
-                        <Line label="LTV inicial" value={toPct(currentOverallLTV, 2)} muted />
-                        <Line label="LTV neto" value={toPct(binanceLtvAfterPlan, 2)} tone={binanceLtvTone} />
+                        <Line label="LTV inicial" value={toPct(binanceInitialLtv, 2)} tone={binanceInitialLtvTone} />
+                        <Line label="LTV neto" value={toPct(currentOverallLTV, 2)} tone={binanceCurrentLtvTone} />
                         <Line label="LTV proyectado (cashflow)" value={Number.isFinite(ltvGaugeValue) ? toPct(ltvGaugeValue, 2) : '∞'} tone={ltvTone} />
                         <Line label="Rango saludable" value={`≤ ${toPct(ltvHealthyThreshold, 0)}`} muted />
                         <Line label="Riesgo medio" value={binanceCautionLabel} muted />
@@ -4722,58 +4799,25 @@
         return { start, end, tone: item.tone, name: item.name, ticker: item.ticker, share: item.share, color };
       });
       const covered = Math.min(1, accShare);
-      const viewBoxSize = 220;
-      const center = viewBoxSize / 2;
-      const outerRadius = 96;
-      const innerRadius = 62;
-      const segmentGap = segments.length > 1 ? 3 : 0; // gap en grados para separar segmentos
-      const leftoverColor = 'rgba(148,163,184,0.28)';
-
-      const polarToCartesian = (cx, cy, radius, angleInDegrees) => {
-        const radians = ((angleInDegrees - 90) * Math.PI) / 180;
-        return {
-          x: cx + radius * Math.cos(radians),
-          y: cy + radius * Math.sin(radians),
-        };
-      };
-
-      const buildSegmentPath = (startAngle, endAngle, innerR, outerR) => {
-        if (endAngle <= startAngle) return '';
-        const startOuter = polarToCartesian(center, center, outerR, startAngle);
-        const endOuter = polarToCartesian(center, center, outerR, endAngle);
-        const startInner = polarToCartesian(center, center, innerR, endAngle);
-        const endInner = polarToCartesian(center, center, innerR, startAngle);
-        const largeArc = endAngle - startAngle <= 180 ? '0' : '1';
-        return [
-          'M', startOuter.x.toFixed(3), startOuter.y.toFixed(3),
-          'A', outerR, outerR, 0, largeArc, 1, endOuter.x.toFixed(3), endOuter.y.toFixed(3),
-          'L', startInner.x.toFixed(3), startInner.y.toFixed(3),
-          'A', innerR, innerR, 0, largeArc, 0, endInner.x.toFixed(3), endInner.y.toFixed(3),
-          'Z',
-        ].join(' ');
-      };
-
-      const segmentShapes = segments.map((seg, idx) => {
-        const shareDegrees = Math.max(0, (seg.end - seg.start) * 360);
-        const halfGap = segmentGap / 2;
-        const startTrim = idx === 0 ? 0 : Math.min(halfGap, shareDegrees * 0.4);
-        const endTrim = idx === segments.length - 1 ? 0 : Math.min(halfGap, shareDegrees * 0.4);
-        const startAngle = seg.start * 360 + startTrim;
-        const endAngle = seg.end * 360 - endTrim;
-        return { ...seg, path: buildSegmentPath(startAngle, endAngle, innerRadius, outerRadius) };
-      }).filter((seg) => seg.path);
-
-      const remainingShare = Math.max(0, 1 - accShare);
-
-      const leftoverShape = remainingShare > 1e-4
-        ? {
-            name: 'No asignado',
-            share: remainingShare,
-            color: leftoverColor,
-            isPlaceholder: true,
-            path: buildSegmentPath(covered * 360 + (segments.length > 0 ? Math.min(segmentGap / 2, (1 - covered) * 360 * 0.4) : 0), 360, innerRadius, outerRadius),
-          }
-        : null;
+      const gapPct = segments.length > 1 ? 1.2 : 0;
+      const gradientPieces = [];
+      segments.forEach((seg, idx) => {
+        const startPct = seg.start * 100;
+        const rawEndPct = seg.end * 100;
+        const trimmedEndPct = idx < segments.length - 1 && gapPct > 0
+          ? Math.max(startPct, rawEndPct - gapPct)
+          : rawEndPct;
+        gradientPieces.push(`${seg.color || '#60a5fa'} ${startPct.toFixed(2)}% ${trimmedEndPct.toFixed(2)}%`);
+        if (idx < segments.length - 1 && gapPct > 0) {
+          const gapStart = trimmedEndPct;
+          const gapEnd = rawEndPct;
+          gradientPieces.push(`#ffffff ${gapStart.toFixed(2)}% ${gapEnd.toFixed(2)}%`);
+        }
+      });
+      if (covered < 1) {
+        gradientPieces.push(`rgba(148,163,184,0.25) ${(covered * 100).toFixed(2)}% 100%`);
+      }
+      const gradient = `conic-gradient(${gradientPieces.join(', ')})`;
       const healthy = Number.isFinite(healthyThreshold) ? healthyThreshold : 0.2;
       const warn = Number.isFinite(warnThreshold) ? warnThreshold : Math.max(healthy + 0.2, healthy);
       const auto = Number.isFinite(autoRepayThreshold) ? autoRepayThreshold : 1;
@@ -4789,32 +4833,16 @@
             <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${toneBadge[overallTone]}`}>{overallLabel}</span>
           </div>
           <div className="flex flex-col items-center gap-4">
-            <div className="relative flex h-48 w-48 items-center justify-center">
-              <svg
-                viewBox={`0 0 ${viewBoxSize} ${viewBoxSize}`}
-                className="h-full w-full"
-                style={{ filter: 'drop-shadow(0 18px 32px rgba(15,30,70,0.16))' }}
-              >
-                <defs>
-                  <radialGradient id="loanDonutBase" cx="50%" cy="50%" r="65%">
-                    <stop offset="55%" stopColor="#ffffff" />
-                    <stop offset="100%" stopColor="#e2e8f0" />
-                  </radialGradient>
-                  <linearGradient id="loanDonutInner" x1="0%" x2="0%" y1="0%" y2="100%">
-                    <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
-                    <stop offset="100%" stopColor="#e5e7eb" stopOpacity="0.85" />
-                  </linearGradient>
-                </defs>
-                <circle cx={center} cy={center} r={outerRadius} fill="url(#loanDonutBase)" />
-                {[...segmentShapes, leftoverShape].filter(Boolean).map((seg, idx) => (
-                  <path key={`${seg.ticker || seg.name || 'segment'}-${idx}`} d={seg.path} fill={seg.color || '#60a5fa'} />
-                ))}
-                <circle cx={center} cy={center} r={innerRadius} fill="url(#loanDonutInner)" />
-                <circle cx={center} cy={center} r={innerRadius - 6} fill="#ffffff" />
-              </svg>
-              <div className="absolute flex h-28 w-28 flex-col items-center justify-center rounded-full bg-white/90 text-center shadow-inner">
-                <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">LTV total</span>
-                <span className="text-xl font-bold text-neutral-900">{formatPercent(overallLTV, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+            <div
+              className="relative h-36 w-36 rounded-full"
+              style={{
+                background: gradient,
+                boxShadow: '0 16px 36px rgba(15,30,70,0.12), inset 0 0 0 6px rgba(255,255,255,0.9)'
+              }}
+            >
+              <div className="absolute inset-10 rounded-full bg-white shadow flex flex-col items-center justify-center text-center">
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">LTV total</span>
+                <span className="text-lg font-bold text-neutral-900">{formatPercent(overallLTV, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
                 <span className={`mt-1 text-xs font-semibold ${overallToneClass}`}>{overallLabel}</span>
               </div>
             </div>
