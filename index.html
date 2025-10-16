@@ -1716,6 +1716,7 @@
         } catch {}
         return baseAssets;
       });
+      const [assetsOriginKey, setAssetsOriginKey] = useState(storageKeys.assets);
 
       const [params, setParams] = useState(() => {
         if (typeof window === 'undefined') return baseParams;
@@ -1727,6 +1728,7 @@
         } catch {}
         return baseParams;
       });
+      const [paramsOriginKey, setParamsOriginKey] = useState(storageKeys.params);
       const loanRequests = useMemo(
         () => sanitizeLoanRequests(params.loanRequests),
         [params.loanRequests, sanitizeLoanRequests]
@@ -1768,6 +1770,7 @@
         } catch {}
         return baseCashflowPlan;
       });
+      const [cashflowOriginKey, setCashflowOriginKey] = useState(storageKeys.cashflow);
 
       const [benchmarkConfig, setBenchmarkConfig] = useState(() => {
         if (typeof window === 'undefined') return baseBenchmarkConfig;
@@ -1779,6 +1782,7 @@
         } catch {}
         return baseBenchmarkConfig;
       });
+      const [benchmarkOriginKey, setBenchmarkOriginKey] = useState(storageKeys.benchmark);
 
       useEffect(() => {
         if (typeof window === 'undefined') return;
@@ -1787,29 +1791,41 @@
 
       useEffect(() => {
         setAssets(() => {
-          if (typeof window === 'undefined') return baseAssets;
+          if (typeof window === 'undefined') {
+            setAssetsOriginKey(storageKeys.assets);
+            return baseAssets;
+          }
           try {
             const saved = localStorage.getItem(storageKeys.assets);
             if (saved) {
-              return sanitizeAssets(JSON.parse(saved));
+              const parsed = sanitizeAssets(JSON.parse(saved));
+              setAssetsOriginKey(storageKeys.assets);
+              return parsed;
             }
           } catch {}
+          setAssetsOriginKey(storageKeys.assets);
           return baseAssets;
         });
-      }, [storageKeys.assets]);
+      }, [storageKeys.assets, baseAssets]);
 
       useEffect(() => {
         setParams(() => {
-          if (typeof window === 'undefined') return baseParams;
+          if (typeof window === 'undefined') {
+            setParamsOriginKey(storageKeys.params);
+            return baseParams;
+          }
           try {
             const saved = localStorage.getItem(storageKeys.params);
             if (saved) {
-              return sanitizeParams(JSON.parse(saved));
+              const parsed = sanitizeParams(JSON.parse(saved));
+              setParamsOriginKey(storageKeys.params);
+              return parsed;
             }
           } catch {}
+          setParamsOriginKey(storageKeys.params);
           return baseParams;
         });
-      }, [storageKeys.params, platformId]);
+      }, [storageKeys.params, baseParams, platformId]);
 
       useEffect(() => {
         fetchOfficialFxRates();
@@ -1817,13 +1833,15 @@
 
       useEffect(() => {
         if (typeof window === 'undefined') return;
+        if (assetsOriginKey !== storageKeys.assets) return;
         try { localStorage.setItem(storageKeys.assets, JSON.stringify(assets)); } catch {}
-      }, [assets, storageKeys.assets]);
+      }, [assets, storageKeys.assets, assetsOriginKey]);
 
       useEffect(() => {
         if (typeof window === 'undefined') return;
+        if (paramsOriginKey !== storageKeys.params) return;
         try { localStorage.setItem(storageKeys.params, JSON.stringify(params)); } catch {}
-      }, [params, storageKeys.params]);
+      }, [params, storageKeys.params, paramsOriginKey]);
 
       const [loanDraftAmount, setLoanDraftAmount] = useState(0);
       const [repayDate, setRepayDate] = useState(() => {
@@ -1880,39 +1898,53 @@
 
       useEffect(() => {
         setCashflowPlan(() => {
-          if (typeof window === 'undefined') return baseCashflowPlan;
+          if (typeof window === 'undefined') {
+            setCashflowOriginKey(storageKeys.cashflow);
+            return baseCashflowPlan;
+          }
           try {
             const saved = localStorage.getItem(storageKeys.cashflow);
             if (saved) {
-              return sanitizeCashflowPlan(JSON.parse(saved), repayDate);
+              const parsed = sanitizeCashflowPlan(JSON.parse(saved), repayDate);
+              setCashflowOriginKey(storageKeys.cashflow);
+              return parsed;
             }
           } catch {}
+          setCashflowOriginKey(storageKeys.cashflow);
           return baseCashflowPlan;
         });
       }, [storageKeys.cashflow, baseCashflowPlan, repayDate]);
 
       useEffect(() => {
         setBenchmarkConfig(() => {
-          if (typeof window === 'undefined') return baseBenchmarkConfig;
+          if (typeof window === 'undefined') {
+            setBenchmarkOriginKey(storageKeys.benchmark);
+            return baseBenchmarkConfig;
+          }
           try {
             const saved = localStorage.getItem(storageKeys.benchmark);
             if (saved) {
-              return sanitizeBenchmarkConfig(JSON.parse(saved));
+              const parsed = sanitizeBenchmarkConfig(JSON.parse(saved));
+              setBenchmarkOriginKey(storageKeys.benchmark);
+              return parsed;
             }
           } catch {}
+          setBenchmarkOriginKey(storageKeys.benchmark);
           return baseBenchmarkConfig;
         });
       }, [storageKeys.benchmark, baseBenchmarkConfig]);
 
       useEffect(() => {
         if (typeof window === 'undefined') return;
+        if (cashflowOriginKey !== storageKeys.cashflow) return;
         try { localStorage.setItem(storageKeys.cashflow, JSON.stringify(cashflowPlan)); } catch {}
-      }, [cashflowPlan, storageKeys.cashflow]);
+      }, [cashflowPlan, storageKeys.cashflow, cashflowOriginKey]);
 
       useEffect(() => {
         if (typeof window === 'undefined') return;
+        if (benchmarkOriginKey !== storageKeys.benchmark) return;
         try { localStorage.setItem(storageKeys.benchmark, JSON.stringify(benchmarkConfig)); } catch {}
-      }, [benchmarkConfig, storageKeys.benchmark]);
+      }, [benchmarkConfig, storageKeys.benchmark, benchmarkOriginKey]);
 
       const currency = selectedCurrency;
       const rate = params.exchangeRates?.[currency] ?? 1;
@@ -2007,6 +2039,7 @@
         if (confirm("¿Restablecer parámetros por defecto?")) {
           localStorage.removeItem(storageKeys.params);
           setParams({ ...baseParams });
+          setParamsOriginKey(storageKeys.params);
           setLoanDraftAmount(0);
         }
         closeExportMenu();
@@ -2016,6 +2049,7 @@
         if (confirm("¿Restablecer activos por defecto?")) {
           localStorage.removeItem(storageKeys.assets);
           setAssets(sanitizeAssets(platformDefaultAssets));
+          setAssetsOriginKey(storageKeys.assets);
         }
         closeExportMenu();
       };
@@ -2040,6 +2074,8 @@
           localStorage.removeItem(storageKeys.benchmark);
           setCashflowPlan(baseCashflowPlan);
           setBenchmarkConfig(baseBenchmarkConfig);
+          setCashflowOriginKey(storageKeys.cashflow);
+          setBenchmarkOriginKey(storageKeys.benchmark);
         }
         closeExportMenu();
       };
@@ -2051,10 +2087,22 @@
           .then((text) => {
             try {
               const parsed = JSON.parse(text);
-              if (parsed.assets) setAssets(sanitizeAssets(parsed.assets));
-              if (parsed.params) setParams(sanitizeParams(parsed.params));
-              if (parsed.cashflowPlan) setCashflowPlan(sanitizeCashflowPlan(parsed.cashflowPlan, repayDate));
-              if (parsed.benchmarkConfig) setBenchmarkConfig(sanitizeBenchmarkConfig(parsed.benchmarkConfig));
+              if (parsed.assets) {
+                setAssets(sanitizeAssets(parsed.assets));
+                setAssetsOriginKey(storageKeys.assets);
+              }
+              if (parsed.params) {
+                setParams(sanitizeParams(parsed.params));
+                setParamsOriginKey(storageKeys.params);
+              }
+              if (parsed.cashflowPlan) {
+                setCashflowPlan(sanitizeCashflowPlan(parsed.cashflowPlan, repayDate));
+                setCashflowOriginKey(storageKeys.cashflow);
+              }
+              if (parsed.benchmarkConfig) {
+                setBenchmarkConfig(sanitizeBenchmarkConfig(parsed.benchmarkConfig));
+                setBenchmarkOriginKey(storageKeys.benchmark);
+              }
             } catch (err) {
               alert(`No se pudo importar el archivo: ${err?.message || err}`);
             }
