@@ -4722,8 +4722,25 @@
         return { start, end, tone: item.tone, name: item.name, ticker: item.ticker, share: item.share, color };
       });
       const covered = Math.min(1, accShare);
-      const gradientStops = segments.map((seg) => `${seg.color || '#60a5fa'} ${(seg.start * 100).toFixed(2)}% ${(seg.end * 100).toFixed(2)}%`).join(', ');
-      const gradient = `conic-gradient(${gradientStops}${covered < 1 ? `, rgba(148,163,184,0.25) ${(covered * 100).toFixed(2)}% 100%` : ''})`;
+      const gapPct = segments.length > 1 ? 1.2 : 0;
+      const gradientPieces = [];
+      segments.forEach((seg, idx) => {
+        const startPct = seg.start * 100;
+        const rawEndPct = seg.end * 100;
+        const trimmedEndPct = idx < segments.length - 1 && gapPct > 0
+          ? Math.max(startPct, rawEndPct - gapPct)
+          : rawEndPct;
+        gradientPieces.push(`${seg.color || '#60a5fa'} ${startPct.toFixed(2)}% ${trimmedEndPct.toFixed(2)}%`);
+        if (idx < segments.length - 1 && gapPct > 0) {
+          const gapStart = trimmedEndPct;
+          const gapEnd = rawEndPct;
+          gradientPieces.push(`#ffffff ${gapStart.toFixed(2)}% ${gapEnd.toFixed(2)}%`);
+        }
+      });
+      if (covered < 1) {
+        gradientPieces.push(`rgba(148,163,184,0.25) ${(covered * 100).toFixed(2)}% 100%`);
+      }
+      const gradient = `conic-gradient(${gradientPieces.join(', ')})`;
       const healthy = Number.isFinite(healthyThreshold) ? healthyThreshold : 0.2;
       const warn = Number.isFinite(warnThreshold) ? warnThreshold : Math.max(healthy + 0.2, healthy);
       const auto = Number.isFinite(autoRepayThreshold) ? autoRepayThreshold : 1;
@@ -4740,7 +4757,13 @@
             <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${toneBadge[overallTone]}`}>{overallLabel}</span>
           </div>
           <div className="flex flex-col items-center gap-4">
-            <div className="relative h-36 w-36 rounded-full shadow-inner" style={{ background: gradient }}>
+            <div
+              className="relative h-36 w-36 rounded-full"
+              style={{
+                background: gradient,
+                boxShadow: '0 16px 36px rgba(15,30,70,0.12), inset 0 0 0 6px rgba(255,255,255,0.9)'
+              }}
+            >
               <div className="absolute inset-10 rounded-full bg-white shadow flex flex-col items-center justify-center text-center">
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">LTV total</span>
                 <span className="text-lg font-bold text-neutral-900">{formatPercent(overallLTV, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
