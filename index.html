@@ -922,14 +922,16 @@
             outstanding: 10471.01,
             interestAccrued: 171.01,
             annualRate: 0.0503283,
-            netAnnualRate: 0.04464082,
+            netAnnualRate: 0.0484,
+            initialLtv: 0.46,
           },
           ALGO: {
             originalPrincipal: 7026,
             outstanding: 1201.78,
             interestAccrued: 69.58,
             annualRate: 0.0503283,
-            netAnnualRate: 0.04464082,
+            netAnnualRate: 0.045,
+            initialLtv: 0.45,
             payments: [
               { id: "algo-payment-1", amount: 5890.97, date: "2024-03-12", note: "Pago capital" },
               { id: "algo-payment-2", amount: 2.77, date: "2024-03-12", note: "Pago interés" },
@@ -1689,6 +1691,8 @@
           const annualRate = Number(entry.annualRate);
           const netAnnualRate = Number(entry.netAnnualRate);
           const liquidationPriceHint = Number(entry.liquidationPriceHint);
+          const initialLtv = Number(entry.initialLtv);
+          const initialCollateralValueRaw = Number(entry.initialCollateralValue ?? entry.initialCollateralUsd ?? entry.initialCollateral);
           const borrowDate = typeof entry.borrowDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(entry.borrowDate)
             ? entry.borrowDate
             : null;
@@ -1707,6 +1711,8 @@
             borrowDate,
             lastUpdated,
             notes: typeof entry.notes === 'string' ? entry.notes : '',
+            initialLtv: Number.isFinite(initialLtv) && initialLtv > 0 ? initialLtv : null,
+            initialCollateralValue: Number.isFinite(initialCollateralValueRaw) && initialCollateralValueRaw > 0 ? initialCollateralValueRaw : null,
           };
           return acc;
         }, {});
@@ -2121,6 +2127,59 @@
         if (!isBinance) return 0;
         return Object.values(binanceLoanLedger).reduce((acc, entry) => acc + (Math.max(0, Number(entry?.outstanding) || 0)), 0);
       }, [isBinance, binanceLoanLedger]);
+      const binanceLedgerTotals = useMemo(() => {
+        if (!isBinance) {
+          return {
+            original: 0,
+            outstanding: loanAmount,
+            interest: 0,
+            paid: 0,
+            initialCollateral: 0,
+          };
+        }
+        return Object.entries(binanceLoanLedger).reduce((acc, [ticker, entry]) => {
+          const original = Math.max(0, Number(entry?.originalPrincipal) || 0);
+          const outstanding = Math.max(0, Number(entry?.outstanding) || 0);
+          const interest = Math.max(0, Number(entry?.interestAccrued) || 0);
+          const paid = Math.max(0, Number(entry?.paidTotal) || 0);
+          const initialCollateralValue = Number(entry?.initialCollateralValue);
+          const initialLtv = Number(entry?.initialLtv);
+          let collateralBase = 0;
+          if (Number.isFinite(initialCollateralValue) && initialCollateralValue > 0) {
+            collateralBase = initialCollateralValue;
+          } else if (Number.isFinite(initialLtv) && initialLtv > 0) {
+            collateralBase = initialLtv > 0 ? original / initialLtv : 0;
+          } else {
+            const policy = ltvByTicker[ticker] ?? defaultLtv;
+            collateralBase = policy > 0 ? original / policy : 0;
+          }
+          acc.original += original;
+          acc.outstanding += outstanding;
+          acc.interest += interest;
+          acc.paid += paid;
+          acc.initialCollateral += Number.isFinite(collateralBase) && collateralBase > 0 ? collateralBase : 0;
+          return acc;
+        }, { original: 0, outstanding: 0, interest: 0, paid: 0, initialCollateral: 0 });
+      }, [isBinance, binanceLoanLedger, loanAmount, ltvByTicker, defaultLtv]);
+      const binanceLedgerPaymentsCount = useMemo(() => {
+        if (!isBinance) return 0;
+        return Object.values(binanceLoanLedger).reduce((acc, entry) => {
+          const count = Array.isArray(entry?.payments) ? entry.payments.length : 0;
+          return acc + count;
+        }, 0);
+      }, [isBinance, binanceLoanLedger]);
+      const binanceOriginalPrincipalTotal = binanceLedgerTotals.original;
+      const binanceInterestAccruedTotal = binanceLedgerTotals.interest;
+      const binancePaidLedgerTotal = binanceLedgerTotals.paid;
+      const binanceInitialCollateralTotal = binanceLedgerTotals.initialCollateral;
+      const binanceNetOutstandingTotal = binanceLedgerTotals.outstanding > 0
+        ? binanceLedgerTotals.outstanding
+        : Math.max(0, binanceOriginalPrincipalTotal + binanceInterestAccruedTotal - binancePaidLedgerTotal);
+      const binanceNetLoanValue = Math.max(0, binanceNetOutstandingTotal);
+      const binanceTotalToRepay = Math.max(0, binanceOriginalPrincipalTotal + binanceInterestAccruedTotal);
+      const binanceInitialLtv = binanceInitialCollateralTotal > 0
+        ? binanceOriginalPrincipalTotal / binanceInitialCollateralTotal
+        : 0;
       const pct = (value, digits = 1) => formatPercent(Number(value), {
         minimumFractionDigits: digits,
         maximumFractionDigits: digits,
@@ -2513,7 +2572,14 @@
         () => normalizeAlertItems(cashflowDerived?.alerts),
         [cashflowDerived],
       );
-      const ltvTone = ltvGaugeValue <= ltvHealthyThreshold ? "ok" : (ltvGaugeValue <= ltvWarnThreshold ? "warn" : "danger");
+      const toneForLtvValue = (value) => {
+        if (!Number.isFinite(value)) return undefined;
+        if (ltvHealthyThreshold > 0 && value <= ltvHealthyThreshold) return "ok";
+        if (ltvWarnThreshold > 0 && value <= ltvWarnThreshold) return "warn";
+        if (value > 0) return "danger";
+        return undefined;
+      };
+      const ltvTone = toneForLtvValue(ltvGaugeValue);
       const plannedCollateralChange = collateralAfterPlan - totals.totalCollateralValue;
       const binanceLoanAfterPlan = plannedOutstanding;
       const binanceOutstandingRatio = loanAmount > 0
@@ -2521,7 +2587,21 @@
         : 0;
       const binanceCollateralAfterPlan = collateralAfterPlan;
       const binanceLtvAfterPlan = plannedOverallLTV;
-      const binanceLtvTone = binanceLtvAfterPlan <= ltvHealthyThreshold ? "ok" : (binanceLtvAfterPlan <= ltvWarnThreshold ? "warn" : "danger");
+      const binanceInitialLtvTone = toneForLtvValue(binanceInitialLtv);
+      const binanceCurrentLtvTone = toneForLtvValue(currentOverallLTV);
+      const binanceLoanNetSubtle = [
+        binanceInterestAccruedTotal > 0 ? `Interés ${fmt(binanceInterestAccruedTotal * rate, currency)}` : null,
+        binancePaidLedgerTotal > 0 ? `Pagos ${fmt(binancePaidLedgerTotal * rate, currency)}` : null,
+      ].filter(Boolean).join(' · ') || 'Sin movimientos registrados';
+      const binancePaidSubtle = binancePaidLedgerTotal > 0
+        ? `${binanceLedgerPaymentsCount} ${binanceLedgerPaymentsCount === 1 ? 'pago' : 'pagos'} registrados`
+        : 'Sin pagos registrados';
+      const binanceInitialCollateralSubtle = binanceInitialCollateralTotal > 0
+        ? `Colateral inicial ${fmt(binanceInitialCollateralTotal * rate, currency)}`
+        : '—';
+      const binanceNetLtvSubtle = totals.totalCollateralValue > 0
+        ? `Colateral actual ${fmt(totals.totalCollateralValue * rate, currency)}`
+        : 'Sin colateral';
       const binanceExtraCollateralNeeded = ltvHealthyThreshold > 0 ? Math.max(0, binanceLoanAfterPlan / ltvHealthyThreshold - binanceCollateralAfterPlan) : 0;
       const binanceRepayNeeded = Math.max(0, binanceLoanAfterPlan - binanceCollateralAfterPlan * ltvHealthyThreshold);
       const binanceBufferToCaution = Math.max(0, binanceCollateralAfterPlan * ltvWarnThreshold - binanceLoanAfterPlan);
@@ -2841,12 +2921,12 @@
           <div className="mx-auto max-w-7xl px-4 py-6">
             <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
               {(isBinance ? [
-                { key: 'loan-current', title: 'Préstamo total', value: fmt(loanAmount * rate, currency), subtle: loanAmount > 0 ? 'Capital original' : '—' },
-                { key: 'loan-plan', title: 'Préstamo neto', value: fmt(binanceLoanAfterPlan * rate, currency), subtle: scheduledPrincipal > 0 ? `Pagos planificados ${fmt(paidPrincipal * rate, currency)}` : 'Sin pagos registrados' },
-                { key: 'loan-paid', title: 'Pagos hechos', value: fmt(totalPaid * rate, currency), subtle: totalPaid > 0 ? `Capital ${fmt(paidPrincipal * rate, currency)} · Interés ${fmt(paidInterest * rate, currency)}` : 'Sin pagos registrados' },
+                { key: 'loan-current', title: 'Préstamo total', value: fmt(binanceOriginalPrincipalTotal * rate, currency), subtle: binanceOriginalPrincipalTotal > 0 ? 'Capital original' : '—' },
+                { key: 'loan-plan', title: 'Préstamo neto', value: fmt(binanceNetLoanValue * rate, currency), subtle: binanceLoanNetSubtle },
+                { key: 'loan-paid', title: 'Pagos hechos', value: fmt(binancePaidLedgerTotal * rate, currency), subtle: binancePaidSubtle },
                 { key: 'collateral-current', title: 'Colateral actual', value: fmt(totals.totalCollateralValue * rate, currency) },
-                { key: 'ltv-current', title: 'LTV inicial', value: toPct(currentOverallLTV, 2), tone: ltvTone, subtle: 'Con datos originales' },
-                { key: 'ltv-plan', title: 'LTV neto', value: toPct(binanceLtvAfterPlan, 2), tone: binanceLtvTone, subtle: scheduledPrincipal > 0 || Math.abs(plannedCollateralChange) > 1e-6 ? 'Tras pagos y plan de cashflow' : 'Sin cambios' },
+                { key: 'ltv-current', title: 'LTV inicial', value: toPct(binanceInitialLtv, 2), tone: binanceInitialLtvTone, subtle: binanceInitialCollateralSubtle },
+                { key: 'ltv-plan', title: 'LTV neto', value: toPct(currentOverallLTV, 2), tone: binanceCurrentLtvTone, subtle: binanceNetLtvSubtle },
                 { key: 'apr', title: 'Tasa anual (APR)', value: toPct(chosenAPR, 2), subtle: binanceBorrowLabel || undefined },
                 {
                   key: 'apr-net',
@@ -2861,7 +2941,7 @@
                   value: fmt(monthlyLoanCost * rate, currency),
                   subtle: `${toPct(chosenAPR, 2)} APR base`,
                 },
-                { key: 'repay-total', title: 'Total a devolver', value: fmt(interestCalc.repayTotal * rate, currency) },
+                { key: 'repay-total', title: 'Total a devolver', value: fmt(binanceTotalToRepay * rate, currency) },
               ] : [
                 { key: 'balance', title: 'Balance total', value: fmt(totals.total * rate, currency) },
                 { key: 'loyalty', title: loyalty ? (loyalty.kpiLabel || 'Loyalty Tier') : 'Programa', value: loyalty ? loyaltyTier : '—', subtle: loyalty && totals.total < minBalancePerks ? '(balance < mínimo)' : undefined },
@@ -3087,8 +3167,8 @@
                   <div className="mt-4 space-y-2">
                     {isBinance ? (
                       <>
-                        <Line label="LTV inicial" value={toPct(currentOverallLTV, 2)} muted />
-                        <Line label="LTV neto" value={toPct(binanceLtvAfterPlan, 2)} tone={binanceLtvTone} />
+                        <Line label="LTV inicial" value={toPct(binanceInitialLtv, 2)} tone={binanceInitialLtvTone} />
+                        <Line label="LTV neto" value={toPct(currentOverallLTV, 2)} tone={binanceCurrentLtvTone} />
                         <Line label="LTV proyectado (cashflow)" value={Number.isFinite(ltvGaugeValue) ? toPct(ltvGaugeValue, 2) : '∞'} tone={ltvTone} />
                         <Line label="Rango saludable" value={`≤ ${toPct(ltvHealthyThreshold, 0)}`} muted />
                         <Line label="Riesgo medio" value={binanceCautionLabel} muted />
