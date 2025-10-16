@@ -4828,38 +4828,14 @@
         const color = assetPalette[idx % assetPalette.length];
         return { start, end, tone: item.tone, name: item.name, ticker: item.ticker, share, color, amount: item.amount };
       });
-      const covered = Math.min(1, accShare);
-      const gapPct = segments.length > 1 ? 1.2 : 0;
-      const gradientPieces = [];
-      segments.forEach((seg, idx) => {
-        const startPct = seg.start * 100;
-        const rawEndPct = seg.end * 100;
-        const trimmedEndPct = idx < segments.length - 1 && gapPct > 0
-          ? Math.max(startPct, rawEndPct - gapPct)
-          : rawEndPct;
-        gradientPieces.push(`${seg.color || '#60a5fa'} ${startPct.toFixed(2)}% ${trimmedEndPct.toFixed(2)}%`);
-        if (idx < segments.length - 1 && gapPct > 0) {
-          const gapStart = trimmedEndPct;
-          const gapEnd = rawEndPct;
-          gradientPieces.push(`#ffffff ${gapStart.toFixed(2)}% ${gapEnd.toFixed(2)}%`);
-        }
+      const gradientPieces = segments.map((seg) => {
+        const startPct = (seg.start * 100).toFixed(2);
+        const endPct = (seg.end * 100).toFixed(2);
+        return `${seg.color || '#60a5fa'} ${startPct}% ${endPct}%`;
       });
-      if (covered < 1) {
-        gradientPieces.push(`rgba(148,163,184,0.25) ${(covered * 100).toFixed(2)}% 100%`);
-      }
-      const gradient = `conic-gradient(${gradientPieces.join(', ')})`;
-      const leftoverShare = Math.max(0, 1 - covered);
-      const leftoverShape = leftoverShare > 0
-        ? {
-            start: covered,
-            end: 1,
-            share: leftoverShare,
-            color: 'rgba(148,163,184,0.6)',
-            name: 'Disponible sin asignar',
-            ticker: '',
-            isPlaceholder: true
-          }
-        : null;
+      const gradient = gradientPieces.length
+        ? `conic-gradient(${gradientPieces.join(', ')})`
+        : 'conic-gradient(#e2e8f0 0% 100%)';
       const healthy = Number.isFinite(healthyThreshold) ? healthyThreshold : 0.2;
       const warn = Number.isFinite(warnThreshold) ? warnThreshold : Math.max(healthy + 0.2, healthy);
       const auto = Number.isFinite(autoRepayThreshold) ? autoRepayThreshold : 1;
@@ -4888,15 +4864,15 @@
             </div>
           </div>
           <div className="space-y-2 text-xs text-neutral-600">
-            {[...segments, leftoverShape].filter(Boolean).map((seg, idx) => (
+            {segments.map((seg, idx) => (
               <div key={`${seg.ticker || seg.name || 'segment'}-${idx}`} className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: seg.color || '#60a5fa' }} />
-                  <span className={`${seg.isPlaceholder ? 'text-neutral-500' : 'font-medium text-neutral-800'}`}>{seg.name}</span>
+                  <span className="font-medium text-neutral-800">{seg.name}</span>
                 </div>
                 <div className="flex flex-col items-end">
-                  <span className={`${seg.isPlaceholder ? 'text-neutral-500' : 'font-semibold text-neutral-800'}`}>{formatPercent(seg.share, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
-                  <span className="text-[10px] text-neutral-500">{fmt((seg.amount ?? seg.share * consideredLoan) * rate, currency)}</span>
+                  <span className="font-semibold text-neutral-800">{formatPercent(seg.share, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+                  <span className="text-[10px] text-neutral-500">{fmt(seg.share * Math.max(0, loanAmount) * rate, currency)}</span>
                 </div>
               </div>
             ))}
