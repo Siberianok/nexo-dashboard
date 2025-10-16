@@ -2172,12 +2172,7 @@
       }, [isBinance, binanceLoanLedger, loanAmount, ltvByTicker, defaultLtv]);
       const binanceOriginalPrincipalTotal = binanceLedgerTotals.original;
       const binanceInterestAccruedTotal = binanceLedgerTotals.interest;
-      const binancePaidLedgerTotal = binanceLedgerTotals.paid;
       const binanceInitialCollateralTotal = binanceLedgerTotals.initialCollateral;
-      const binanceNetLoanValue = Math.max(
-        0,
-        binanceOriginalPrincipalTotal + binanceInterestAccruedTotal - binancePaidLedgerTotal,
-      );
       const binanceTotalToRepay = Math.max(0, binanceOriginalPrincipalTotal + binanceInterestAccruedTotal);
       const binanceInitialLtv = binanceInitialCollateralTotal > 0
         ? binanceOriginalPrincipalTotal / binanceInitialCollateralTotal
@@ -2567,7 +2562,13 @@
           return (Number.isFinite(amount) && amount > 0) || (Number.isFinite(interest) && interest > 0);
         });
       }, [cashflowPlan]);
-      const binancePlanPaidTotal = hasCashflowPlanPayments ? totalPaid : 0;
+      const binancePlanPaidTotal = totalPaid;
+      const binancePaidDisplayTotal = binancePlanPaidTotal;
+      const binancePaidLabel = 'Pagos planificados';
+      const binanceNetLoanValue = Math.max(
+        0,
+        binanceOriginalPrincipalTotal + binanceInterestAccruedTotal - binancePaidDisplayTotal,
+      );
       const projectedFinalPayoff = Math.max(0, cashflowDerived?.projectedFinalPayoff || 0);
       const totalProjectedOutflows = Math.max(0, cashflowDerived?.totalCost || 0);
       const plannedOutstanding = Math.max(0, cashflowDerived?.outstandingAfterPlan ?? loanAmount);
@@ -2604,15 +2605,13 @@
       const binanceLtvAfterPlan = plannedOverallLTV;
       const binanceInitialLtvTone = toneForLtvValue(binanceInitialLtv);
       const binanceCurrentLtvTone = toneForLtvValue(currentOverallLTV);
-      const binancePaidDisplayTotal = hasCashflowPlanPayments ? binancePlanPaidTotal : binancePaidLedgerTotal;
-      const binancePaidLabel = hasCashflowPlanPayments ? 'Pagos planificados' : 'Pagos';
       const binanceLoanNetSubtle = [
         binanceInterestAccruedTotal > 0 ? `Interés ${fmt(binanceInterestAccruedTotal * rate, currency)}` : null,
         binancePaidDisplayTotal > 0 ? `${binancePaidLabel} ${fmt(binancePaidDisplayTotal * rate, currency)}` : null,
       ].filter(Boolean).join(' · ') || 'Sin movimientos registrados';
       const binancePaidSubtle = hasCashflowPlanPayments
-        ? (binancePaidDisplayTotal > 0 ? 'Pagos planificados desde Cashflow' : 'Sin pagos planificados')
-        : (binancePaidLedgerTotal > 0 ? 'Pagos registrados en ledger' : 'Sin pagos registrados');
+        ? 'Pagos planificados desde Cashflow'
+        : 'Sin pagos planificados';
       const binanceInitialCollateralSubtle = binanceInitialCollateralTotal > 0
         ? `Colateral inicial ${fmt(binanceInitialCollateralTotal * rate, currency)}`
         : '—';
