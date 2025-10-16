@@ -103,6 +103,7 @@
     // Simulador de Préstamos – HTML portable (sin build, con CDN)
     const DEFAULT_EXCHANGE_RATES = {
       USD: 1,
+      USDT: 1,
       ARS: 1000,
       EUR: 0.92,
       GBP: 0.79,
@@ -242,6 +243,7 @@
 
     const SUPPORTED_CURRENCIES = [
       { code: "USD", label: "USD — Dólar estadounidense" },
+      { code: "USDT", label: "USDT — Tether" },
       { code: "ARS", label: "ARS — Peso argentino" },
       { code: "EUR", label: "EUR — Euro" },
       { code: "GBP", label: "GBP — Libra esterlina" },
@@ -516,12 +518,20 @@
 
     const formatCurrency = (value, currency = 'USD') => {
       if (!Number.isFinite(value)) return '—';
-      return new Intl.NumberFormat(DEFAULT_LOCALE, {
-        style: 'currency',
-        currency,
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(value);
+      try {
+        return new Intl.NumberFormat(DEFAULT_LOCALE, {
+          style: 'currency',
+          currency,
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }).format(value);
+      } catch (error) {
+        const formatted = new Intl.NumberFormat(DEFAULT_LOCALE, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }).format(value);
+        return `${currency} ${formatted}`;
+      }
     };
 
     const formatPercent = (value, {
@@ -585,7 +595,7 @@
         maximumFractionDigits: safeDecimals,
       });
     };
-    const FX_SYMBOLS = SUPPORTED_CURRENCIES.filter((c) => c.code !== "USD").map((c) => c.code);
+    const FX_SYMBOLS = SUPPORTED_CURRENCIES.filter((c) => !['USD', 'USDT'].includes(c.code)).map((c) => c.code);
     const HOURS_IN_YEAR = 365 * 24;
     const annualToHourly = (apr) => {
       const normalized = Number(apr);
@@ -1869,13 +1879,24 @@
       const fetchOfficialFxRates = useCallback(async () => {
         setFxMeta((prev) => ({ ...prev, loading: true, error: null }));
         try {
-          const symbols = SUPPORTED_CURRENCIES.filter((option) => option.code !== 'USD')
-            .map((option) => option.code)
-            .join(',');
-          const res = await fetch(`https://api.exchangerate.host/latest?base=USD&symbols=${symbols}`);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const data = await res.json();
-          const nextRates = sanitizeExchangeRates(data?.rates || {});
+          const symbols = FX_SYMBOLS.join(',');
+          let ratesPayload = {};
+          if (symbols) {
+            const res = await fetch(`https://api.exchangerate.host/latest?base=USD&symbols=${symbols}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            ratesPayload = await res.json();
+          }
+          const nextRates = sanitizeExchangeRates(ratesPayload?.rates || {});
+          try {
+            const usdtRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=usd');
+            if (usdtRes.ok) {
+              const usdtData = await usdtRes.json();
+              const usdtUsd = Number(usdtData?.tether?.usd);
+              if (Number.isFinite(usdtUsd) && usdtUsd > 0) {
+                nextRates.USDT = 1 / usdtUsd;
+              }
+            }
+          } catch {}
           setParams((prev) => ({
             ...prev,
             exchangeRates: nextRates,
@@ -2077,7 +2098,12 @@
       }, [benchmarkConfig, storageKeys.benchmark, benchmarkOriginKey]);
 
       const currency = selectedCurrency;
-      const rate = params.exchangeRates?.[currency] ?? 1;
+      const usdRate = params.exchangeRates?.[currency] ?? 1;
+      const usdtPerUsdRaw = Number(params.exchangeRates?.USDT);
+      const usdPerUsdt = Number.isFinite(usdtPerUsdRaw) && usdtPerUsdRaw > 0 ? 1 / usdtPerUsdRaw : 1;
+      const loanRate = usdRate * usdPerUsdt;
+      const formatUsd = useCallback((value, showCurrency = true) => fmt(value * usdRate, currency, showCurrency), [usdRate, currency]);
+      const formatLoan = useCallback((value, showCurrency = true) => fmt(value * loanRate, currency, showCurrency), [loanRate, currency]);
       const loanRequestsTotals = useMemo(() => {
         const totals = {};
         loanRequests.forEach((item) => {
@@ -2098,6 +2124,7 @@
         () => Object.values(loanRequestsTotals).reduce((acc, amount) => acc + (Number(amount) || 0), 0),
         [loanRequestsTotals]
       );
+      const loanAmountUsd = loanAmount * usdPerUsdt;
       const binanceLoanLedger = useMemo(() => {
         if (!isBinance) return {};
         const clone = Object.entries(baseLoanLedger).reduce((acc, [ticker, entry]) => {
@@ -2470,19 +2497,19 @@
 
       const recommendedLoanAtTarget = useMemo(() => targetLtv * totals.totalCollateralValue, [targetLtv, totals.totalCollateralValue]);
       const capLowCost = useMemo(() => Math.min(recommendedLoanAtTarget, totals.maxBorrow), [recommendedLoanAtTarget, totals.maxBorrow]);
-      const lowCostHeadroom = useMemo(() => Math.max(0, capLowCost - loanAmount), [capLowCost, loanAmount]);
+      const lowCostHeadroom = useMemo(() => Math.max(0, capLowCost - loanAmount * usdPerUsdt), [capLowCost, loanAmount, usdPerUsdt]);
 
       const chosenAPR = useMemo(() => {
         if (isBinance) {
           return binanceBorrowAnnualRate;
         }
-        const table = loanAmount <= recommendedLoanAtTarget ? aprDiscountTable : aprStandardTable;
+        const table = loanAmountUsd <= recommendedLoanAtTarget ? aprDiscountTable : aprStandardTable;
         const aprFromTier = table?.[loyaltyTier];
         if (typeof aprFromTier === 'number') return aprFromTier;
         if (aprBaseTier && typeof table?.[aprBaseTier] === 'number') return table[aprBaseTier];
         if (loyalty?.baseLabel && typeof table?.[loyalty.baseLabel] === 'number') return table[loyalty.baseLabel];
         return aprBase;
-      }, [isBinance, binanceBorrowAnnualRate, loanAmount, recommendedLoanAtTarget, aprDiscountTable, aprStandardTable, loyaltyTier, aprBaseTier, aprBase, loyalty?.baseLabel]);
+      }, [isBinance, binanceBorrowAnnualRate, loanAmountUsd, recommendedLoanAtTarget, aprDiscountTable, aprStandardTable, loyaltyTier, aprBaseTier, aprBase, loyalty?.baseLabel]);
 
       const daysUntilRepay = useMemo(() => {
         const a = new Date(); const b = new Date(repayDate);
@@ -2577,10 +2604,11 @@
       const currentOverallLTV = useMemo(() => {
         if (!(totals.totalCollateralValue > 0)) return 0;
         const netLoanBase = isBinance ? binanceNetLoanValue : loanAmount;
-        return netLoanBase / totals.totalCollateralValue;
-      }, [isBinance, binanceNetLoanValue, loanAmount, totals.totalCollateralValue]);
-      const plannedOverallLTV = collateralAfterPlan > 0 && Number.isFinite(plannedOutstanding / collateralAfterPlan)
-        ? plannedOutstanding / collateralAfterPlan
+        const netLoanUsd = netLoanBase * usdPerUsdt;
+        return netLoanUsd / totals.totalCollateralValue;
+      }, [isBinance, binanceNetLoanValue, loanAmount, totals.totalCollateralValue, usdPerUsdt]);
+      const plannedOverallLTV = collateralAfterPlan > 0 && Number.isFinite(plannedOutstanding)
+        ? (plannedOutstanding * usdPerUsdt) / collateralAfterPlan
         : (plannedOutstanding > 0 ? 1 : 0);
       const ltvGaugeValue = Number.isFinite(cashflowDerived?.ltvForGauge) ? Math.max(0, cashflowDerived.ltvForGauge) : plannedOverallLTV;
       const ltvScenarioLabel = cashflowDerived?.scenarioLabel;
@@ -2606,17 +2634,17 @@
       const binanceInitialLtvTone = toneForLtvValue(binanceInitialLtv);
       const binanceCurrentLtvTone = toneForLtvValue(currentOverallLTV);
       const binanceLoanNetSubtle = [
-        binanceInterestAccruedTotal > 0 ? `Interés ${fmt(binanceInterestAccruedTotal * rate, currency)}` : null,
-        binancePaidDisplayTotal > 0 ? `${binancePaidLabel} ${fmt(binancePaidDisplayTotal * rate, currency)}` : null,
+        binanceInterestAccruedTotal > 0 ? `Interés ${formatLoan(binanceInterestAccruedTotal)}` : null,
+        binancePaidDisplayTotal > 0 ? `${binancePaidLabel} ${formatLoan(binancePaidDisplayTotal)}` : null,
       ].filter(Boolean).join(' · ') || 'Sin movimientos registrados';
       const binancePaidSubtle = hasCashflowPlanPayments
         ? 'Pagos planificados desde Cashflow'
         : 'Sin pagos planificados';
       const binanceInitialCollateralSubtle = binanceInitialCollateralTotal > 0
-        ? `Colateral inicial ${fmt(binanceInitialCollateralTotal * rate, currency)}`
+        ? `Colateral inicial ${formatUsd(binanceInitialCollateralTotal)}`
         : '—';
       const binanceNetLtvSubtle = totals.totalCollateralValue > 0
-        ? `Colateral actual ${fmt(totals.totalCollateralValue * rate, currency)}`
+        ? `Colateral actual ${formatUsd(totals.totalCollateralValue)}`
         : 'Sin colateral';
       const binanceExtraCollateralNeeded = ltvHealthyThreshold > 0 ? Math.max(0, binanceLoanAfterPlan / ltvHealthyThreshold - binanceCollateralAfterPlan) : 0;
       const binanceRepayNeeded = Math.max(0, binanceLoanAfterPlan - binanceCollateralAfterPlan * ltvHealthyThreshold);
@@ -2629,7 +2657,7 @@
 
       const formatBinanceBufferValue = (buffer) => {
         if (!Number.isFinite(buffer)) return '—';
-        const formatted = fmt(Math.abs(buffer) * rate, currency);
+        const formatted = formatUsd(Math.abs(buffer));
         return buffer >= 0 ? formatted : `Déficit ${formatted}`;
       };
 
@@ -2816,9 +2844,9 @@
 
       const extraCollateralForTarget = useMemo(() => {
         if (targetLtv <= 0) return 0;
-        const neededCollateral = loanAmount / targetLtv;
+        const neededCollateral = (loanAmount * usdPerUsdt) / targetLtv;
         return Math.max(0, neededCollateral - totals.totalCollateralValue);
-      }, [loanAmount, targetLtv, totals.totalCollateralValue]);
+      }, [loanAmount, targetLtv, totals.totalCollateralValue, usdPerUsdt]);
 
       const loyaltyReqs = useMemo(() => {
         if (!loyalty) return null;
@@ -2832,13 +2860,13 @@
       }, [loyalty, loyaltyModelActive, totals.total, totals.rest, totals.totalLoyalty]);
 
       const meetsLowCost = useMemo(() => {
-        const withinTarget = loanAmount <= recommendedLoanAtTarget;
+        const withinTarget = loanAmountUsd <= recommendedLoanAtTarget;
         if (lowCostEligibleTiers.length === 0) {
           return totals.total >= minBalancePerks && withinTarget;
         }
         const hasTier = lowCostEligibleTiers.includes(loyaltyTier);
         return totals.total >= minBalancePerks && withinTarget && hasTier;
-      }, [loanAmount, recommendedLoanAtTarget, loyaltyTier, totals.total, lowCostEligibleTiers, minBalancePerks]);
+      }, [loanAmountUsd, recommendedLoanAtTarget, loyaltyTier, totals.total, lowCostEligibleTiers, minBalancePerks]);
 
       const handleAssetChange = (id, patch) => setAssets(prev => prev.map(a => (a.id === id ? { ...a, ...patch } : a)));
 
@@ -2937,10 +2965,10 @@
           <div className="mx-auto max-w-7xl px-4 py-6">
             <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
               {(isBinance ? [
-                { key: 'loan-current', title: 'Préstamo total', value: fmt(binanceOriginalPrincipalTotal * rate, currency), subtle: binanceOriginalPrincipalTotal > 0 ? 'Capital original' : '—' },
-                { key: 'loan-plan', title: 'Préstamo neto', value: fmt(binanceNetLoanValue * rate, currency), subtle: binanceLoanNetSubtle },
-                { key: 'loan-paid', title: 'Pagos hechos', value: fmt(binancePaidDisplayTotal * rate, currency), subtle: binancePaidSubtle },
-                { key: 'collateral-current', title: 'Colateral actual', value: fmt(totals.totalCollateralValue * rate, currency) },
+                { key: 'loan-current', title: 'Préstamo total', value: formatLoan(binanceOriginalPrincipalTotal), subtle: binanceOriginalPrincipalTotal > 0 ? 'Capital original' : '—' },
+                { key: 'loan-plan', title: 'Préstamo neto', value: formatLoan(binanceNetLoanValue), subtle: binanceLoanNetSubtle },
+                { key: 'loan-paid', title: 'Pagos hechos', value: formatLoan(binancePaidDisplayTotal), subtle: binancePaidSubtle },
+                { key: 'collateral-current', title: 'Colateral actual', value: formatUsd(totals.totalCollateralValue) },
                 { key: 'ltv-current', title: 'LTV inicial', value: toPct(binanceInitialLtv, 2), tone: binanceInitialLtvTone, subtle: binanceInitialCollateralSubtle },
                 { key: 'ltv-plan', title: 'LTV neto', value: toPct(currentOverallLTV, 2), tone: binanceCurrentLtvTone, subtle: binanceNetLtvSubtle },
                 { key: 'apr', title: 'Tasa anual (APR)', value: toPct(chosenAPR, 2), subtle: binanceBorrowLabel || undefined },
@@ -2954,20 +2982,20 @@
                 {
                   key: 'interest-monthly',
                   title: 'Interés mensual estimado',
-                  value: fmt(monthlyLoanCost * rate, currency),
+                  value: formatLoan(monthlyLoanCost),
                   subtle: `${toPct(chosenAPR, 2)} APR base`,
                 },
-                { key: 'repay-total', title: 'Total a devolver', value: fmt(binanceTotalToRepay * rate, currency) },
+                { key: 'repay-total', title: 'Total a devolver', value: formatLoan(binanceTotalToRepay) },
               ] : [
-                { key: 'balance', title: 'Balance total', value: fmt(totals.total * rate, currency) },
+                { key: 'balance', title: 'Balance total', value: formatUsd(totals.total) },
                 { key: 'loyalty', title: loyalty ? (loyalty.kpiLabel || 'Loyalty Tier') : 'Programa', value: loyalty ? loyaltyTier : '—', subtle: loyalty && totals.total < minBalancePerks ? '(balance < mínimo)' : undefined },
                 { key: 'apr', title: 'APR crédito', value: toPct(chosenAPR, 2), subtle: meetsLowCost ? 'Low-Cost activo' : undefined },
-                { key: 'cap-lowcost', title: 'Cap. Low-Cost (≤20% LTV)', value: fmt(capLowCost * rate, currency), subtle: 'potencial' },
-                { key: 'ltv-top', title: 'Tope por LTVs', value: fmt(totals.maxBorrow * rate, currency) },
-                { key: 'loan-target', title: 'Préstamo recomendado (≤20%)', value: fmt(recommendedLoanAtTarget * rate, currency) },
-                { key: 'interest-total', title: 'Interés hasta repago', value: fmt(interestCalc.total * rate, currency), subtle: `${daysUntilRepay} días` },
-                { key: 'repay-total', title: 'Total a devolver', value: fmt(totalProjectedOutflows * rate, currency), subtle: projectedFinalPayoff > 0 ? `Pago final proyectado ${fmt(projectedFinalPayoff * rate, currency)}` : undefined },
-                { key: 'earn-monthly', title: 'Earn mensual (hasta)', value: fmt(earnMonthly * rate, currency), subtle: earnEligible ? (minBalancePerks > 0 ? `Savings ≥ US$${formatDecimal(minBalancePerks, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : undefined) : 'no elegible' },
+                { key: 'cap-lowcost', title: 'Cap. Low-Cost (≤20% LTV)', value: formatUsd(capLowCost), subtle: 'potencial' },
+                { key: 'ltv-top', title: 'Tope por LTVs', value: formatUsd(totals.maxBorrow) },
+                { key: 'loan-target', title: 'Préstamo recomendado (≤20%)', value: formatUsd(recommendedLoanAtTarget) },
+                { key: 'interest-total', title: 'Interés hasta repago', value: formatLoan(interestCalc.total), subtle: `${daysUntilRepay} días` },
+                { key: 'repay-total', title: 'Total a devolver', value: formatLoan(totalProjectedOutflows), subtle: projectedFinalPayoff > 0 ? `Pago final proyectado ${formatLoan(projectedFinalPayoff)}` : undefined },
+                { key: 'earn-monthly', title: 'Earn mensual (hasta)', value: formatUsd(earnMonthly), subtle: earnEligible ? (minBalancePerks > 0 ? `Savings ≥ US$${formatDecimal(minBalancePerks, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : undefined) : 'no elegible' },
               ]).map((item) => (
                 <KPI key={item.key} title={item.title} value={item.value} subtle={item.subtle} tone={item.tone} variant={item.variant || 'button'} />
               ))}
@@ -2985,14 +3013,16 @@
                       key={item.id}
                       item={item}
                       currency={currency}
-                      rate={rate}
+                      formatUsd={formatUsd}
+                      formatLoan={formatLoan}
                       chosenAPR={chosenAPR}
                     />
                   ))}
                   <CollateralLoanShareCard
                     breakdown={collateralBreakdown.items}
                     currency={currency}
-                    rate={rate}
+                    formatUsd={formatUsd}
+                    formatLoan={formatLoan}
                     loanAmount={plannedOutstanding}
                     overallLTV={binanceLtvAfterPlan}
                     healthyThreshold={ltvHealthyThreshold}
@@ -3009,8 +3039,8 @@
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 justify-items-center">
                     <Field label={`Monto a pedir (${currency})`} align="center" className="w-full max-w-xs">
                       <LocaleNumberInput
-                        value={loanDraftAmount * rate}
-                        onChange={(v) => setLoanDraftAmount(Math.max(0, v / rate))}
+                        value={loanDraftAmount * loanRate}
+                        onChange={(v) => setLoanDraftAmount(Math.max(0, v / loanRate))}
                         decimals={2}
                         min={0}
                         className={`w-full rounded-full border border-neutral-300 px-5 py-3 text-center text-lg font-semibold shadow-sm focus:outline-none focus:ring-2 ${focusRingClass}`}
@@ -3060,7 +3090,7 @@
                       </button>
                     )}
                     <span className="text-sm font-medium text-neutral-600">
-                      Total cargado: {fmt(loanAmount * rate, currency)}
+                      Total cargado: {formatLoan(loanAmount)}
                     </span>
                   </div>
                   {isBinance && (
@@ -3095,7 +3125,7 @@
                                   </div>
                                 </div>
                                 <div className="text-right font-semibold text-neutral-800">
-                                  {fmt(request.amount * rate, currency)}
+                                  {formatLoan(request.amount)}
                                 </div>
                                 <div className="text-right">
                                   <button
@@ -3128,9 +3158,9 @@
                     ) : (
                       <>
                         <Pill label="LTV si pides esto" value={toPct(plannedOverallLTV, 2)} tone={ltvTone} />
-                        <Pill label="≤20% LTV (fijo)" value={loanAmount <= recommendedLoanAtTarget ? "Sí" : "No"} tone={loanAmount <= recommendedLoanAtTarget ? "ok" : "warn"} />
+                        <Pill label="≤20% LTV (fijo)" value={loanAmountUsd <= recommendedLoanAtTarget ? "Sí" : "No"} tone={loanAmountUsd <= recommendedLoanAtTarget ? "ok" : "warn"} />
                         <Pill label="¿Califica Low-Cost?" value={meetsLowCost ? "Sí" : "No"} tone={meetsLowCost ? "ok" : "warn"} />
-                        <Pill label="Margen Low-Cost" value={fmt(lowCostHeadroom * rate, currency)} tone={lowCostHeadroom > 0 ? "ok" : "danger"} />
+                        <Pill label="Margen Low-Cost" value={formatUsd(lowCostHeadroom)} tone={lowCostHeadroom > 0 ? "ok" : "danger"} />
                       </>
                     )}
                   </div>
@@ -3141,20 +3171,20 @@
                     {loyalty && loyaltyReqs?.tiers?.length ? (
                       loyaltyReqs.tiers.map((tier) => (
                         <React.Fragment key={tier.label}>
-                          <Line label={`Requerido ${tier.label} (${toPct(tier.minRatio, 1)} ${loyaltyModelActive === 'vsTotal' ? 'vs total' : 'vs resto'})`} value={fmt(tier.required * rate, currency)} />
-                          <Line label={`Faltante ${tier.label}`} value={fmt(tier.missing * rate, currency)} muted={tier.missing <= 0} />
+                          <Line label={`Requerido ${tier.label} (${toPct(tier.minRatio, 1)} ${loyaltyModelActive === 'vsTotal' ? 'vs total' : 'vs resto'})`} value={formatUsd(tier.required)} />
+                          <Line label={`Faltante ${tier.label}`} value={formatUsd(tier.missing)} muted={tier.missing <= 0} />
                         </React.Fragment>
                       ))
                     ) : (
                       <p className="text-sm text-neutral-500">Esta plataforma no tiene un programa de niveles ligado a un token específico.</p>
                     )}
                     <div className="h-px bg-neutral-200 my-1" />
-                    <Line label={`Colateral extra para ≤${toPct(targetLtv, 0)}`} value={fmt(extraCollateralForTarget * rate, currency)} tone={extraCollateralForTarget <= 0 ? "ok" : "warn"} />
+                    <Line label={`Colateral extra para ≤${toPct(targetLtv, 0)}`} value={formatUsd(extraCollateralForTarget)} tone={extraCollateralForTarget <= 0 ? "ok" : "warn"} />
                   </div>
                 </Card>
 
                 <Card title="Proyección del préstamo">
-                  <TrendChart data={timeline} currency={currency} rate={rate} />
+                  <TrendChart data={timeline} currency={currency} rate={loanRate} />
                 </Card>
 
               </div>
@@ -3200,7 +3230,7 @@
                         <Line label="Objetivo Low-Cost" value={toPct(targetLtv, 0)} muted />
                         <Line label="Margin call" value={toPct(marginCallLtv, 0)} muted />
                         <Line label="Auto-repay" value={toPct(autoRepayLtv, 0)} muted />
-                        <Line label="Cap Low-Cost" value={fmt(capLowCost * rate, currency)} tone={lowCostHeadroom > 0 ? "ok" : "danger"} />
+                        <Line label="Cap Low-Cost" value={formatUsd(capLowCost)} tone={lowCostHeadroom > 0 ? "ok" : "danger"} />
                       </>
                     )}
                   </div>
@@ -3211,7 +3241,7 @@
                   onChange={updateBenchmarkConfig}
                   fmt={fmt}
                   currency={currency}
-                  rate={rate}
+                  rate={loanRate}
                   loanAmount={loanAmount}
                   chosenAPR={chosenAPR}
                   daysUntilRepay={daysUntilRepay}
@@ -3225,7 +3255,7 @@
                   derived={cashflowDerived}
                   onPlanChange={updateCashflowPlan}
                   currency={currency}
-                  rate={rate}
+                  rate={loanRate}
                   fmt={fmt}
                   loanAmount={loanAmount}
                   chosenAPR={chosenAPR}
@@ -3257,21 +3287,21 @@
                     {loyalty && loyaltyReqs?.tiers?.length ? (
                       <li>
                         {loyaltyReqs.tiers.map((tier, idx) => (
-                          <span key={tier.label}>{idx > 0 ? ' · ' : ''}Para <b>{tier.label}</b> faltan {fmt(tier.missing * rate, currency)}</span>
+                          <span key={tier.label}>{idx > 0 ? ' · ' : ''}Para <b>{tier.label}</b> faltan {formatUsd(tier.missing)}</span>
                         ))}
                       </li>
                     ) : null}
                     <li>
-                      Con tu colateral actual, el tope por LTVs es {fmt(totals.maxBorrow * rate, currency)}. El cap Low-Cost (≤{toPct(targetLtv, 0)}) permite pedir hasta {fmt(capLowCost * rate, currency)} y deja {fmt(lowCostHeadroom * rate, currency)} de margen.
+                      Con tu colateral actual, el tope por LTVs es {formatUsd(totals.maxBorrow)}. El cap Low-Cost (≤{toPct(targetLtv, 0)}) permite pedir hasta {formatUsd(capLowCost)} y deja {formatUsd(lowCostHeadroom)} de margen.
                     </li>
                     <li>
-                      Para solicitar {fmt(loanAmount * rate, currency)} y mantener ≤{toPct(targetLtv, 0)} LTV se requieren {fmt(extraCollateralForTarget * rate, currency)} adicionales en colateral.
+                      Para solicitar {formatLoan(loanAmount)} y mantener ≤{toPct(targetLtv, 0)} LTV se requieren {formatUsd(extraCollateralForTarget)} adicionales en colateral.
                     </li>
                     <li>
-                      APR estimado: <b>{toPct(chosenAPR, 2)}</b>{isBinance && binanceBorrowLabel ? ` (${binanceBorrowLabel})` : ''}. Interés hasta repago ({daysUntilRepay} días): {fmt(interestCalc.total * rate, currency)}.{interestCalc.early > 0 && <span> Incluye interés por "early rule".</span>}
+                      APR estimado: <b>{toPct(chosenAPR, 2)}</b>{isBinance && binanceBorrowLabel ? ` (${binanceBorrowLabel})` : ''}. Interés hasta repago ({daysUntilRepay} días): {formatLoan(interestCalc.total)}.{interestCalc.early > 0 && <span> Incluye interés por "early rule".</span>}
                     </li>
                     <li>
-                      Earn (flex) mensual estimado {earnEligible ? (minBalancePerks > 0 ? "(tope)" : "") : (minBalancePerks > 0 ? "(requiere balance mínimo)" : "(no elegible)")}: <b>{fmt(earnMonthly * rate, currency)}</b>.
+                      Earn (flex) mensual estimado {earnEligible ? (minBalancePerks > 0 ? "(tope)" : "") : (minBalancePerks > 0 ? "(requiere balance mínimo)" : "(no elegible)")}: <b>{formatUsd(earnMonthly)}</b>.
                     </li>
                   </ul>
                   </Card>
@@ -3354,7 +3384,7 @@
                         <Td align="center">
                           <input type="checkbox" checked={a.priceAuto !== false} onChange={(e) => { handleAssetChange(a.id, { priceAuto: e.target.checked }); if (e.target.checked) { fetchPricesForTickers([a.ticker]); } }} className="h-5 w-5" />
                         </Td>
-                        <Td align="center" className="font-medium">{fmt(a.value * rate, currency)}</Td>
+                        <Td align="center" className="font-medium">{formatUsd(a.value)}</Td>
                         <Td align="center">
                           <LocaleNumberInput
                             value={a.loanAssigned}
@@ -3560,7 +3590,7 @@
         { label: 'Capital pendiente (plan)', value: formatMoney(outstandingPlan), tone: 'text-neutral-700' },
         { label: 'Pagos programados', value: formatMoney(totalScheduledOutflows), tone: totalScheduledOutflows > 0 ? 'text-neutral-700' : 'text-neutral-500', hint: totalScheduledOutflows > 0 ? `Capital ${formatMoney(scheduledPrincipalPlan)} · Interés cancelado ${formatMoney(scheduledInterestPlan)}` : 'Sin pagos programados' },
         { label: 'Pago final proyectado', value: formatMoney(projectedPayoffPlan), tone: projectedPayoffPlan >= 0 ? 'text-neutral-700' : 'text-rose-600', hint: outstandingPlan > 0 ? 'Restante tras plan' : 'Cubierto por plan' },
-        { label: 'Earn mensual', value: formatMoney(earnMonthly), tone: 'text-neutral-700', hint: earnEligible ? 'Earn activo' : 'Earn inactivo' },
+        { label: 'Earn mensual', value: fmt(earnMonthly * rate, currency), tone: 'text-neutral-700', hint: earnEligible ? 'Earn activo' : 'Earn inactivo' },
       ];
 
       return (
@@ -3578,7 +3608,7 @@
 
             <div>
               <h4 className="mb-2 text-sm font-semibold text-neutral-700">Curva de saldo neto</h4>
-              <TrendChart data={chartData} currency={currency} rate={rate} />
+              <TrendChart data={chartData} currency={currency} rate={loanRate} />
             </div>
 
             <div className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-4">
@@ -4706,7 +4736,7 @@
       );
     }
 
-    function BinanceAssetCard({ item, currency, rate, chosenAPR }) {
+    function BinanceAssetCard({ item, currency, formatUsd, formatLoan, chosenAPR }) {
       const toneBadge = { ok: 'bg-emerald-50 text-emerald-700', warn: 'bg-amber-50 text-amber-700', danger: 'bg-rose-50 text-rose-700' };
       const toneBar = { ok: '#10b981', warn: '#f97316', danger: '#ef4444' };
       const tickerUpper = (item.ticker || '').toUpperCase();
@@ -4716,7 +4746,7 @@
       const netTone = item.netApr < 0 ? 'text-emerald-600' : item.netApr <= annualApr ? 'text-neutral-900' : 'text-amber-600';
       const ledger = item.ledger || {};
       const interestAccrued = Number.isFinite(item.interestAccrued) ? Math.max(0, item.interestAccrued) : 0;
-      const interestLabel = interestAccrued > 0 ? fmt(interestAccrued * rate, currency) : '—';
+      const interestLabel = interestAccrued > 0 ? formatLoan(interestAccrued) : '—';
       const liquidationPrice = Number.isFinite(item.liquidationPrice) && item.liquidationPrice > 0 ? item.liquidationPrice : null;
       const liquidationDigits = liquidationPrice != null && liquidationPrice < 0.1 ? { minimumFractionDigits: 6, maximumFractionDigits: 8 } : { minimumFractionDigits: 4, maximumFractionDigits: 6 };
       const liquidationPriceLabel = liquidationPrice != null ? `$${formatDecimal(liquidationPrice, liquidationDigits)}` : '—';
@@ -4737,11 +4767,11 @@
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Colateral</div>
-                <div className="text-sm font-semibold text-neutral-800">{fmt(item.value * rate, currency)}</div>
+                <div className="text-sm font-semibold text-neutral-800">{formatUsd(item.value)}</div>
               </div>
               <div>
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">{highlightEtbDetails ? 'ETB neto asignado' : 'Préstamo & flujos'}</div>
-                <div className="text-sm font-semibold text-neutral-800">{fmt(item.allocatedLoan * rate, currency)}</div>
+                <div className="text-sm font-semibold text-neutral-800">{formatLoan(item.allocatedLoan)}</div>
                 <div className="text-[10px] text-neutral-500">Interés devengado {interestLabel}</div>
               </div>
             </div>
@@ -4780,7 +4810,7 @@
       );
     }
 
-    function CollateralLoanShareCard({ breakdown, currency, rate, loanAmount, overallLTV, healthyThreshold, warnThreshold, autoRepayThreshold }) {
+    function CollateralLoanShareCard({ breakdown, currency, formatUsd, formatLoan, loanAmount, overallLTV, healthyThreshold, warnThreshold, autoRepayThreshold }) {
       const items = (breakdown || []).map((item) => {
         const share = item.loanShare > 0 ? item.loanShare : item.share;
         return { ...item, share: Math.max(0, share) };
