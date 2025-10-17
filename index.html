@@ -2211,8 +2211,97 @@
             accrualHoursElapsed: hoursElapsed,
           };
         });
+
+        const planLoanByTicker = cashflowDerived?.loanByTicker;
+        const planOutstandingByTicker = cashflowDerived?.outstandingByTicker;
+        const scheduledPrincipalPlan = Number.isFinite(Number(cashflowDerived?.scheduledPrincipal))
+          ? Math.max(0, Number(cashflowDerived.scheduledPrincipal))
+          : 0;
+        const scheduledInterestPlan = Number.isFinite(Number(cashflowDerived?.scheduledInterest))
+          ? Math.max(0, Number(cashflowDerived.scheduledInterest))
+          : 0;
+
+        const plannedPrincipalReductions = {};
+        if (planLoanByTicker && typeof planLoanByTicker === 'object' && planOutstandingByTicker && typeof planOutstandingByTicker === 'object') {
+          Object.entries(planLoanByTicker).forEach(([ticker, amount]) => {
+            const key = sanitizeTicker(ticker);
+            if (!key) return;
+            const before = Math.max(0, Number(amount) || 0);
+            const afterRaw = planOutstandingByTicker[key] ?? planOutstandingByTicker[ticker];
+            const after = Math.max(0, Number(afterRaw) || 0);
+            const reduction = Math.max(0, before - after);
+            if (reduction > 0) {
+              plannedPrincipalReductions[key] = reduction;
+            }
+          });
+        }
+        const ledgerKeys = Object.keys(clone);
+        const ledgerKeySet = new Set(ledgerKeys);
+        const effectivePrincipalReductions = {};
+        let unmatchedPrincipalPlan = 0;
+        Object.entries(plannedPrincipalReductions).forEach(([key, value]) => {
+          const safeValue = Math.max(0, Number(value) || 0);
+          if (!(safeValue > 0)) return;
+          if (ledgerKeySet.has(key)) {
+            effectivePrincipalReductions[key] = safeValue;
+          } else {
+            unmatchedPrincipalPlan += safeValue;
+          }
+        });
+        const targetedPrincipalTotal = Object.values(effectivePrincipalReductions).reduce((sum, value) => sum + value, 0);
+        let remainingPrincipalPlan = Math.max(0, scheduledPrincipalPlan - targetedPrincipalTotal) + unmatchedPrincipalPlan;
+        const basePrincipalTotals = ledgerKeys.reduce((sum, key) => {
+          const principal = Math.max(0, Number(clone[key]?.principalOutstanding) || 0);
+          return sum + principal;
+        }, 0);
+        const fallbackPrincipalReductions = {};
+        if (remainingPrincipalPlan > 0 && basePrincipalTotals > 0) {
+          ledgerKeys.forEach((key) => {
+            const entry = clone[key];
+            if (!entry) { fallbackPrincipalReductions[key] = 0; return; }
+            const principal = Math.max(0, Number(entry.principalOutstanding) || 0);
+            if (!(principal > 0)) { fallbackPrincipalReductions[key] = 0; return; }
+            const share = principal / basePrincipalTotals;
+            const reduction = Math.min(principal, remainingPrincipalPlan * share);
+            fallbackPrincipalReductions[key] = reduction;
+          });
+        }
+
+        const interestBaseTotals = ledgerKeys.reduce((sum, key) => {
+          const interest = Math.max(0, Number(clone[key]?.interestAccrued) || 0);
+          return sum + interest;
+        }, 0);
+
+        let remainingInterestPlan = scheduledInterestPlan;
+        ledgerKeys.forEach((key) => {
+          const entry = clone[key];
+          if (!entry) return;
+          const basePrincipal = Math.max(0, Number(entry.principalOutstanding) || 0);
+          const baseInterest = Math.max(0, Number(entry.interestAccrued) || 0);
+          const targetedReduction = Math.max(0, Number(effectivePrincipalReductions[key]) || 0);
+          const fallbackReduction = Math.max(0, Number(fallbackPrincipalReductions[key]) || 0);
+          const totalReduction = Math.min(basePrincipal, targetedReduction + fallbackReduction);
+          if (totalReduction > 0) {
+            entry.principalOutstanding = Math.max(0, basePrincipal - totalReduction);
+            entry.paidTotal = Math.max(0, (Number(entry.paidTotal) || 0) + totalReduction);
+          } else {
+            entry.principalOutstanding = basePrincipal;
+          }
+
+          if (remainingInterestPlan > 0 && baseInterest > 0 && interestBaseTotals > 0) {
+            const share = baseInterest / interestBaseTotals;
+            const interestReduction = Math.min(baseInterest, remainingInterestPlan * share);
+            entry.interestAccrued = Math.max(0, baseInterest - interestReduction);
+            remainingInterestPlan -= interestReduction;
+          } else {
+            entry.interestAccrued = baseInterest;
+          }
+
+          entry.outstanding = Math.max(0, entry.principalOutstanding + entry.interestAccrued);
+        });
+
         return clone;
-      }, [isBinance, baseLoanLedger, loanRequestsTotals, borrowRatesByTicker, nowTs]);
+      }, [isBinance, baseLoanLedger, loanRequestsTotals, borrowRatesByTicker, nowTs, cashflowDerived]);
       const binanceLedgerOutstandingTotal = useMemo(() => {
         if (!isBinance) return 0;
         return Object.values(binanceLoanLedger).reduce((acc, entry) => acc + (Math.max(0, Number(entry?.outstanding) || 0)), 0);
