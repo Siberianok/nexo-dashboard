@@ -296,6 +296,31 @@
     const BINANCE_API_BASE = 'https://api.binance.com';
     const BINANCE_FAPI_BASE = 'https://fapi.binance.com';
     const BINANCE_SIGNED_RECV_WINDOW = 5000;
+    const BINANCE_SYNC_TIMEOUT_MS = 15000;
+
+    const fetchWithTimeout = async (url, options = {}, timeoutMs = BINANCE_SYNC_TIMEOUT_MS) => {
+      const { signal, ...rest } = options || {};
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      if (signal) {
+        if (signal.aborted) {
+          controller.abort();
+        } else {
+          signal.addEventListener('abort', () => controller.abort(), { once: true });
+        }
+      }
+      try {
+        const response = await fetch(url, { ...rest, signal: controller.signal });
+        return response;
+      } catch (error) {
+        if (error?.name === 'AbortError') {
+          throw new Error('Tiempo de espera agotado al conectar con Binance.');
+        }
+        throw error;
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
 
     const DEFAULT_LOCALE = 'es-AR';
 
@@ -2147,6 +2172,22 @@
           }));
           return null;
         }
+        const markBinanceCancelled = () => {
+          if (!binanceCancelRef.current) return false;
+          setBinanceLiveMeta((prev) => {
+            const prevStatus = prev.status || 'idle';
+            const isSyncing = prevStatus === 'syncing' || prevStatus === 'syncing-manual';
+            if (!isSyncing && prev.loading === false) {
+              return prev;
+            }
+            return {
+              ...prev,
+              loading: false,
+              status: isSyncing ? 'idle' : prevStatus,
+            };
+          });
+          return true;
+        };
         const signPayload = async (payload) => {
           const cached = binanceHmacKeyRef.current;
           if (!cached.key || cached.secret !== apiSecret) {
@@ -2173,13 +2214,14 @@
           lastAttempt: now,
         }));
         try {
-          const serverRes = await fetch(`${BINANCE_API_BASE}/api/v3/time`);
+          const serverRes = await fetchWithTimeout(`${BINANCE_API_BASE}/api/v3/time`);
           if (!serverRes.ok) throw new Error(`HTTP ${serverRes.status}`);
           const serverData = await serverRes.json();
           const serverTime = Number(serverData?.serverTime);
           if (!Number.isFinite(serverTime)) throw new Error('Server time inválido.');
           const clockSkew = serverTime - Date.now();
           const signedFetch = async (path, query = {}, options = {}) => {
+            const { method = 'GET', recvWindow = BINANCE_SIGNED_RECV_WINDOW, timeoutMs = BINANCE_SYNC_TIMEOUT_MS } = options || {};
             const search = new URLSearchParams();
             Object.entries(query).forEach(([key, value]) => {
               if (value === undefined || value === null || value === '') return;
@@ -2187,15 +2229,14 @@
             });
             const timestamp = Date.now() + clockSkew;
             search.append('timestamp', String(Math.floor(timestamp)));
-            const recvWindow = options.recvWindow ?? BINANCE_SIGNED_RECV_WINDOW;
             if (recvWindow) search.append('recvWindow', String(recvWindow));
             const signature = await signPayload(search.toString());
             search.append('signature', signature);
             const url = `${BINANCE_API_BASE}${path}?${search.toString()}`;
-            const res = await fetch(url, {
-              method: options.method || 'GET',
+            const res = await fetchWithTimeout(url, {
+              method,
               headers: { 'X-MBX-APIKEY': apiKey },
-            });
+            }, timeoutMs);
             if (!res.ok) {
               let message = '';
               try {
@@ -2306,7 +2347,7 @@
                 return Promise.resolve({ coin, price: 1 });
               }
               const symbol = `${coin}USDT`;
-              return fetch(`${BINANCE_FAPI_BASE}/fapi/v1/premiumIndex?symbol=${symbol}`)
+              return fetchWithTimeout(`${BINANCE_FAPI_BASE}/fapi/v1/premiumIndex?symbol=${symbol}`)
                 .then((res) => {
                   if (!res.ok) throw new Error(`HTTP ${res.status}`);
                   return res.json();
@@ -2433,7 +2474,7 @@
             };
             return acc;
           }, {});
-          if (binanceCancelRef.current) {
+          if (markBinanceCancelled()) {
             return null;
           }
           setBinanceLive({
@@ -2473,10 +2514,13 @@
           }, delay);
           return { serverTime, clockSkew };
         } catch (error) {
-          if (binanceCancelRef.current) {
+          if (markBinanceCancelled()) {
             return null;
           }
-          const message = error?.message || error || 'Error desconocido al sincronizar Binance.';
+          let message = error?.message || error || 'Error desconocido al sincronizar Binance.';
+          if (typeof message === 'string' && /failed to fetch/i.test(message)) {
+            message = 'No se pudo conectar con Binance. Revisa tu conexión o si la API permite solicitudes desde el navegador.';
+          }
           setBinanceLiveMeta((prev) => ({
             ...prev,
             loading: false,
