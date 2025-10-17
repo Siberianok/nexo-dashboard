@@ -292,6 +292,10 @@
     const LIVE_REFRESH_SECONDS = 5;
     const FX_REFRESH_MINUTES = 30;
     const BINANCE_INTEREST_REFRESH_MS = 60 * 1000;
+    const BINANCE_STALE_THRESHOLD_MS = 90 * 1000;
+    const BINANCE_API_BASE = 'https://api.binance.com';
+    const BINANCE_FAPI_BASE = 'https://fapi.binance.com';
+    const BINANCE_SIGNED_RECV_WINDOW = 5000;
 
     const DEFAULT_LOCALE = 'es-AR';
 
@@ -301,7 +305,9 @@
     const HOURS_IN_YEAR = 365 * 24;
     const annualToHourly = (apr) => {
       const normalized = Number(apr);
-      if (!Number.isFinite(normalized) || normalized <= 0) return 0;
+      if (!Number.isFinite(normalized)) return 0;
+      if (normalized <= -0.9999) return 0;
+      if (normalized === 0) return 0;
       return Math.pow(1 + normalized, 1 / HOURS_IN_YEAR) - 1;
     };
 
@@ -1469,12 +1475,12 @@
         theme: platformTheme,
         classes = {},
         coingeckoIds = {},
-        ltvByTicker = {},
-        earnAprTop = {},
+        ltvByTicker: ltvByTickerConfig = {},
+        earnAprTop: earnAprTopConfig = {},
         policies = {},
         apr: aprConfig = {},
-        borrowRates = {},
-        loanLedger: platformLoanLedger = {},
+        borrowRates: borrowRatesConfig = {},
+        loanLedger: platformLoanLedgerConfig = {},
         loyalty,
         ltvHealth,
         previewSnapshot,
@@ -1546,6 +1552,118 @@
 
       const sanitizeTicker = (t) => (t || "").toUpperCase();
 
+      const binanceTimerRef = useRef(null);
+      const binanceHmacKeyRef = useRef({ secret: null, key: null });
+      const binanceCancelRef = useRef(false);
+
+      const [binanceLive, setBinanceLive] = useState({
+        borrowApr: {},
+        collateralApr: {},
+        collateralParams: {},
+        indexPrices: {},
+        positions: [],
+        loanLedger: {},
+        aggregate: null,
+        serverTime: null,
+        clockSkew: 0,
+      });
+      const [binanceLiveMeta, setBinanceLiveMeta] = useState({
+        loading: false,
+        error: null,
+        lastUpdated: null,
+        lastAttempt: null,
+        status: 'idle',
+      });
+
+      const liveCollateralParams = isBinance ? (binanceLive?.collateralParams || {}) : {};
+      const liveCollateralApr = isBinance ? (binanceLive?.collateralApr || {}) : {};
+      const liveLoanLedger = isBinance ? (binanceLive?.loanLedger || {}) : {};
+      const liveBorrowPositions = isBinance ? (binanceLive?.positions || []) : [];
+      const binanceAggregate = isBinance ? (binanceLive?.aggregate || null) : null;
+
+      const ltvByTicker = useMemo(() => {
+        if (!isBinance) return ltvByTickerConfig;
+        if (!liveCollateralParams || Object.keys(liveCollateralParams).length === 0) {
+          return ltvByTickerConfig;
+        }
+        const merged = { ...ltvByTickerConfig };
+        Object.entries(liveCollateralParams).forEach(([ticker, payload]) => {
+          const key = typeof ticker === 'string' ? ticker.toUpperCase() : '';
+          if (!key) return;
+          const initial = Number(
+            payload?.initialLTV ?? payload?.initialLtv ?? payload?.initial ?? payload
+          );
+          if (Number.isFinite(initial) && initial > 0) {
+            merged[key] = initial;
+          }
+        });
+        return merged;
+      }, [isBinance, ltvByTickerConfig, liveCollateralParams]);
+
+      const earnAprTop = useMemo(() => {
+        if (!isBinance) return earnAprTopConfig;
+        if (!liveCollateralApr || Object.keys(liveCollateralApr).length === 0) {
+          return earnAprTopConfig;
+        }
+        const merged = { ...earnAprTopConfig };
+        Object.entries(liveCollateralApr).forEach(([ticker, payload]) => {
+          const key = typeof ticker === 'string' ? ticker.toUpperCase() : '';
+          if (!key) return;
+          const aprValue = typeof payload === 'object' && payload !== null
+            ? Number(payload?.apr ?? payload?.latestAnnualPercentageRate ?? payload?.rate)
+            : Number(payload);
+          if (Number.isFinite(aprValue) && aprValue >= 0) {
+            merged[key] = aprValue;
+          }
+        });
+        return merged;
+      }, [isBinance, earnAprTopConfig, liveCollateralApr]);
+
+      const liveBorrowRatesByCollateral = useMemo(() => {
+        if (!isBinance || !Array.isArray(liveBorrowPositions) || liveBorrowPositions.length === 0) {
+          return {};
+        }
+        return liveBorrowPositions.reduce((acc, position) => {
+          const collateralKey = typeof position?.collateralCoin === 'string' ? position.collateralCoin.toUpperCase() : '';
+          if (!collateralKey) return acc;
+          const loanCoin = typeof position?.loanCoin === 'string' ? position.loanCoin.toUpperCase() : '';
+          const annual = Number(position?.borrowApr);
+          const netAnnual = Number(position?.netApr);
+          const adjustment = Number(position?.aprOffset);
+          const hourly = Number(position?.borrowHourly);
+          const netHourly = Number(position?.netHourly);
+          acc[collateralKey] = {
+            label: loanCoin ? `${collateralKey} · préstamo ${loanCoin}` : collateralKey,
+            annual: Number.isFinite(annual) && annual >= 0 ? annual : 0,
+            netAnnual: Number.isFinite(netAnnual) ? netAnnual : null,
+            adjustmentAnnual: Number.isFinite(adjustment) && adjustment >= 0 ? adjustment : Math.max(0, (Number.isFinite(annual) ? annual : 0) - (Number.isFinite(netAnnual) ? netAnnual : 0)),
+            hourly: Number.isFinite(hourly) && hourly >= 0 ? hourly : annualToHourly(Number.isFinite(annual) ? annual : 0),
+            netHourly: Number.isFinite(netHourly) ? netHourly : annualToHourly(Number.isFinite(netAnnual) ? netAnnual : 0),
+            loanAsset: loanCoin || collateralKey,
+            collateralApr: Number.isFinite(position?.collateralApr) ? position.collateralApr : null,
+            fetchedAt: position?.updatedAt || null,
+            source: 'binance-live',
+          };
+          return acc;
+        }, {});
+      }, [isBinance, liveBorrowPositions]);
+
+      const borrowRates = useMemo(() => {
+        if (!isBinance) return borrowRatesConfig;
+        if (Object.keys(liveBorrowRatesByCollateral).length === 0) {
+          return borrowRatesConfig;
+        }
+        return { ...borrowRatesConfig, ...liveBorrowRatesByCollateral };
+      }, [isBinance, borrowRatesConfig, liveBorrowRatesByCollateral]);
+
+      const platformLoanLedger = useMemo(() => {
+        if (!isBinance) return platformLoanLedgerConfig;
+        if (!liveLoanLedger || Object.keys(liveLoanLedger).length === 0) {
+          return platformLoanLedgerConfig;
+        }
+        return { ...platformLoanLedgerConfig, ...liveLoanLedger };
+      }, [isBinance, platformLoanLedgerConfig, liveLoanLedger]);
+
       useEffect(() => {
         if (!isBinance) return undefined;
         const tick = () => setNowTs(Date.now());
@@ -1559,15 +1677,16 @@
           const key = sanitizeTicker(ticker);
           if (!key) return acc;
           const annual = Number(info.annual);
-          const safeAnnual = Number.isFinite(annual) && annual > 0 ? annual : 0;
+          const safeAnnual = Number.isFinite(annual) ? annual : 0;
           const hourly = Number(info.hourly);
-          const safeHourly = Number.isFinite(hourly) && hourly > 0 ? hourly : annualToHourly(safeAnnual);
+          const safeHourly = Number.isFinite(hourly) ? hourly : annualToHourly(safeAnnual);
           const netAnnualRaw = Number(info.netAnnual);
           const adjustmentRaw = Number(info.adjustmentAnnual);
-          const safeAdjustment = Number.isFinite(adjustmentRaw) && adjustmentRaw >= 0 ? Math.min(adjustmentRaw, safeAnnual) : (Number.isFinite(netAnnualRaw) && netAnnualRaw >= 0 ? Math.max(0, safeAnnual - netAnnualRaw) : 0);
-          const safeNetAnnual = Number.isFinite(netAnnualRaw) && netAnnualRaw >= 0
-            ? Math.min(netAnnualRaw, safeAnnual)
-            : Math.max(0, safeAnnual - safeAdjustment);
+          const safeAdjustment = Number.isFinite(adjustmentRaw)
+            ? adjustmentRaw
+            : (Number.isFinite(netAnnualRaw) ? safeAnnual - netAnnualRaw : 0);
+          const fallbackNet = safeAnnual - safeAdjustment;
+          const safeNetAnnual = Number.isFinite(netAnnualRaw) ? netAnnualRaw : fallbackNet;
           const safeNetHourly = annualToHourly(safeNetAnnual);
           acc[key] = {
             ...info,
@@ -1810,8 +1929,15 @@
           const netAnnualRate = Number(entry.netAnnualRate);
           const liquidationPriceHint = Number(entry.liquidationPriceHint);
           const liquidationLtv = Number(entry.liquidationLtv);
+          const marginCallLtv = Number(entry.marginCallLtv);
           const initialLtv = Number(entry.initialLtv);
           const initialCollateralValueRaw = Number(entry.initialCollateralValue ?? entry.initialCollateralUsd ?? entry.initialCollateral);
+          const collateralAmountRaw = Number(entry.collateralAmount);
+          const borrowIndexPrice = Number(entry.borrowIndexPrice);
+          const collateralIndexPrice = Number(entry.collateralIndexPrice);
+          const currentLtv = Number(entry.currentLtv);
+          const loanCoin = sanitizeTicker(entry.loanCoin || entry.borrowCoin || entry.loanTicker || '');
+          const lastUpdatedTs = Number(entry.lastUpdatedTs);
           const borrowDate = typeof entry.borrowDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(entry.borrowDate)
             ? entry.borrowDate
             : null;
@@ -1825,14 +1951,21 @@
             paidTotal,
             interestAccrued,
             annualRate: Number.isFinite(annualRate) && annualRate > 0 ? annualRate : null,
-            netAnnualRate: Number.isFinite(netAnnualRate) && netAnnualRate > 0 ? netAnnualRate : null,
+            netAnnualRate: Number.isFinite(netAnnualRate) && netAnnualRate >= 0 ? netAnnualRate : null,
             liquidationPriceHint: Number.isFinite(liquidationPriceHint) && liquidationPriceHint > 0 ? liquidationPriceHint : null,
             liquidationLtv: Number.isFinite(liquidationLtv) && liquidationLtv > 0 ? liquidationLtv : null,
+            marginCallLtv: Number.isFinite(marginCallLtv) && marginCallLtv > 0 ? marginCallLtv : null,
             borrowDate,
             lastUpdated,
+            lastUpdatedTs: Number.isFinite(lastUpdatedTs) && lastUpdatedTs > 0 ? lastUpdatedTs : null,
+            loanCoin: loanCoin || null,
             notes: typeof entry.notes === 'string' ? entry.notes : '',
             initialLtv: Number.isFinite(initialLtv) && initialLtv > 0 ? initialLtv : null,
             initialCollateralValue: Number.isFinite(initialCollateralValueRaw) && initialCollateralValueRaw > 0 ? initialCollateralValueRaw : null,
+            collateralAmount: Number.isFinite(collateralAmountRaw) && collateralAmountRaw > 0 ? collateralAmountRaw : null,
+            borrowIndexPrice: Number.isFinite(borrowIndexPrice) && borrowIndexPrice > 0 ? borrowIndexPrice : null,
+            collateralIndexPrice: Number.isFinite(collateralIndexPrice) && collateralIndexPrice > 0 ? collateralIndexPrice : null,
+            currentLtv: Number.isFinite(currentLtv) && currentLtv >= 0 ? currentLtv : null,
           };
           return acc;
         }, {});
@@ -1974,6 +2107,416 @@
         () => sanitizeLoanRequests(params.loanRequests),
         [params.loanRequests, sanitizeLoanRequests]
       );
+
+      const resetBinanceTimer = useCallback(() => {
+        if (binanceTimerRef.current) {
+          clearTimeout(binanceTimerRef.current);
+          binanceTimerRef.current = null;
+        }
+      }, []);
+
+      useEffect(() => {
+        binanceHmacKeyRef.current = { secret: null, key: null };
+      }, [params.binanceApiSecret]);
+
+      const triggerBinanceFetch = useCallback(async (origin = 'auto') => {
+        if (!isBinance) return null;
+        const apiKey = (params.binanceApiKey || '').trim();
+        const apiSecret = (params.binanceApiSecret || '').trim();
+        if (!apiKey || !apiSecret) {
+          resetBinanceTimer();
+          setBinanceLiveMeta((prev) => ({
+            ...prev,
+            loading: false,
+            error: null,
+            status: apiKey || apiSecret ? 'incomplete' : 'missing',
+          }));
+          return null;
+        }
+        const cryptoObj = (typeof window !== 'undefined' && window.crypto)
+          ? window.crypto
+          : (typeof self !== 'undefined' ? self.crypto : null);
+        if (!cryptoObj || !cryptoObj.subtle) {
+          const now = Date.now();
+          setBinanceLiveMeta((prev) => ({
+            ...prev,
+            loading: false,
+            error: 'Crypto API no disponible para firmar solicitudes.',
+            status: 'error',
+            lastAttempt: now,
+          }));
+          return null;
+        }
+        const signPayload = async (payload) => {
+          const cached = binanceHmacKeyRef.current;
+          if (!cached.key || cached.secret !== apiSecret) {
+            const encoder = new TextEncoder();
+            const material = encoder.encode(apiSecret);
+            const key = await cryptoObj.subtle.importKey('raw', material, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+            binanceHmacKeyRef.current = { secret: apiSecret, key };
+          }
+          const encoder = new TextEncoder();
+          const data = encoder.encode(payload);
+          const signature = await cryptoObj.subtle.sign('HMAC', binanceHmacKeyRef.current.key, data);
+          return Array.from(new Uint8Array(signature)).map((b) => b.toString(16).padStart(2, '0')).join('');
+        };
+        const parseNumber = (value) => {
+          const n = Number(value);
+          return Number.isFinite(n) ? n : 0;
+        };
+        const now = Date.now();
+        setBinanceLiveMeta((prev) => ({
+          ...prev,
+          loading: true,
+          error: null,
+          status: origin === 'manual' ? 'syncing-manual' : 'syncing',
+          lastAttempt: now,
+        }));
+        try {
+          const serverRes = await fetch(`${BINANCE_API_BASE}/api/v3/time`);
+          if (!serverRes.ok) throw new Error(`HTTP ${serverRes.status}`);
+          const serverData = await serverRes.json();
+          const serverTime = Number(serverData?.serverTime);
+          if (!Number.isFinite(serverTime)) throw new Error('Server time inválido.');
+          const clockSkew = serverTime - Date.now();
+          const signedFetch = async (path, query = {}, options = {}) => {
+            const search = new URLSearchParams();
+            Object.entries(query).forEach(([key, value]) => {
+              if (value === undefined || value === null || value === '') return;
+              search.append(key, value);
+            });
+            const timestamp = Date.now() + clockSkew;
+            search.append('timestamp', String(Math.floor(timestamp)));
+            const recvWindow = options.recvWindow ?? BINANCE_SIGNED_RECV_WINDOW;
+            if (recvWindow) search.append('recvWindow', String(recvWindow));
+            const signature = await signPayload(search.toString());
+            search.append('signature', signature);
+            const url = `${BINANCE_API_BASE}${path}?${search.toString()}`;
+            const res = await fetch(url, {
+              method: options.method || 'GET',
+              headers: { 'X-MBX-APIKEY': apiKey },
+            });
+            if (!res.ok) {
+              let message = '';
+              try {
+                const payload = await res.json();
+                message = payload?.msg || payload?.message || JSON.stringify(payload);
+              } catch {
+                message = await res.text();
+              }
+              throw new Error(message || `HTTP ${res.status}`);
+            }
+            return res.json();
+          };
+          const collateralCandidates = new Set();
+          const loanCandidates = new Set();
+          assets.forEach((asset) => {
+            if (asset?.useAsCollateral === false) return;
+            const ticker = sanitizeTicker(asset?.ticker);
+            if (ticker) collateralCandidates.add(ticker);
+          });
+          loanRequests.forEach((req) => {
+            const ticker = sanitizeTicker(req?.ticker);
+            if (ticker) loanCandidates.add(ticker);
+          });
+          const defaultLoanTicker = sanitizeTicker(params.binanceBorrowTicker);
+          if (defaultLoanTicker) loanCandidates.add(defaultLoanTicker);
+          const ordersPayload = await signedFetch('/sapi/v2/loan/flexible/ongoing/orders', { limit: 200 });
+          const orderRows = Array.isArray(ordersPayload?.rows) ? ordersPayload.rows : [];
+          orderRows.forEach((row) => {
+            const loanCoin = sanitizeTicker(row?.loanCoin);
+            const collateralCoin = sanitizeTicker(row?.collateralCoin);
+            if (loanCoin) loanCandidates.add(loanCoin);
+            if (collateralCoin) collateralCandidates.add(collateralCoin);
+          });
+          if (loanCandidates.size === 0 && collateralCandidates.size === 0 && Array.isArray(liveBorrowPositions)) {
+            liveBorrowPositions.forEach((pos) => {
+              const loanCoin = sanitizeTicker(pos?.loanCoin);
+              const collateralCoin = sanitizeTicker(pos?.collateralCoin);
+              if (loanCoin) loanCandidates.add(loanCoin);
+              if (collateralCoin) collateralCandidates.add(collateralCoin);
+            });
+          }
+          const loanCoinsArray = Array.from(loanCandidates);
+          const collateralCoinsArray = Array.from(collateralCandidates);
+          const borrowAprByLoan = {};
+          if (loanCoinsArray.length > 0) {
+            const borrowResults = await Promise.allSettled(loanCoinsArray.map((coin) => signedFetch('/sapi/v2/loan/interestRateHistory', { coin, limit: 1 })));
+            borrowResults.forEach((result, idx) => {
+              const coin = loanCoinsArray[idx];
+              if (result.status !== 'fulfilled') {
+                console.warn('Binance loan interest falló para', coin, result.reason);
+                return;
+              }
+              const rows = Array.isArray(result.value?.rows) ? result.value.rows : [];
+              const latest = rows[0];
+              if (!latest) return;
+              borrowAprByLoan[coin] = {
+                annual: parseNumber(latest.annualizedInterestRate ?? latest.annualRate ?? latest.apr),
+                hourly: parseNumber(latest.hourlyRate ?? latest.rate),
+                raw: latest,
+                fetchedAt: serverTime,
+              };
+            });
+          }
+          const collateralAprMap = {};
+          if (collateralCoinsArray.length > 0) {
+            const earnResults = await Promise.allSettled(collateralCoinsArray.map((coin) => signedFetch('/sapi/v1/simple-earn/flexible/list', { asset: coin })));
+            earnResults.forEach((result, idx) => {
+              const coin = collateralCoinsArray[idx];
+              if (result.status !== 'fulfilled') {
+                console.warn('Binance simple earn falló para', coin, result.reason);
+                return;
+              }
+              const rows = Array.isArray(result.value?.rows) ? result.value.rows : [];
+              const match = rows.find((row) => sanitizeTicker(row?.asset) === coin) || rows[0];
+              if (!match) return;
+              collateralAprMap[coin] = {
+                apr: parseNumber(match.latestAnnualPercentageRate ?? match.apr),
+                raw: match,
+                fetchedAt: serverTime,
+              };
+            });
+          }
+          const collateralParamsMap = {};
+          if (collateralCoinsArray.length > 0) {
+            const paramsResults = await Promise.allSettled(collateralCoinsArray.map((coin) => signedFetch('/sapi/v2/loan/flexible/collateral/data', { collateralCoin: coin })));
+            paramsResults.forEach((result, idx) => {
+              const coin = collateralCoinsArray[idx];
+              if (result.status !== 'fulfilled') {
+                console.warn('Binance collateral data falló para', coin, result.reason);
+                return;
+              }
+              const payload = result.value;
+              const base = Array.isArray(payload?.rows) ? payload.rows[0] : payload;
+              if (!base) return;
+              collateralParamsMap[coin] = {
+                initialLTV: parseNumber(base.initialLTV ?? base.initialLtv ?? base.initial),
+                marginCall: parseNumber(base.marginCall ?? base.marginCallLTV ?? base.marginCallLtv),
+                liquidationLTV: parseNumber(base.liquidationLTV ?? base.liquidationLtv ?? base.liquidation),
+                raw: base,
+              };
+            });
+          }
+          const indexCoins = new Set([...loanCoinsArray, ...collateralCoinsArray]);
+          const indexPrices = {};
+          if (indexCoins.size > 0) {
+            const indexResults = await Promise.allSettled(Array.from(indexCoins).map((coin) => {
+              if (coin === 'USDT') {
+                return Promise.resolve({ coin, price: 1 });
+              }
+              const symbol = `${coin}USDT`;
+              return fetch(`${BINANCE_FAPI_BASE}/fapi/v1/premiumIndex?symbol=${symbol}`)
+                .then((res) => {
+                  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                  return res.json();
+                })
+                .then((data) => ({ coin, price: parseNumber(data?.indexPrice) }))
+                .catch((error) => ({ coin, error }));
+            }));
+            indexResults.forEach((result) => {
+              if (result.status === 'fulfilled') {
+                const { coin, price, error } = result.value;
+                if (error) {
+                  console.warn('Binance premiumIndex falló para', coin, error);
+                  return;
+                }
+                if (coin && Number.isFinite(price) && price > 0) {
+                  indexPrices[coin] = price;
+                }
+              } else if (result.reason?.coin) {
+                console.warn('Binance premiumIndex falló para', result.reason.coin, result.reason.error || result.reason);
+              }
+            });
+          }
+          if (!indexPrices.USDT) indexPrices.USDT = 1;
+          const assetPriceMap = assets.reduce((acc, asset) => {
+            const ticker = sanitizeTicker(asset?.ticker);
+            if (!ticker) return acc;
+            const price = parseNumber(asset?.price);
+            if (price > 0) acc[ticker] = price;
+            return acc;
+          }, {});
+          const positions = orderRows.map((row) => {
+            const loanCoin = sanitizeTicker(row?.loanCoin);
+            const collateralCoin = sanitizeTicker(row?.collateralCoin);
+            const totalDebt = parseNumber(row?.totalDebt ?? row?.remainingDebt ?? row?.loanAmount ?? 0);
+            const borrowPrincipal = parseNumber(row?.loanAmount ?? row?.principal ?? row?.borrowAmount ?? totalDebt);
+            const collateralAmount = parseNumber(row?.collateralAmount ?? row?.remainingCollateralAmount ?? row?.collateralAmt ?? 0);
+            const interestAccrued = Math.max(0, totalDebt - borrowPrincipal);
+            const borrowEntry = borrowAprByLoan[loanCoin] || {};
+            const borrowApr = Number.isFinite(borrowEntry.annual) ? borrowEntry.annual : null;
+            const borrowHourly = Number.isFinite(borrowEntry.hourly) ? borrowEntry.hourly : null;
+            const collateralAprEntry = collateralAprMap[collateralCoin] || {};
+            const collateralApr = Number.isFinite(collateralAprEntry.apr) ? collateralAprEntry.apr : 0;
+            const paramsEntry = collateralParamsMap[collateralCoin] || {};
+            const initialLtv = Number.isFinite(paramsEntry.initialLTV) && paramsEntry.initialLTV > 0 ? paramsEntry.initialLTV : parseNumber(row?.collateralLTV ?? row?.initialLTV);
+            const marginCall = Number.isFinite(paramsEntry.marginCall) && paramsEntry.marginCall > 0 ? paramsEntry.marginCall : parseNumber(row?.marginCallLTV ?? row?.marginCall);
+            const liquidation = Number.isFinite(paramsEntry.liquidationLTV) && paramsEntry.liquidationLTV > 0 ? paramsEntry.liquidationLTV : parseNumber(row?.liquidationLTV ?? row?.liquidationLtv);
+            const borrowIndexPrice = Number.isFinite(indexPrices[loanCoin]) && indexPrices[loanCoin] > 0 ? indexPrices[loanCoin] : 1;
+            const collateralIndexPrice = Number.isFinite(indexPrices[collateralCoin]) && indexPrices[collateralCoin] > 0 ? indexPrices[collateralCoin] : (assetPriceMap[collateralCoin] ?? null);
+            const collateralUsd = collateralIndexPrice != null ? collateralIndexPrice * collateralAmount : null;
+            const borrowUsd = borrowIndexPrice * totalDebt;
+            const ltvComputed = collateralUsd && collateralUsd > 0 ? borrowUsd / collateralUsd : null;
+            const currentLtvApi = parseNumber(row?.currentLTV ?? row?.currentLtv);
+            const netApr = Number.isFinite(initialLtv) && initialLtv > 0 ? ((Number.isFinite(borrowApr) ? borrowApr : 0) - (collateralApr / initialLtv)) : (borrowApr ?? 0);
+            const aprOffset = Number.isFinite(borrowApr) && Number.isFinite(netApr) ? borrowApr - netApr : null;
+            const netHourly = annualToHourly(Number.isFinite(netApr) ? netApr : 0);
+            const collateralQty = collateralAmount > 0 ? collateralAmount : parseNumber(row?.collateralQty);
+            const liquidationPrice = (Number.isFinite(liquidation) && liquidation > 0 && collateralQty > 0) ? (borrowIndexPrice * totalDebt) / (liquidation * collateralQty) : null;
+            const marginCallPrice = (Number.isFinite(marginCall) && marginCall > 0 && collateralQty > 0) ? (borrowIndexPrice * totalDebt) / (marginCall * collateralQty) : null;
+            const createdTime = parseNumber(row?.createdTime ?? row?.createTime ?? row?.loanDate);
+            return {
+              loanCoin,
+              collateralCoin,
+              totalDebt,
+              borrowPrincipal,
+              collateralAmount,
+              interestAccrued,
+              borrowApr,
+              borrowHourly,
+              collateralApr,
+              initialLtv,
+              marginCallLtv: marginCall,
+              liquidationLtv: liquidation,
+              indexPrices: { borrow: borrowIndexPrice, collateral: collateralIndexPrice },
+              collateralUsd,
+              borrowUsd,
+              ltvComputed,
+              currentLtvApi,
+              netApr,
+              aprOffset,
+              netHourly,
+              liquidationPrice,
+              marginCallPrice,
+              updatedAt: serverTime,
+              createdTime,
+            };
+          });
+          const aggregate = positions.reduce((acc, pos) => {
+            const debtUsd = Number.isFinite(pos.borrowUsd) ? pos.borrowUsd : 0;
+            const collateralUsd = Number.isFinite(pos.collateralUsd) ? pos.collateralUsd : 0;
+            acc.borrowUsd += debtUsd;
+            acc.collateralUsd += collateralUsd;
+            if (debtUsd > 0 && Number.isFinite(pos.borrowApr)) {
+              acc.borrowAprSum += pos.borrowApr * debtUsd;
+            }
+            if (debtUsd > 0 && Number.isFinite(pos.netApr)) {
+              acc.netAprSum += pos.netApr * debtUsd;
+            }
+            return acc;
+          }, { borrowUsd: 0, collateralUsd: 0, borrowAprSum: 0, netAprSum: 0 });
+          const aggregateLtv = aggregate.collateralUsd > 0 ? aggregate.borrowUsd / aggregate.collateralUsd : null;
+          const aggregateBorrowApr = aggregate.borrowUsd > 0 ? aggregate.borrowAprSum / aggregate.borrowUsd : null;
+          const aggregateNetApr = aggregate.borrowUsd > 0 ? aggregate.netAprSum / aggregate.borrowUsd : null;
+          const loanLedger = positions.reduce((acc, pos) => {
+            const key = pos.collateralCoin;
+            if (!key) return acc;
+            acc[key] = {
+              originalPrincipal: pos.borrowPrincipal,
+              outstanding: pos.totalDebt,
+              interestAccrued: pos.interestAccrued,
+              annualRate: pos.borrowApr,
+              netAnnualRate: pos.netApr,
+              liquidationLtv: pos.liquidationLtv,
+              marginCallLtv: pos.marginCallLtv,
+              liquidationPriceHint: pos.liquidationPrice,
+              initialLtv: pos.initialLtv,
+              initialCollateralValue: pos.collateralUsd,
+              collateralAmount: pos.collateralAmount,
+              borrowIndexPrice: pos.indexPrices.borrow,
+              collateralIndexPrice: pos.indexPrices.collateral,
+              currentLtv: pos.ltvComputed ?? pos.currentLtvApi ?? null,
+              loanCoin: pos.loanCoin,
+              lastUpdated: new Date(serverTime).toISOString().slice(0, 10),
+              lastUpdatedTs: serverTime,
+            };
+            return acc;
+          }, {});
+          if (binanceCancelRef.current) {
+            return null;
+          }
+          setBinanceLive({
+            borrowApr: borrowAprByLoan,
+            collateralApr: collateralAprMap,
+            collateralParams: collateralParamsMap,
+            indexPrices,
+            positions,
+            loanLedger,
+            aggregate: {
+              borrowUsd: aggregate.borrowUsd,
+              collateralUsd: aggregate.collateralUsd,
+              ltv: aggregateLtv,
+              averageBorrowApr: aggregateBorrowApr,
+              averageNetApr: aggregateNetApr,
+            },
+            serverTime,
+            clockSkew,
+          });
+          const updatedAt = Date.now();
+          setBinanceLiveMeta({
+            loading: false,
+            error: null,
+            lastUpdated: updatedAt,
+            lastAttempt: updatedAt,
+            status: 'ok',
+          });
+          resetBinanceTimer();
+          const base = BINANCE_INTEREST_REFRESH_MS;
+          let nextServerTarget = Math.ceil(serverTime / base) * base;
+          if (nextServerTarget - serverTime < base) {
+            nextServerTarget += base;
+          }
+          const delay = Math.max(base, nextServerTarget - serverTime);
+          binanceTimerRef.current = setTimeout(() => {
+            triggerBinanceFetch('auto').catch(() => {});
+          }, delay);
+          return { serverTime, clockSkew };
+        } catch (error) {
+          if (binanceCancelRef.current) {
+            return null;
+          }
+          const message = error?.message || error || 'Error desconocido al sincronizar Binance.';
+          setBinanceLiveMeta((prev) => ({
+            ...prev,
+            loading: false,
+            error: message,
+            status: 'error',
+            lastAttempt: Date.now(),
+          }));
+          resetBinanceTimer();
+          binanceTimerRef.current = setTimeout(() => {
+            triggerBinanceFetch('retry').catch(() => {});
+          }, BINANCE_INTEREST_REFRESH_MS);
+          return null;
+        }
+      }, [isBinance, params.binanceApiKey, params.binanceApiSecret, params.binanceBorrowTicker, assets, loanRequests, liveBorrowPositions, sanitizeTicker, resetBinanceTimer]);
+
+      const handleBinanceManualRefresh = useCallback(() => {
+        resetBinanceTimer();
+        return triggerBinanceFetch('manual');
+      }, [resetBinanceTimer, triggerBinanceFetch]);
+
+      useEffect(() => {
+        if (!isBinance) {
+          resetBinanceTimer();
+          setBinanceLiveMeta((prev) => ({ ...prev, loading: false, status: 'idle' }));
+          return undefined;
+        }
+        const apiKey = (params.binanceApiKey || '').trim();
+        const apiSecret = (params.binanceApiSecret || '').trim();
+        if (!apiKey || !apiSecret) {
+          resetBinanceTimer();
+          setBinanceLiveMeta((prev) => ({ ...prev, loading: false, status: apiKey || apiSecret ? 'incomplete' : 'missing', error: null }));
+          return undefined;
+        }
+        binanceCancelRef.current = false;
+        triggerBinanceFetch('init').catch(() => {});
+        return () => {
+          binanceCancelRef.current = true;
+          resetBinanceTimer();
+        };
+      }, [isBinance, params.binanceApiKey, params.binanceApiSecret, triggerBinanceFetch, resetBinanceTimer]);
 
       const [fxMeta, setFxMeta] = useState({ loading: false, lastUpdated: null, error: null });
 
@@ -2661,6 +3204,9 @@
       }, [isBinance, loanRequestsTotals]);
       const binanceBorrowAnnualRate = useMemo(() => {
         if (!isBinance) return 0;
+        if (Number.isFinite(binanceAggregate?.averageBorrowApr)) {
+          return binanceAggregate.averageBorrowApr;
+        }
         if (loanAmount > 0 && binanceActiveLoanEntries.length > 0) {
           return binanceActiveLoanEntries.reduce((acc, [ticker, amount]) => {
             const info = borrowRatesByTicker[ticker];
@@ -2669,9 +3215,12 @@
           }, 0);
         }
         return binanceBorrowInfo?.annual ?? 0;
-      }, [isBinance, loanAmount, binanceActiveLoanEntries, borrowRatesByTicker, binanceBorrowInfo]);
+      }, [isBinance, loanAmount, binanceActiveLoanEntries, borrowRatesByTicker, binanceBorrowInfo, binanceAggregate?.averageBorrowApr]);
       const binanceBorrowNetAnnualRate = useMemo(() => {
         if (!isBinance) return 0;
+        if (Number.isFinite(binanceAggregate?.averageNetApr)) {
+          return binanceAggregate.averageNetApr;
+        }
         if (loanAmount > 0 && binanceActiveLoanEntries.length > 0) {
           return binanceActiveLoanEntries.reduce((acc, [ticker, amount]) => {
             const info = borrowRatesByTicker[ticker];
@@ -2680,7 +3229,7 @@
           }, 0);
         }
         return binanceBorrowInfo?.netAnnual ?? binanceBorrowInfo?.annual ?? 0;
-      }, [isBinance, loanAmount, binanceActiveLoanEntries, borrowRatesByTicker, binanceBorrowInfo]);
+      }, [isBinance, loanAmount, binanceActiveLoanEntries, borrowRatesByTicker, binanceBorrowInfo, binanceAggregate?.averageNetApr]);
       const binanceBorrowAdjustment = useMemo(
         () => Math.max(0, binanceBorrowAnnualRate - binanceBorrowNetAnnualRate),
         [binanceBorrowAnnualRate, binanceBorrowNetAnnualRate]
@@ -2985,7 +3534,24 @@
               ? plannedOutstanding
               : fallbackOutstanding;
             const usageVsCap = maxBorrowForAsset > 0 ? loanNetOutstanding / maxBorrowForAsset : 0;
-            const actualLtv = asset.value > 0 ? loanNetOutstanding / asset.value : 0;
+            const qty = Number(asset.qty) || 0;
+            const ledgerCollateralAmount = Number.isFinite(ledgerEntry?.collateralAmount) && ledgerEntry.collateralAmount > 0
+              ? ledgerEntry.collateralAmount
+              : null;
+            const collateralQtyForCalc = ledgerCollateralAmount != null ? ledgerCollateralAmount : qty;
+            const ledgerBorrowIndexPrice = Number.isFinite(ledgerEntry?.borrowIndexPrice) && ledgerEntry.borrowIndexPrice > 0
+              ? ledgerEntry.borrowIndexPrice
+              : 1;
+            const ledgerCollateralIndexPrice = Number.isFinite(ledgerEntry?.collateralIndexPrice) && ledgerEntry.collateralIndexPrice > 0
+              ? ledgerEntry.collateralIndexPrice
+              : (Number(asset.price) > 0 ? asset.price : null);
+            const collateralIndexValue = ledgerCollateralIndexPrice != null && collateralQtyForCalc > 0
+              ? ledgerCollateralIndexPrice * collateralQtyForCalc
+              : null;
+            const borrowValueIndex = ledgerBorrowIndexPrice * loanNetOutstanding;
+            const actualLtv = collateralIndexValue && collateralIndexValue > 0
+              ? borrowValueIndex / collateralIndexValue
+              : (asset.value > 0 ? loanNetOutstanding / asset.value : 0);
             const earnApr = earnAprTop[ticker] ?? 0;
             const baseOffset = actualLtv > 0 ? earnApr / actualLtv : 0;
             const borrowInfo = isBinance ? borrowRatesByTicker[ticker] || {} : {};
@@ -2994,13 +3560,20 @@
                 ? ledgerEntry.annualRate
                 : (borrowInfo.annual ?? binanceBorrowAnnualRate))
               : chosenAPR;
+            const fallbackNetApr = Number.isFinite(annualApr) && Number.isFinite(policyLTV) && policyLTV > 0
+              ? annualApr - (earnApr / policyLTV)
+              : annualApr;
             const netAprRaw = isBinance
-              ? (Number.isFinite(ledgerEntry?.netAnnualRate) && ledgerEntry.netAnnualRate >= 0
+              ? (Number.isFinite(ledgerEntry?.netAnnualRate)
                 ? ledgerEntry.netAnnualRate
-                : (borrowInfo.netAnnual ?? borrowInfo.annual ?? annualApr))
+                : (Number.isFinite(borrowInfo.netAnnual)
+                  ? borrowInfo.netAnnual
+                  : (Number.isFinite(borrowInfo.annual) ? borrowInfo.annual : fallbackNetApr)))
               : Math.max(0, chosenAPR - baseOffset);
-            const netApr = Math.max(0, netAprRaw);
-            const aprOffset = isBinance ? Math.max(0, annualApr - netApr) : baseOffset;
+            const netApr = Number.isFinite(netAprRaw) ? netAprRaw : 0;
+            const aprOffset = isBinance
+              ? (Number.isFinite(annualApr) && Number.isFinite(netApr) ? annualApr - netApr : 0)
+              : baseOffset;
             let tone = "ok";
             if (isBinance) {
               const warnCut = ltvHealthyThreshold || 0;
@@ -3021,7 +3594,9 @@
               ? ledgerEntry.liquidationLtv
               : null;
             const liquidationThreshold = ledgerLiquidationLtv || (autoRepayLtv > 0 ? autoRepayLtv : marginCallLtv);
-            const qty = Number(asset.qty) || 0;
+            const marginCallThreshold = Number.isFinite(ledgerEntry?.marginCallLtv) && ledgerEntry.marginCallLtv > 0
+              ? ledgerEntry.marginCallLtv
+              : marginCallLtv;
             const ledgerPrincipalOutstanding = Number.isFinite(ledgerEntry?.principalOutstanding) && ledgerEntry.principalOutstanding >= 0
               ? ledgerEntry.principalOutstanding
               : Math.max(0, fallbackOutstanding - interestAccrued);
@@ -3032,18 +3607,24 @@
               ? plannedOutstanding
               : loanNetOutstanding;
             const liquidationValue = liquidationThreshold > 0
-              ? (liquidationBaseLoan > 0 ? liquidationBaseLoan / liquidationThreshold : 0)
+              ? (liquidationBaseLoan > 0 ? (ledgerBorrowIndexPrice * liquidationBaseLoan) / liquidationThreshold : 0)
               : null;
-            const computedLiquidationPrice = liquidationValue != null && qty > 0 ? liquidationValue / qty : null;
+            const marginCallValue = marginCallThreshold > 0
+              ? (liquidationBaseLoan > 0 ? (ledgerBorrowIndexPrice * liquidationBaseLoan) / marginCallThreshold : 0)
+              : null;
+            const computedLiquidationPrice = liquidationValue != null && collateralQtyForCalc > 0 ? liquidationValue / collateralQtyForCalc : null;
             const liquidationPrice = Number.isFinite(computedLiquidationPrice) && computedLiquidationPrice > 0
               ? computedLiquidationPrice
               : (Number.isFinite(ledgerEntry?.liquidationPriceHint) && ledgerEntry.liquidationPriceHint > 0
                 ? ledgerEntry.liquidationPriceHint
                 : null);
-            const currentPrice = Number(asset.price) > 0 ? asset.price : null;
-            const liquidationBufferValue = Number.isFinite(liquidationValue) ? asset.value - liquidationValue : null;
-            const liquidationBufferPct = currentPrice && liquidationPrice && currentPrice > 0
-              ? Math.max(0, (currentPrice - liquidationPrice) / currentPrice)
+            const marginCallPrice = Number.isFinite(marginCallValue) && collateralQtyForCalc > 0 ? marginCallValue / collateralQtyForCalc : null;
+            const referencePrice = ledgerCollateralIndexPrice ?? (Number(asset.price) > 0 ? asset.price : null);
+            const liquidationBufferValue = Number.isFinite(liquidationValue) && collateralIndexValue != null
+              ? collateralIndexValue - liquidationValue
+              : null;
+            const liquidationBufferPct = referencePrice && liquidationPrice && referencePrice > 0
+              ? Math.max(0, (referencePrice - liquidationPrice) / referencePrice)
               : null;
             return {
               id: asset.id,
@@ -3068,14 +3649,21 @@
               originalPrincipal,
               principalOutstanding,
               liquidationPrice,
+              marginCallPrice,
               liquidationBufferPct,
               liquidationBufferValue,
-              currentPrice,
-              qty,
+              currentPrice: referencePrice,
+              qty: collateralQtyForCalc,
+              marginCallThreshold,
+              marginCallValue,
               liquidationValue,
               liquidationThreshold,
               liquidationBaseLoan,
               loanNetOutstanding,
+              borrowIndexPrice: ledgerBorrowIndexPrice,
+              collateralIndexPrice: ledgerCollateralIndexPrice,
+              indexCollateralValue: collateralIndexValue,
+              ltvFromApi: Number.isFinite(ledgerEntry?.currentLtv) ? ledgerEntry.currentLtv : null,
             };
           })
           .sort((a, b) => b.value - a.value);
@@ -3119,15 +3707,20 @@
       }, [autoRepayLtv, binanceBorrowAdjustment, binanceBorrowNetAnnualRate, binanceOutstandingRatio, binanceLoanLedger, binanceLedgerOutstandingTotal, borrowRatesByTicker, cashflowDerived?.outstandingByTicker, defaultLtv, earnAprTop, isBinance, loanAmount, loanRequestsTotals, manualLoanAllocationEnabled, marginCallLtv, plannedOverallLTV, plannedOutstanding, plannedOutstandingPrincipal, totals.totalCollateralValue, totals.withValue, ltvByTicker, ltvHealthyThreshold, ltvWarnThreshold]);
 
       const binanceNetAprOffset = isBinance ? Math.max(0, collateralBreakdown.weightedAprOffset || 0) : 0;
-      const binanceNetAprBase = isBinance ? Math.max(0, collateralBreakdown.weightedNetApr ?? chosenAPR) : 0;
-      const binanceNetAnnualRate = isBinance ? Math.max(0, binanceNetAprBase) : 0;
+      const binanceNetAprBase = isBinance ? (collateralBreakdown.weightedNetApr ?? chosenAPR) : 0;
+      const binanceNetAnnualRate = isBinance ? binanceNetAprBase : 0;
       const netAnnualRate = isBinance ? binanceNetAnnualRate : standardNetAnnualRate;
+      const renderNow = Date.now();
+      const binanceLastUpdatedMs = binanceLiveMeta?.lastUpdated ?? null;
+      const binanceSecondsAgo = binanceLastUpdatedMs != null ? Math.max(0, Math.floor((renderNow - binanceLastUpdatedMs) / 1000)) : null;
+      const binanceDataStale = binanceLastUpdatedMs != null ? (renderNow - binanceLastUpdatedMs > BINANCE_STALE_THRESHOLD_MS) : false;
+      const binanceUpdatedLabel = binanceSecondsAgo != null ? ` · actualizado hace ${binanceSecondsAgo}s` : '';
       const binanceNetAprSubtle = isBinance
-        ? (binanceOutstandingRatio < 0.999
+        ? ((binanceOutstandingRatio < 0.999
           ? `Saldo neto ${toPct(binanceOutstandingRatio, 0)} · tasa neta ${toPct(binanceNetAprBase, 2)}`
           : (binanceNetAprOffset > 0
             ? `Préstamo ${toPct(chosenAPR, 2)} − ajuste ${toPct(binanceNetAprOffset, 2)}`
-            : `Préstamo ${toPct(chosenAPR, 2)}`))
+            : `Préstamo ${toPct(chosenAPR, 2)}`)) + binanceUpdatedLabel)
         : undefined;
 
       const extraCollateralForTarget = useMemo(() => {
@@ -3321,6 +3914,20 @@
 
             <section className="mb-10 grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
               <div className="space-y-6">
+                {isBinance && (
+                  <BinanceLivePanel
+                    apiKey={params.binanceApiKey || ''}
+                    apiSecret={params.binanceApiSecret || ''}
+                    onChangeKey={(value) => setParams({ ...params, binanceApiKey: value })}
+                    onChangeSecret={(value) => setParams({ ...params, binanceApiSecret: value })}
+                    onRefresh={handleBinanceManualRefresh}
+                    meta={binanceLiveMeta}
+                    aggregate={binanceAggregate}
+                    dataStale={binanceDataStale}
+                    secondsAgo={binanceSecondsAgo}
+                    formatUsd={formatUsd}
+                  />
+                )}
                 <Card title="Préstamo & Repago">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 justify-items-center">
                     <Field label={`Monto a pedir (${currency})`} align="center" className="w-full max-w-xs">
@@ -5006,6 +5613,125 @@
       );
     }
 
+    function BinanceLivePanel({
+      apiKey,
+      apiSecret,
+      onChangeKey,
+      onChangeSecret,
+      onRefresh,
+      meta,
+      aggregate,
+      dataStale,
+      secondsAgo,
+      formatUsd,
+    }) {
+      const borrowApr = Number.isFinite(aggregate?.averageBorrowApr) ? aggregate.averageBorrowApr : null;
+      const netApr = Number.isFinite(aggregate?.averageNetApr) ? aggregate.averageNetApr : null;
+      const ltv = Number.isFinite(aggregate?.ltv) ? aggregate.ltv : null;
+      const borrowUsd = Number.isFinite(aggregate?.borrowUsd) ? aggregate.borrowUsd : null;
+      const collateralUsd = Number.isFinite(aggregate?.collateralUsd) ? aggregate.collateralUsd : null;
+      const loading = !!meta?.loading;
+      const error = meta?.error ? String(meta.error) : null;
+      const status = meta?.status || 'idle';
+      const statusLabel = (() => {
+        if (status === 'missing') return 'Configura tu API Key y Secret (solo lectura).';
+        if (status === 'incomplete') return 'Completa ambas credenciales para sincronizar.';
+        if (status === 'syncing' || status === 'syncing-manual') return 'Sincronizando con Binance…';
+        if (status === 'ok') {
+          if (secondsAgo != null) {
+            return secondsAgo === 0 ? 'Actualizado hace <1s' : `Actualizado hace ${secondsAgo}s`;
+          }
+          return 'Sincronizado con Binance';
+        }
+        if (status === 'error' && error) return error;
+        return 'Sincronización manual disponible.';
+      })();
+      const statusTone = status === 'error'
+        ? 'text-rose-600'
+        : dataStale && status !== 'missing' && status !== 'incomplete'
+          ? 'text-amber-600'
+          : 'text-neutral-800';
+      return (
+        <Card title="Binance Loans – API en vivo">
+          <div className="space-y-4 text-sm">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-semibold uppercase text-neutral-500">API Key (READ)</span>
+                <input
+                  type="password"
+                  autoComplete="off"
+                  className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                  value={apiKey}
+                  onChange={(e) => onChangeKey(e.target.value.trim())}
+                  placeholder="Ingresa tu API Key"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-semibold uppercase text-neutral-500">API Secret</span>
+                <input
+                  type="password"
+                  autoComplete="off"
+                  className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
+                  value={apiSecret}
+                  onChange={(e) => onChangeSecret(e.target.value.trim())}
+                  placeholder="Ingresa tu API Secret"
+                />
+              </label>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="text-xs font-semibold uppercase text-neutral-500">Estado</div>
+                <div className={`text-sm font-semibold ${statusTone}`}>{statusLabel}</div>
+                {error && status !== 'error' && (
+                  <div className="text-xs text-rose-600 mt-1">{error}</div>
+                )}
+                {dataStale && !loading && status === 'ok' && (
+                  <div className="text-xs text-amber-600 mt-1">Datos con más de 90s · revisa la conexión.</div>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={onRefresh}
+                disabled={loading}
+                className="nx-btn nx-btn-sm self-start disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {loading ? 'Sincronizando…' : 'Sincronizar ahora'}
+              </button>
+            </div>
+            <div className="grid gap-3 text-xs sm:grid-cols-2">
+              <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-3">
+                <div className="text-[10px] font-semibold uppercase text-neutral-500">APR préstamo</div>
+                <div className="text-sm font-semibold text-neutral-800">{borrowApr != null ? formatPercent(borrowApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</div>
+              </div>
+              <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-3">
+                <div className="text-[10px] font-semibold uppercase text-neutral-500">APR neto</div>
+                <div className={`text-sm font-semibold ${netApr != null && netApr < 0 ? 'text-emerald-600' : 'text-neutral-800'}`}>
+                  {netApr != null ? formatPercent(netApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-3">
+                <div className="text-[10px] font-semibold uppercase text-neutral-500">Deuda total (USDT)</div>
+                <div className="text-sm font-semibold text-neutral-800">{borrowUsd != null ? formatUsd(borrowUsd, true) : '—'}</div>
+              </div>
+              <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-3">
+                <div className="text-[10px] font-semibold uppercase text-neutral-500">Colateral indexado</div>
+                <div className="text-sm font-semibold text-neutral-800">{collateralUsd != null ? formatUsd(collateralUsd, true) : '—'}</div>
+              </div>
+              <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-3 sm:col-span-2">
+                <div className="text-[10px] font-semibold uppercase text-neutral-500">LTV (índice)</div>
+                <div className={`text-sm font-semibold ${ltv != null && ltv > 0.85 ? 'text-rose-600' : 'text-neutral-800'}`}>
+                  {ltv != null ? formatPercent(ltv, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                </div>
+              </div>
+            </div>
+            <div className="rounded-xl bg-neutral-50 px-3 py-2 text-[11px] text-neutral-500">
+              Las credenciales requieren permisos READ para Loans y Simple Earn. Binance recomienda restringir la API por IP.
+            </div>
+          </div>
+        </Card>
+      );
+    }
+
     function BinanceAssetCard({ item, currency, formatUsd, formatLoan, chosenAPR }) {
       const toneBadge = { ok: 'bg-emerald-50 text-emerald-700', warn: 'bg-amber-50 text-amber-700', danger: 'bg-rose-50 text-rose-700' };
       const toneBar = { ok: '#10b981', warn: '#f97316', danger: '#ef4444' };
@@ -5020,6 +5746,25 @@
       const liquidationPrice = Number.isFinite(item.liquidationPrice) && item.liquidationPrice > 0 ? item.liquidationPrice : null;
       const liquidationDigits = liquidationPrice != null && liquidationPrice < 0.1 ? { minimumFractionDigits: 6, maximumFractionDigits: 8 } : { minimumFractionDigits: 4, maximumFractionDigits: 6 };
       const liquidationPriceLabel = liquidationPrice != null ? `$${formatDecimal(liquidationPrice, liquidationDigits)}` : '—';
+      const marginCallPrice = Number.isFinite(item.marginCallPrice) && item.marginCallPrice > 0 ? item.marginCallPrice : null;
+      const marginDigits = marginCallPrice != null && marginCallPrice < 0.1 ? { minimumFractionDigits: 6, maximumFractionDigits: 8 } : { minimumFractionDigits: 4, maximumFractionDigits: 6 };
+      const marginPriceLabel = marginCallPrice != null ? `$${formatDecimal(marginCallPrice, marginDigits)}` : '—';
+      const ltvApi = Number.isFinite(item.ltvFromApi) ? item.ltvFromApi : null;
+      const ltvDrift = ltvApi != null ? item.actualLtv - ltvApi : null;
+      const showLtvDrift = ltvDrift != null && Math.abs(ltvDrift) >= 0.0005;
+      const indexPrice = Number.isFinite(item.collateralIndexPrice) ? item.collateralIndexPrice : null;
+      const indexDigits = indexPrice != null && indexPrice < 0.1 ? { minimumFractionDigits: 6, maximumFractionDigits: 8 } : { minimumFractionDigits: 4, maximumFractionDigits: 6 };
+      const marginCallThreshold = Number.isFinite(item.marginCallThreshold) ? item.marginCallThreshold : null;
+      const liquidationThreshold = Number.isFinite(item.liquidationThreshold) ? item.liquidationThreshold : null;
+      const thresholdParts = [];
+      if (marginCallThreshold != null) {
+        thresholdParts.push(`MC ${formatPercent(marginCallThreshold, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`);
+      }
+      if (liquidationThreshold != null) {
+        thresholdParts.push(`Liq ${formatPercent(liquidationThreshold, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`);
+      }
+      const thresholdLabel = thresholdParts.length > 0 ? thresholdParts.join(' · ') : null;
+      const indexPairLabel = item.ticker ? `${item.ticker}/USDT` : '—';
       const borrowDate = ledger.borrowDate;
       const lastUpdated = ledger.lastUpdated;
       return (
@@ -5049,11 +5794,26 @@
               <div>
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">LTV neto</div>
                 <div className="text-sm font-semibold text-neutral-800">{formatPercent(item.actualLtv, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div>
+                {ltvApi != null && (
+                  <div className="text-[10px] text-neutral-500">LTV API {formatPercent(ltvApi, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div>
+                )}
+                {showLtvDrift && (
+                  <div className={`text-[10px] ${ltvDrift > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                    Δ vs API {ltvDrift > 0 ? '+' : ''}{formatPercent(Math.abs(ltvDrift), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                )}
               </div>
               <div>
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Tasas Binance</div>
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Parámetros Binance</div>
                 <div className="text-sm font-semibold text-neutral-800">{formatPercent(annualApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} APR</div>
-                <div className="text-[10px] text-neutral-500">Precio de liquidación estimada {liquidationPriceLabel}</div>
+                {thresholdLabel && (
+                  <div className="text-[10px] text-neutral-500">Umbrales LTV {thresholdLabel}</div>
+                )}
+                <div className="text-[10px] text-neutral-500">Precio liquidación <span className="font-medium text-neutral-700">{liquidationPriceLabel}</span></div>
+                <div className="text-[10px] text-neutral-500">Precio margin call <span className="font-medium text-neutral-700">{marginPriceLabel}</span></div>
+                {indexPrice != null && (
+                  <div className="text-[10px] text-neutral-500">Precio índice {indexPairLabel} <span className="font-medium text-neutral-700">{`$${formatDecimal(indexPrice, indexDigits)}`}</span></div>
+                )}
               </div>
             </div>
           </div>
