@@ -894,19 +894,19 @@
         borrowRates: {
           ADA: {
             label: "Cardano (ADA)",
-            annual: 0.0507,
-            hourly: annualToHourly(0.0507),
-            netAnnual: 0.0476,
-            adjustmentAnnual: 0.0031,
+            annual: 0.0503,
+            hourly: annualToHourly(0.0503),
+            netAnnual: 0.049,
+            adjustmentAnnual: 0.0013,
             loanAsset: "ADA",
             limitNote: "Depende del colateral y nivel VIP (ver tabla oficial)",
           },
           ALGO: {
             label: "Algorand (ALGO)",
-            annual: 0.0507,
-            hourly: annualToHourly(0.0507),
-            netAnnual: 0.0415,
-            adjustmentAnnual: 0.0092,
+            annual: 0.0503,
+            hourly: annualToHourly(0.0503),
+            netAnnual: 0.0468,
+            adjustmentAnnual: 0.0035,
             loanAsset: "ALGO",
             limitNote: "Depende del colateral y nivel VIP (ver tabla oficial)",
           },
@@ -1028,16 +1028,20 @@
             originalPrincipal: 10300,
             outstanding: 10471.01,
             interestAccrued: 171.01,
-            annualRate: 0.0503283,
-            netAnnualRate: 0.0484,
+            annualRate: 0.0503,
+            netAnnualRate: 0.049,
+            liquidationLtv: 0.85,
+            liquidationPriceHint: 0.3518,
             initialLtv: 0.46,
           },
           ALGO: {
             originalPrincipal: 7026,
             outstanding: 1201.78,
             interestAccrued: 69.58,
-            annualRate: 0.0503283,
-            netAnnualRate: 0.045,
+            annualRate: 0.0503,
+            netAnnualRate: 0.0468,
+            liquidationLtv: 0.85,
+            liquidationPriceHint: 0.02149,
             initialLtv: 0.45,
             payments: [
               { id: "algo-payment-1", amount: 5890.97, date: "2024-03-12", note: "Pago capital" },
@@ -3026,9 +3030,7 @@
               : ledgerPrincipalOutstanding;
             const liquidationBaseLoan = hasPlannedOutstanding
               ? plannedOutstanding
-              : (ledgerPrincipalOutstanding > 0
-                ? ledgerPrincipalOutstanding
-                : Math.max(0, fallbackOutstanding - interestAccrued));
+              : loanNetOutstanding;
             const liquidationValue = liquidationThreshold > 0
               ? (liquidationBaseLoan > 0 ? liquidationBaseLoan / liquidationThreshold : 0)
               : null;
