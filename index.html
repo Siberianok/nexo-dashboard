@@ -2862,14 +2862,23 @@
                 : mappedLoanRaw)
               : 0;
             const ledgerEntry = isBinance ? binanceLoanLedger[ticker] : null;
-            let allocatedLoan = manualActive
+            const manualAllocation = manualActive
               ? Math.max(0, asset.loanAssigned || 0)
               : (directLoanActive ? mappedLoan : loanBase * share);
-            if (isBinance && ledgerEntry?.outstanding > 0) {
-              allocatedLoan = ledgerEntry.outstanding;
-            }
-            const usageVsCap = maxBorrowForAsset > 0 ? allocatedLoan / maxBorrowForAsset : 0;
-            const actualLtv = asset.value > 0 ? allocatedLoan / asset.value : 0;
+            const ledgerOutstandingHint = Number.isFinite(ledgerEntry?.outstanding) && ledgerEntry.outstanding >= 0
+              ? Math.max(0, ledgerEntry.outstanding)
+              : 0;
+            const paidTotal = Math.max(0, Number(ledgerEntry?.paidTotal) || 0);
+            const interestAccrued = Math.max(0, Number(ledgerEntry?.interestAccrued) || 0);
+            const originalPrincipal = Number.isFinite(ledgerEntry?.originalPrincipal) && ledgerEntry.originalPrincipal > 0
+              ? ledgerEntry.originalPrincipal
+              : Math.max(0, manualAllocation + paidTotal - interestAccrued);
+            const ledgerNetOutstanding = Math.max(0, originalPrincipal + interestAccrued - paidTotal);
+            const loanNetOutstanding = ledgerNetOutstanding > 0
+              ? ledgerNetOutstanding
+              : (ledgerOutstandingHint > 0 ? ledgerOutstandingHint : manualAllocation);
+            const usageVsCap = maxBorrowForAsset > 0 ? loanNetOutstanding / maxBorrowForAsset : 0;
+            const actualLtv = asset.value > 0 ? loanNetOutstanding / asset.value : 0;
             const earnApr = earnAprTop[ticker] ?? 0;
             const baseOffset = actualLtv > 0 ? earnApr / actualLtv : 0;
             const borrowInfo = isBinance ? borrowRatesByTicker[ticker] || {} : {};
@@ -2901,20 +2910,6 @@
                 tone = "warn";
               }
             }
-            const loanShareDenom = isBinance && binanceLedgerOutstandingTotal > 0
-              ? binanceLedgerOutstandingTotal
-              : manualActive
-                ? manualTotal
-                : directLoanActive
-                  ? (hasOutstandingMap
-                    ? (outstandingDirectTotal > 0 ? outstandingDirectTotal : loanBase)
-                    : (directLoanSum > 0 ? directLoanSum : loanBase))
-                  : loanBase;
-            const paidTotal = Math.max(0, Number(ledgerEntry?.paidTotal) || 0);
-            const interestAccrued = Math.max(0, Number(ledgerEntry?.interestAccrued) || 0);
-            const originalPrincipal = Number.isFinite(ledgerEntry?.originalPrincipal) && ledgerEntry.originalPrincipal > 0
-              ? ledgerEntry.originalPrincipal
-              : Math.max(0, allocatedLoan + paidTotal - interestAccrued);
             const ledgerLiquidationLtv = Number.isFinite(ledgerEntry?.liquidationLtv) && ledgerEntry.liquidationLtv > 0
               ? ledgerEntry.liquidationLtv
               : null;
@@ -2922,10 +2917,10 @@
             const qty = Number(asset.qty) || 0;
             const principalOutstanding = Number.isFinite(ledgerEntry?.principalOutstanding) && ledgerEntry.principalOutstanding >= 0
               ? ledgerEntry.principalOutstanding
-              : Math.max(0, allocatedLoan - interestAccrued);
+              : Math.max(0, loanNetOutstanding - interestAccrued);
             const liquidationBaseLoan = principalOutstanding > 0
               ? principalOutstanding
-              : Math.max(0, allocatedLoan - interestAccrued);
+              : Math.max(0, loanNetOutstanding - interestAccrued);
             const liquidationValue = liquidationThreshold > 0
               ? (liquidationBaseLoan > 0 ? liquidationBaseLoan / liquidationThreshold : 0)
               : null;
@@ -2949,13 +2944,12 @@
               policyLTV,
               policyPct: policyLTV * 100,
               maxBorrowForAsset,
-              allocatedLoan,
+              allocatedLoan: loanNetOutstanding,
               usageVsCap: Math.max(0, usageVsCap),
               actualLtv,
               earnApr,
               aprOffset,
               netApr,
-              loanShare: loanShareDenom > 0 ? allocatedLoan / loanShareDenom : 0,
               tone,
               annualApr,
               ledger: ledgerEntry ? { ...ledgerEntry, payments: Array.isArray(ledgerEntry.payments) ? ledgerEntry.payments.map((p) => ({ ...p })) : [] } : null,
@@ -2971,26 +2965,44 @@
               liquidationValue,
               liquidationThreshold,
               liquidationBaseLoan,
+              loanNetOutstanding,
             };
           })
           .sort((a, b) => b.value - a.value);
-        const totalAllocated = manualActive
+        const netOutstandingTotal = items.reduce((acc, item) => acc + Math.max(0, item.loanNetOutstanding || 0), 0);
+        const fallbackAllocatedTotal = items.reduce((acc, item) => acc + Math.max(0, item.allocatedLoan || 0), 0);
+        const fallbackLoanBase = manualActive
           ? manualTotal
           : directLoanActive
-            ? (isBinance ? (binanceLedgerOutstandingTotal || directLoanSum || loanBase) : (loanBase))
-            : items.reduce((acc, item) => acc + item.allocatedLoan, 0);
+            ? (hasOutstandingMap
+              ? (outstandingDirectTotal > 0 ? outstandingDirectTotal : loanBase)
+              : (directLoanSum > 0 ? directLoanSum : loanBase))
+            : fallbackAllocatedTotal;
+        const loanShareDenom = netOutstandingTotal > 0
+          ? netOutstandingTotal
+          : (fallbackLoanBase > 0 ? fallbackLoanBase : loanBase);
+        const itemsWithShare = items.map((item) => {
+          const shareAmount = item.loanNetOutstanding > 0
+            ? item.loanNetOutstanding
+            : Math.max(0, item.allocatedLoan || 0);
+          const loanShare = loanShareDenom > 0 ? shareAmount / loanShareDenom : 0;
+          return { ...item, loanShare, loanShareAmount: shareAmount };
+        });
+        const totalAllocated = loanShareDenom > 0 ? loanShareDenom : loanBase;
         const weightedAprOffset = totalAllocated > 0
-          ? items.reduce((acc, item) => acc + Math.max(0, item.aprOffset || 0) * (item.allocatedLoan / totalAllocated), 0)
+          ? itemsWithShare.reduce((acc, item) => acc + Math.max(0, item.aprOffset || 0) * ((item.loanShareAmount || 0) / totalAllocated), 0)
           : (isBinance ? binanceBorrowAdjustment : 0);
         const weightedNetApr = totalAllocated > 0
-          ? items.reduce((acc, item) => acc + (item.netApr ?? chosenAPR) * (item.allocatedLoan / totalAllocated), 0)
+          ? itemsWithShare.reduce((acc, item) => acc + (item.netApr ?? chosenAPR) * ((item.loanShareAmount || 0) / totalAllocated), 0)
           : (isBinance ? binanceBorrowNetAnnualRate : Math.max(0, chosenAPR - weightedAprOffset));
         return {
-          items,
+          items: itemsWithShare.map(({ loanShareAmount, ...rest }) => rest),
           manualActive,
           manualEnabled,
           manualTotal,
           loanAllocated: totalAllocated || loanBase,
+          loanShareDenom,
+          netOutstandingTotal,
           weightedAprOffset,
           weightedNetApr,
         };
@@ -5090,15 +5102,20 @@
       const assetPalette = ['#2563eb', '#f97316', '#10b981', '#8b5cf6', '#ec4899', '#14b8a6', '#facc15', '#0ea5e9', '#ef4444', '#22d3ee'];
       const distribution = items.map((item) => {
         const ledger = item.ledger || {};
+        const precomputedOutstanding = Number.isFinite(item.loanNetOutstanding)
+          ? Math.max(0, item.loanNetOutstanding)
+          : null;
         const ledgerOriginal = Number.isFinite(ledger.originalPrincipal) ? Math.max(0, ledger.originalPrincipal) : 0;
         const ledgerInterest = Number.isFinite(ledger.interestAccrued) ? Math.max(0, ledger.interestAccrued) : 0;
         const ledgerPaid = Number.isFinite(ledger.paidTotal) ? Math.max(0, ledger.paidTotal) : 0;
         const ledgerOutstanding = Math.max(0, ledgerOriginal + ledgerInterest - ledgerPaid);
         const recordedOutstanding = Number.isFinite(ledger.outstanding) ? Math.max(0, ledger.outstanding) : 0;
         const fallbackOutstanding = Number.isFinite(item.allocatedLoan) ? Math.max(0, item.allocatedLoan) : 0;
-        const amount = ledgerOutstanding > 0
-          ? ledgerOutstanding
-          : (recordedOutstanding > 0 ? recordedOutstanding : fallbackOutstanding);
+        const amount = precomputedOutstanding != null
+          ? precomputedOutstanding
+          : (ledgerOutstanding > 0
+            ? ledgerOutstanding
+            : (recordedOutstanding > 0 ? recordedOutstanding : fallbackOutstanding));
         return { ...item, amount };
       }).filter((item) => item.amount > 0);
       if (distribution.length === 0) {
