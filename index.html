@@ -2853,8 +2853,6 @@
       };
       const removeRow = (id) => setAssets(prev => prev.filter(a => a.id !== id));
 
-      const loyaltyCardTitle = loyalty ? `Requisitos ${loyalty.tokenTicker ? `${loyalty.tokenTicker.toUpperCase()} & ` : ''}Colateral` : "Colateral & métricas";
-
       const displayPlatformName = platformName || platformId;
 
 
@@ -3143,28 +3141,32 @@
                   </div>
                 </Card>
 
-                <Card title={loyaltyCardTitle}>
-                  <div className="grid grid-cols-1 gap-3">
-                    {loyalty && loyaltyReqs?.tiers?.length ? (
-                      loyaltyReqs.tiers.map((tier) => (
-                        <React.Fragment key={tier.label}>
-                          <Line label={`Requerido ${tier.label} (${toPct(tier.minRatio, 1)} ${loyaltyModelActive === 'vsTotal' ? 'vs total' : 'vs resto'})`} value={formatUsd(tier.required)} />
-                          <Line label={`Faltante ${tier.label}`} value={formatUsd(tier.missing)} muted={tier.missing <= 0} />
-                        </React.Fragment>
-                      ))
-                    ) : (
-                      !isBinance && (
-                        <p className="text-sm text-neutral-500">Esta plataforma no tiene un programa de niveles ligado a un token específico.</p>
-                      )
-                    )}
-                    <div className="h-px bg-neutral-200 my-1" />
-                    <Line label={`Colateral extra para ≤${toPct(targetLtv, 0)}`} value={formatUsd(extraCollateralForTarget)} tone={extraCollateralForTarget <= 0 ? "ok" : "warn"} />
-                  </div>
-                </Card>
-
                 <Card title="Proyección del préstamo">
                   <TrendChart data={timeline} currency={currency} rate={loanRate} />
                 </Card>
+
+                <CashflowPlanner
+                  plan={cashflowPlan}
+                  derived={cashflowDerived}
+                  onPlanChange={updateCashflowPlan}
+                  currency={currency}
+                  rate={loanRate}
+                  fmt={fmt}
+                  loanAmount={loanAmount}
+                  chosenAPR={chosenAPR}
+                  interestCalc={interestCalc}
+                  daysUntilRepay={daysUntilRepay}
+                  repayDate={repayDate}
+                  totals={totals}
+                  targetLtv={targetLtv}
+                  marginCallLtv={marginCallLtv}
+                  autoRepayLtv={autoRepayLtv}
+                  scenarioDefaults={cashflowPlan?.scenarioShocks}
+                  focusRingClass={focusRingClass}
+                  earnMonthly={earnMonthly}
+                  earnEligible={earnEligible}
+                  minBalancePerks={minBalancePerks}
+                />
 
               </div>
 
@@ -3227,29 +3229,6 @@
                   scenarioName={ltvScenarioLabel}
                   cashflowNet={cashflowDerived?.netBalanceFinal}
                   defaultMatrix={baseBenchmarkConfig?.rateMatrix}
-                />
-
-                <CashflowPlanner
-                  plan={cashflowPlan}
-                  derived={cashflowDerived}
-                  onPlanChange={updateCashflowPlan}
-                  currency={currency}
-                  rate={loanRate}
-                  fmt={fmt}
-                  loanAmount={loanAmount}
-                  chosenAPR={chosenAPR}
-                  interestCalc={interestCalc}
-                  daysUntilRepay={daysUntilRepay}
-                  repayDate={repayDate}
-                  totals={totals}
-                  targetLtv={targetLtv}
-                  marginCallLtv={marginCallLtv}
-                  autoRepayLtv={autoRepayLtv}
-                  scenarioDefaults={cashflowPlan?.scenarioShocks}
-                  focusRingClass={focusRingClass}
-                  earnMonthly={earnMonthly}
-                  earnEligible={earnEligible}
-                  minBalancePerks={minBalancePerks}
                 />
 
                 {!isBinance && (
