@@ -3253,8 +3253,8 @@
                 { key: 'repay-total', title: 'Total a devolver', value: formatLoan(binanceTotalToRepay) },
                 { key: 'loan-paid', title: 'Pagos hechos', value: formatLoan(binancePaidDisplayTotal), subtle: binancePaidSubtle },
                 { key: 'loan-plan', title: 'Préstamo neto', value: formatLoan(binanceNetLoanValue), subtle: binanceLoanNetSubtle },
-                { key: 'ltv-current', title: 'LTV inicial', value: toPct(binanceInitialLtv, 2), tone: binanceInitialLtvTone, subtle: binanceInitialCollateralSubtle },
                 { key: 'collateral-current', title: 'Colateral actual', value: formatUsd(totals.totalCollateralValue) },
+                { key: 'ltv-current', title: 'LTV inicial', value: toPct(binanceInitialLtv, 2), tone: binanceInitialLtvTone, subtle: binanceInitialCollateralSubtle },
                 { key: 'ltv-plan', title: 'LTV neto', value: toPct(currentOverallLTV, 2), tone: binanceCurrentLtvTone, subtle: binanceNetLtvSubtle },
                 { key: 'apr', title: 'Tasa anual (APR)', value: toPct(chosenAPR, 2), subtle: binanceBorrowLabel || undefined },
                 {
