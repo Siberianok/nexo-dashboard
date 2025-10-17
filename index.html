@@ -1717,6 +1717,7 @@
           const annualRate = Number(entry.annualRate);
           const netAnnualRate = Number(entry.netAnnualRate);
           const liquidationPriceHint = Number(entry.liquidationPriceHint);
+          const liquidationLtv = Number(entry.liquidationLtv);
           const initialLtv = Number(entry.initialLtv);
           const initialCollateralValueRaw = Number(entry.initialCollateralValue ?? entry.initialCollateralUsd ?? entry.initialCollateral);
           const borrowDate = typeof entry.borrowDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(entry.borrowDate)
@@ -1734,6 +1735,7 @@
             annualRate: Number.isFinite(annualRate) && annualRate > 0 ? annualRate : null,
             netAnnualRate: Number.isFinite(netAnnualRate) && netAnnualRate > 0 ? netAnnualRate : null,
             liquidationPriceHint: Number.isFinite(liquidationPriceHint) && liquidationPriceHint > 0 ? liquidationPriceHint : null,
+            liquidationLtv: Number.isFinite(liquidationLtv) && liquidationLtv > 0 ? liquidationLtv : null,
             borrowDate,
             lastUpdated,
             notes: typeof entry.notes === 'string' ? entry.notes : '',
@@ -2196,6 +2198,7 @@
             payments,
             paidTotal,
             originalPrincipal: baseOriginal,
+            principalOutstanding,
             outstanding: liveOutstanding,
             outstandingRecorded: recordedOutstanding,
             interestAccrued: liveInterest,
@@ -2817,12 +2820,26 @@
             const originalPrincipal = Number.isFinite(ledgerEntry?.originalPrincipal) && ledgerEntry.originalPrincipal > 0
               ? ledgerEntry.originalPrincipal
               : Math.max(0, allocatedLoan + paidTotal - interestAccrued);
-            const liquidationValue = marginCallLtv > 0 ? allocatedLoan / marginCallLtv : null;
+            const ledgerLiquidationLtv = Number.isFinite(ledgerEntry?.liquidationLtv) && ledgerEntry.liquidationLtv > 0
+              ? ledgerEntry.liquidationLtv
+              : null;
+            const liquidationThreshold = ledgerLiquidationLtv || (autoRepayLtv > 0 ? autoRepayLtv : marginCallLtv);
             const qty = Number(asset.qty) || 0;
-            const computedLiquidationPrice = marginCallLtv > 0 && qty > 0 ? (allocatedLoan / marginCallLtv) / qty : null;
-            const liquidationPrice = Number.isFinite(ledgerEntry?.liquidationPriceHint) && ledgerEntry.liquidationPriceHint > 0
-              ? ledgerEntry.liquidationPriceHint
-              : computedLiquidationPrice;
+            const principalOutstanding = Number.isFinite(ledgerEntry?.principalOutstanding) && ledgerEntry.principalOutstanding >= 0
+              ? ledgerEntry.principalOutstanding
+              : Math.max(0, allocatedLoan - interestAccrued);
+            const liquidationBaseLoan = principalOutstanding > 0
+              ? principalOutstanding
+              : Math.max(0, allocatedLoan - interestAccrued);
+            const liquidationValue = liquidationThreshold > 0
+              ? (liquidationBaseLoan > 0 ? liquidationBaseLoan / liquidationThreshold : 0)
+              : null;
+            const computedLiquidationPrice = liquidationValue != null && qty > 0 ? liquidationValue / qty : null;
+            const liquidationPrice = Number.isFinite(computedLiquidationPrice) && computedLiquidationPrice > 0
+              ? computedLiquidationPrice
+              : (Number.isFinite(ledgerEntry?.liquidationPriceHint) && ledgerEntry.liquidationPriceHint > 0
+                ? ledgerEntry.liquidationPriceHint
+                : null);
             const currentPrice = Number(asset.price) > 0 ? asset.price : null;
             const liquidationBufferValue = Number.isFinite(liquidationValue) ? asset.value - liquidationValue : null;
             const liquidationBufferPct = currentPrice && liquidationPrice && currentPrice > 0
@@ -2850,12 +2867,15 @@
               paidTotal,
               interestAccrued,
               originalPrincipal,
+              principalOutstanding,
               liquidationPrice,
               liquidationBufferPct,
               liquidationBufferValue,
               currentPrice,
               qty,
               liquidationValue,
+              liquidationThreshold,
+              liquidationBaseLoan,
             };
           })
           .sort((a, b) => b.value - a.value);
