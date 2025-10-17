@@ -295,6 +295,8 @@
 
     const DEFAULT_LOCALE = 'es-AR';
 
+    const normalizeTicker = (value) => (typeof value === 'string' ? value.trim().toUpperCase() : '');
+
     const MS_IN_HOUR = 60 * 60 * 1000;
     const HOURS_IN_YEAR = 365 * 24;
     const annualToHourly = (apr) => {
@@ -326,7 +328,6 @@
       const earns = Array.isArray(plan?.earns) ? plan.earns : [];
       const manual = Array.isArray(plan?.manual) ? plan.manual : [];
 
-      const normalizeTicker = (value) => (typeof value === 'string' ? value.trim().toUpperCase() : '');
       const loanAmount = Math.max(0, Number(ctx?.loanAmount) || 0);
       const baseCollateral = Math.max(0, Number(ctx?.totalCollateralValue) || 0);
 
@@ -3742,7 +3743,6 @@
 
       const scenarioLabels = { base: 'Base', bear: 'Bajista', bull: 'Alcista' };
 
-      const normalizeTicker = (value) => (typeof value === 'string' ? value.trim().toUpperCase() : '');
       const loanByTicker = derived?.loanByTicker || {};
       const outstandingByTicker = derived?.outstandingByTicker || {};
       const paymentTickerOptions = useMemo(() => {
