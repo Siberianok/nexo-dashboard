@@ -3129,11 +3129,12 @@
           <div className="mx-auto max-w-7xl px-4 py-6">
             <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
               {(isBinance ? [
-                { key: 'loan-current', title: 'Préstamo total', value: formatLoan(binanceOriginalPrincipalTotal), subtle: binanceOriginalPrincipalTotal > 0 ? 'Capital original' : '—' },
-                { key: 'loan-plan', title: 'Préstamo neto', value: formatLoan(binanceNetLoanValue), subtle: binanceLoanNetSubtle },
+                { key: 'loan-current', title: 'Préstamo original', value: formatLoan(binanceOriginalPrincipalTotal), subtle: binanceOriginalPrincipalTotal > 0 ? 'Capital original' : '—' },
+                { key: 'repay-total', title: 'Total a devolver', value: formatLoan(binanceTotalToRepay) },
                 { key: 'loan-paid', title: 'Pagos hechos', value: formatLoan(binancePaidDisplayTotal), subtle: binancePaidSubtle },
-                { key: 'collateral-current', title: 'Colateral actual', value: formatUsd(totals.totalCollateralValue) },
+                { key: 'loan-plan', title: 'Préstamo neto', value: formatLoan(binanceNetLoanValue), subtle: binanceLoanNetSubtle },
                 { key: 'ltv-current', title: 'LTV inicial', value: toPct(binanceInitialLtv, 2), tone: binanceInitialLtvTone, subtle: binanceInitialCollateralSubtle },
+                { key: 'collateral-current', title: 'Colateral actual', value: formatUsd(totals.totalCollateralValue) },
                 { key: 'ltv-plan', title: 'LTV neto', value: toPct(currentOverallLTV, 2), tone: binanceCurrentLtvTone, subtle: binanceNetLtvSubtle },
                 { key: 'apr', title: 'Tasa anual (APR)', value: toPct(chosenAPR, 2), subtle: binanceBorrowLabel || undefined },
                 {
@@ -3149,7 +3150,6 @@
                   value: formatLoan(monthlyLoanCost),
                   subtle: `${toPct(chosenAPR, 2)} APR base`,
                 },
-                { key: 'repay-total', title: 'Total a devolver', value: formatLoan(binanceTotalToRepay) },
               ] : [
                 { key: 'balance', title: 'Balance total', value: formatUsd(totals.total) },
                 { key: 'loyalty', title: loyalty ? (loyalty.kpiLabel || 'Loyalty Tier') : 'Programa', value: loyalty ? loyaltyTier : '—', subtle: loyalty && totals.total < minBalancePerks ? '(balance < mínimo)' : undefined },
