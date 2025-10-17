@@ -5746,25 +5746,9 @@
       const liquidationPrice = Number.isFinite(item.liquidationPrice) && item.liquidationPrice > 0 ? item.liquidationPrice : null;
       const liquidationDigits = liquidationPrice != null && liquidationPrice < 0.1 ? { minimumFractionDigits: 6, maximumFractionDigits: 8 } : { minimumFractionDigits: 4, maximumFractionDigits: 6 };
       const liquidationPriceLabel = liquidationPrice != null ? `$${formatDecimal(liquidationPrice, liquidationDigits)}` : '—';
-      const marginCallPrice = Number.isFinite(item.marginCallPrice) && item.marginCallPrice > 0 ? item.marginCallPrice : null;
-      const marginDigits = marginCallPrice != null && marginCallPrice < 0.1 ? { minimumFractionDigits: 6, maximumFractionDigits: 8 } : { minimumFractionDigits: 4, maximumFractionDigits: 6 };
-      const marginPriceLabel = marginCallPrice != null ? `$${formatDecimal(marginCallPrice, marginDigits)}` : '—';
       const ltvApi = Number.isFinite(item.ltvFromApi) ? item.ltvFromApi : null;
       const ltvDrift = ltvApi != null ? item.actualLtv - ltvApi : null;
       const showLtvDrift = ltvDrift != null && Math.abs(ltvDrift) >= 0.0005;
-      const indexPrice = Number.isFinite(item.collateralIndexPrice) ? item.collateralIndexPrice : null;
-      const indexDigits = indexPrice != null && indexPrice < 0.1 ? { minimumFractionDigits: 6, maximumFractionDigits: 8 } : { minimumFractionDigits: 4, maximumFractionDigits: 6 };
-      const marginCallThreshold = Number.isFinite(item.marginCallThreshold) ? item.marginCallThreshold : null;
-      const liquidationThreshold = Number.isFinite(item.liquidationThreshold) ? item.liquidationThreshold : null;
-      const thresholdParts = [];
-      if (marginCallThreshold != null) {
-        thresholdParts.push(`MC ${formatPercent(marginCallThreshold, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`);
-      }
-      if (liquidationThreshold != null) {
-        thresholdParts.push(`Liq ${formatPercent(liquidationThreshold, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`);
-      }
-      const thresholdLabel = thresholdParts.length > 0 ? thresholdParts.join(' · ') : null;
-      const indexPairLabel = item.ticker ? `${item.ticker}/USDT` : '—';
       const borrowDate = ledger.borrowDate;
       const lastUpdated = ledger.lastUpdated;
       return (
@@ -5806,14 +5790,7 @@
               <div>
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Parámetros Binance</div>
                 <div className="text-sm font-semibold text-neutral-800">{formatPercent(annualApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} APR</div>
-                {thresholdLabel && (
-                  <div className="text-[10px] text-neutral-500">Umbrales LTV {thresholdLabel}</div>
-                )}
                 <div className="text-[10px] text-neutral-500">Precio liquidación <span className="font-medium text-neutral-700">{liquidationPriceLabel}</span></div>
-                <div className="text-[10px] text-neutral-500">Precio margin call <span className="font-medium text-neutral-700">{marginPriceLabel}</span></div>
-                {indexPrice != null && (
-                  <div className="text-[10px] text-neutral-500">Precio índice {indexPairLabel} <span className="font-medium text-neutral-700">{`$${formatDecimal(indexPrice, indexDigits)}`}</span></div>
-                )}
               </div>
             </div>
           </div>
