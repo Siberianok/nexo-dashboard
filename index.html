@@ -2548,7 +2548,6 @@
 
       const recommendedLoanAtTarget = useMemo(() => targetLtv * totals.totalCollateralValue, [targetLtv, totals.totalCollateralValue]);
       const capLowCost = useMemo(() => Math.min(recommendedLoanAtTarget, totals.maxBorrow), [recommendedLoanAtTarget, totals.maxBorrow]);
-      const lowCostHeadroom = useMemo(() => Math.max(0, capLowCost - loanAmount * usdPerUsdt), [capLowCost, loanAmount, usdPerUsdt]);
 
       const chosenAPR = useMemo(() => {
         if (isBinance) {
@@ -2576,7 +2575,6 @@
         const total = main + early; return { main, early, total, repayTotal: P + total };
       }, [loanAmount, daysUntilRepay, chosenAPR, earlyRuleDays, earlyAPR]);
 
-      const monthlyLoanCost = useMemo(() => loanAmount * (Math.pow(1 + chosenAPR / 365, 30) - 1), [loanAmount, chosenAPR]);
 
       const earnEligible = totals.total >= minBalancePerks && params.earnOptIn;
       const earnMonthly = useMemo(() => {
@@ -2652,12 +2650,20 @@
       const plannedOutstanding = Math.max(0, cashflowDerived?.outstandingAfterPlan ?? loanAmount);
       const plannedCollateralDelta = cashflowDerived?.collateralDeltaPlanned ?? 0;
       const collateralAfterPlan = Math.max(0, cashflowDerived?.collateralAfterPlan ?? (totals.totalCollateralValue + plannedCollateralDelta));
+      const monthlyLoanCost = useMemo(
+        () => plannedOutstanding * (Math.pow(1 + chosenAPR / 365, 30) - 1),
+        [plannedOutstanding, chosenAPR],
+      );
+      const lowCostHeadroom = useMemo(
+        () => Math.max(0, capLowCost - plannedOutstanding * usdPerUsdt),
+        [capLowCost, plannedOutstanding, usdPerUsdt],
+      );
       const currentOverallLTV = useMemo(() => {
         if (!(totals.totalCollateralValue > 0)) return 0;
-        const netLoanBase = isBinance ? binanceNetLoanValue : loanAmount;
+        const netLoanBase = isBinance ? binanceNetLoanValue : plannedOutstanding;
         const netLoanUsd = netLoanBase * usdPerUsdt;
         return netLoanUsd / totals.totalCollateralValue;
-      }, [isBinance, binanceNetLoanValue, loanAmount, totals.totalCollateralValue, usdPerUsdt]);
+      }, [isBinance, binanceNetLoanValue, plannedOutstanding, totals.totalCollateralValue, usdPerUsdt]);
       const plannedOverallLTV = collateralAfterPlan > 0 && Number.isFinite(plannedOutstanding)
         ? (plannedOutstanding * usdPerUsdt) / collateralAfterPlan
         : (plannedOutstanding > 0 ? 1 : 0);
@@ -2701,7 +2707,7 @@
       const binanceRepayNeeded = Math.max(0, binanceLoanAfterPlan - binanceCollateralAfterPlan * ltvHealthyThreshold);
       const binanceBufferToCaution = Math.max(0, binanceCollateralAfterPlan * ltvWarnThreshold - binanceLoanAfterPlan);
       const binanceCautionLabel = ltvWarnThreshold > ltvHealthyThreshold ? `${toPct(ltvHealthyThreshold, 0)} – ${toPct(ltvWarnThreshold, 0)}` : `>${toPct(ltvHealthyThreshold, 0)}`;
-      const currentLiquidationValue = marginCallLtv > 0 ? loanAmount / marginCallLtv : 0;
+      const currentLiquidationValue = marginCallLtv > 0 ? plannedOutstanding / marginCallLtv : 0;
       const currentLiquidationBuffer = totals.totalCollateralValue - currentLiquidationValue;
       const binanceLiquidationValue = marginCallLtv > 0 ? binanceLoanAfterPlan / marginCallLtv : 0;
       const binanceLiquidationBuffer = binanceCollateralAfterPlan - binanceLiquidationValue;
@@ -2879,7 +2885,7 @@
           weightedAprOffset,
           weightedNetApr,
         };
-      }, [autoRepayLtv, binanceBorrowAdjustment, binanceBorrowNetAnnualRate, binanceOutstandingRatio, binanceLoanLedger, binanceLedgerOutstandingTotal, borrowRatesByTicker, cashflowDerived?.outstandingByTicker, defaultLtv, earnAprTop, isBinance, loanAmount, loanRequestsTotals, manualLoanAllocationEnabled, marginCallLtv, plannedOverallLTV, totals.totalCollateralValue, totals.withValue, ltvByTicker, ltvHealthyThreshold, ltvWarnThreshold]);
+      }, [autoRepayLtv, binanceBorrowAdjustment, binanceBorrowNetAnnualRate, binanceOutstandingRatio, binanceLoanLedger, binanceLedgerOutstandingTotal, borrowRatesByTicker, cashflowDerived?.outstandingByTicker, defaultLtv, earnAprTop, isBinance, loanAmount, loanRequestsTotals, manualLoanAllocationEnabled, marginCallLtv, plannedOverallLTV, plannedOutstanding, totals.totalCollateralValue, totals.withValue, ltvByTicker, ltvHealthyThreshold, ltvWarnThreshold]);
 
       const binanceNetAprOffset = isBinance ? Math.max(0, collateralBreakdown.weightedAprOffset || 0) : 0;
       const binanceNetAprBase = isBinance ? Math.max(0, collateralBreakdown.weightedNetApr ?? chosenAPR) : 0;
@@ -2895,9 +2901,9 @@
 
       const extraCollateralForTarget = useMemo(() => {
         if (targetLtv <= 0) return 0;
-        const neededCollateral = (loanAmount * usdPerUsdt) / targetLtv;
+        const neededCollateral = (plannedOutstanding * usdPerUsdt) / targetLtv;
         return Math.max(0, neededCollateral - totals.totalCollateralValue);
-      }, [loanAmount, targetLtv, totals.totalCollateralValue, usdPerUsdt]);
+      }, [plannedOutstanding, targetLtv, totals.totalCollateralValue, usdPerUsdt]);
 
       const loyaltyReqs = useMemo(() => {
         if (!loyalty) return null;
@@ -3327,7 +3333,7 @@
                       Con tu colateral actual, el tope por LTVs es {formatUsd(totals.maxBorrow)}. El cap Low-Cost (≤{toPct(targetLtv, 0)}) permite pedir hasta {formatUsd(capLowCost)} y deja {formatUsd(lowCostHeadroom)} de margen.
                     </li>
                     <li>
-                      Para solicitar {formatLoan(loanAmount)} y mantener ≤{toPct(targetLtv, 0)} LTV se requieren {formatUsd(extraCollateralForTarget)} adicionales en colateral.
+                      Para sostener un préstamo neto de {formatLoan(plannedOutstanding)} y mantener ≤{toPct(targetLtv, 0)} LTV se requieren {formatUsd(extraCollateralForTarget)} adicionales en colateral.
                     </li>
                     <li>
                       APR estimado: <b>{toPct(chosenAPR, 2)}</b>{isBinance && binanceBorrowLabel ? ` (${binanceBorrowLabel})` : ''}. Interés hasta repago ({daysUntilRepay} días): {formatLoan(interestCalc.total)}.{interestCalc.early > 0 && <span> Incluye interés por "early rule".</span>}
@@ -5037,7 +5043,7 @@
                 </div>
                 <div className="flex flex-col items-end">
                   <span className="font-semibold text-neutral-800">{formatPercent(seg.share, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
-                  <span className="text-[10px] text-neutral-500">{formatLoan(seg.share * Math.max(0, loanAmount))}</span>
+                  <span className="text-[10px] text-neutral-500">{formatLoan(seg.share * consideredLoan)}</span>
                 </div>
               </div>
             ))}
