@@ -291,9 +291,36 @@
 
     const LIVE_REFRESH_SECONDS = 5;
     const FX_REFRESH_MINUTES = 30;
+    const BINANCE_INTEREST_REFRESH_MS = 60 * 1000;
 
     const DEFAULT_LOCALE = 'es-AR';
 
+    const MS_IN_HOUR = 60 * 60 * 1000;
+    const HOURS_IN_YEAR = 365 * 24;
+    const annualToHourly = (apr) => {
+      const normalized = Number(apr);
+      if (!Number.isFinite(normalized) || normalized <= 0) return 0;
+      return Math.pow(1 + normalized, 1 / HOURS_IN_YEAR) - 1;
+    };
+
+    const coerceDateValue = (value) => {
+      if (!value) return null;
+      if (value instanceof Date) {
+        return Number.isNaN(value.getTime()) ? null : value;
+      }
+      if (typeof value === 'number') {
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? null : date;
+      }
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) return null;
+        const date = new Date(trimmed);
+        return Number.isNaN(date.getTime()) ? null : date;
+      }
+      return null;
+    };
+    
     function computeCashflowProjections(plan = {}, ctx = {}) {
       const payments = Array.isArray(plan?.payments) ? plan.payments : [];
       const earns = Array.isArray(plan?.earns) ? plan.earns : [];
@@ -596,12 +623,6 @@
       });
     };
     const FX_SYMBOLS = SUPPORTED_CURRENCIES.filter((c) => !['USD', 'USDT'].includes(c.code)).map((c) => c.code);
-    const HOURS_IN_YEAR = 365 * 24;
-    const annualToHourly = (apr) => {
-      const normalized = Number(apr);
-      if (!Number.isFinite(normalized) || normalized <= 0) return 0;
-      return Math.pow(1 + normalized, 1 / HOURS_IN_YEAR) - 1;
-    };
 
     const PLATFORM_CONFIGS = {
       nexo: {
@@ -1391,6 +1412,7 @@
       const loyaltyModels = loyalty?.models ?? [];
       const loyaltyModelFallback = platformDefaultParams?.loyaltyModel ?? loyaltyModels[0]?.id ?? "vsRest";
       const isBinance = id === "binance";
+      const [nowTs, setNowTs] = useState(() => Date.now());
       const clamp01 = (v) => Math.max(0, Math.min(1, Number(v) || 0));
       const toPct = (value, digits = 0) => formatPercent(Number(value), {
         minimumFractionDigits: digits,
@@ -1431,6 +1453,14 @@
       }, [ltvHealth, targetLtv, marginCallLtv, autoRepayLtv]);
 
       const sanitizeTicker = (t) => (t || "").toUpperCase();
+
+      useEffect(() => {
+        if (!isBinance) return undefined;
+        const tick = () => setNowTs(Date.now());
+        tick();
+        const interval = setInterval(tick, BINANCE_INTEREST_REFRESH_MS);
+        return () => clearInterval(interval);
+      }, [isBinance]);
       const borrowRatesByTicker = useMemo(() => {
         if (!borrowRates || typeof borrowRates !== 'object') return {};
         return Object.entries(borrowRates).reduce((acc, [ticker, info = {}]) => {
@@ -2111,31 +2141,75 @@
           };
           return acc;
         }, {});
-        Object.entries(loanRequestsTotals).forEach(([ticker, amount]) => {
+        const now = nowTs;
+        const tickers = new Set([...Object.keys(clone), ...Object.keys(loanRequestsTotals)]);
+        tickers.forEach((ticker) => {
           const key = sanitizeTicker(ticker);
           if (!key) return;
-          const outstanding = Math.max(0, Number(amount) || 0);
-          const current = clone[key] || { payments: [], paidTotal: 0, interestAccrued: 0, originalPrincipal: outstanding };
-          const paidTotal = Number(current.paidTotal) || (current.payments || []).reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-          const baseOriginal = current.originalPrincipal > 0 ? current.originalPrincipal : Math.max(0, outstanding + paidTotal - (Number(current.interestAccrued) || 0));
-          const interestAccrued = Number.isFinite(current.interestAccrued)
-            ? Math.max(0, Number(current.interestAccrued))
-            : Math.max(0, outstanding - Math.max(0, baseOriginal - paidTotal));
-          const annualRate = current.annualRate ?? borrowRatesByTicker[key]?.annual ?? null;
-          const netAnnualRate = current.netAnnualRate ?? borrowRatesByTicker[key]?.netAnnual ?? annualRate;
+          const requestedOutstanding = Math.max(0, Number(loanRequestsTotals[key]) || 0);
+          const current = clone[key] || { payments: [], paidTotal: 0, interestAccrued: 0, originalPrincipal: requestedOutstanding };
+          const payments = Array.isArray(current.payments) ? current.payments.map((p) => ({ ...p })) : [];
+          const paidFromEntry = Number(current.paidTotal);
+          const paidTotal = Number.isFinite(paidFromEntry) && paidFromEntry > 0
+            ? paidFromEntry
+            : payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+          let recordedOutstanding = Number.isFinite(current.outstanding) && current.outstanding > 0
+            ? Math.max(0, Number(current.outstanding))
+            : 0;
+          if (requestedOutstanding > 0) {
+            recordedOutstanding = requestedOutstanding;
+          }
+          const baseInterestRaw = Number(current.interestAccrued);
+          const baseOriginal = current.originalPrincipal > 0
+            ? current.originalPrincipal
+            : Math.max(0, recordedOutstanding + paidTotal - (Number.isFinite(baseInterestRaw) ? Math.max(0, baseInterestRaw) : 0));
+          const principalOutstanding = Math.max(0, baseOriginal - paidTotal);
+          if (!(recordedOutstanding > 0) && principalOutstanding > 0) {
+            recordedOutstanding = principalOutstanding + Math.max(0, baseInterestRaw || 0);
+          }
+          const baseInterest = Number.isFinite(baseInterestRaw) && baseInterestRaw >= 0
+            ? Math.min(Math.max(0, baseInterestRaw), recordedOutstanding)
+            : Math.max(0, recordedOutstanding - principalOutstanding);
+          const borrowInfo = borrowRatesByTicker[key] || {};
+          const annualRate = Number.isFinite(current.annualRate) && current.annualRate > 0
+            ? current.annualRate
+            : (Number.isFinite(borrowInfo.annual) && borrowInfo.annual > 0 ? borrowInfo.annual : null);
+          const netAnnualRate = Number.isFinite(current.netAnnualRate) && current.netAnnualRate >= 0
+            ? current.netAnnualRate
+            : (Number.isFinite(borrowInfo.netAnnual) && borrowInfo.netAnnual >= 0
+              ? borrowInfo.netAnnual
+              : (Number.isFinite(borrowInfo.annual) && borrowInfo.annual > 0 ? borrowInfo.annual : (annualRate ?? 0)));
+          const hourlyRate = Number.isFinite(borrowInfo.hourly) && borrowInfo.hourly > 0
+            ? borrowInfo.hourly
+            : (Number.isFinite(current.hourlyRate) && current.hourlyRate > 0
+              ? current.hourlyRate
+              : annualToHourly(annualRate || 0));
+          const lastUpdatedDate = coerceDateValue(current.lastUpdated) || coerceDateValue(current.borrowDate);
+          const hoursElapsed = lastUpdatedDate ? Math.max(0, (now - lastUpdatedDate.getTime()) / MS_IN_HOUR) : 0;
+          const incrementalInterest = principalOutstanding > 0 && hourlyRate > 0 && hoursElapsed > 0
+            ? principalOutstanding * (Math.pow(1 + hourlyRate, hoursElapsed) - 1)
+            : 0;
+          const liveInterest = Math.max(0, baseInterest + incrementalInterest);
+          const liveOutstanding = principalOutstanding + liveInterest;
           clone[key] = {
             ...current,
-            payments: Array.isArray(current.payments) ? current.payments.map((p) => ({ ...p })) : [],
-            outstanding,
+            payments,
             paidTotal,
             originalPrincipal: baseOriginal,
-            interestAccrued,
+            outstanding: liveOutstanding,
+            outstandingRecorded: recordedOutstanding,
+            interestAccrued: liveInterest,
+            interestAccruedBase: baseInterest,
+            interestAccruedRealtime: Math.max(0, liveInterest - baseInterest),
             annualRate,
             netAnnualRate,
+            hourlyRate,
+            lastAccrualTs: now,
+            accrualHoursElapsed: hoursElapsed,
           };
         });
         return clone;
-      }, [isBinance, baseLoanLedger, loanRequestsTotals, borrowRatesByTicker]);
+      }, [isBinance, baseLoanLedger, loanRequestsTotals, borrowRatesByTicker, nowTs]);
       const binanceLedgerOutstandingTotal = useMemo(() => {
         if (!isBinance) return 0;
         return Object.values(binanceLoanLedger).reduce((acc, entry) => acc + (Math.max(0, Number(entry?.outstanding) || 0)), 0);
