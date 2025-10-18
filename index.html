@@ -3869,6 +3869,7 @@
               currentPrice: referencePrice,
               qty: collateralQtyForCalc,
               marginCallThreshold,
+              autoLiquidationThreshold: autoRepayLtv > 0 ? autoRepayLtv : null,
               marginCallValue,
               liquidationValue,
               liquidationThreshold,
@@ -3921,8 +3922,8 @@
       }, [autoRepayLtv, binanceBorrowAdjustment, binanceBorrowNetAnnualRate, binanceOutstandingRatio, binanceLoanLedger, binanceLedgerOutstandingTotal, borrowRatesByTicker, cashflowDerived?.outstandingByTicker, defaultLtv, earnAprTop, isBinance, loanAmount, loanRequestsTotals, manualLoanAllocationEnabled, marginCallLtv, plannedOverallLTV, plannedOutstanding, plannedOutstandingPrincipal, totals.totalCollateralValue, totals.withValue, ltvByTicker, ltvHealthyThreshold, ltvWarnThreshold]);
 
       const binanceNetAprOffset = isBinance ? Math.max(0, collateralBreakdown.weightedAprOffset || 0) : 0;
-      const binanceNetAprBase = isBinance ? (collateralBreakdown.weightedNetApr ?? chosenAPR) : 0;
-      const binanceNetAnnualRate = isBinance ? binanceNetAprBase : 0;
+      const binanceBaseAnnualRate = isBinance ? binanceBorrowAnnualRate : chosenAPR;
+      const binanceNetAnnualRate = isBinance ? binanceBorrowNetAnnualRate : 0;
       const netAnnualRate = isBinance ? binanceNetAnnualRate : standardNetAnnualRate;
       const renderNow = Date.now();
       const binanceLastUpdatedMs = binanceLiveMeta?.lastUpdated ?? null;
@@ -3930,10 +3931,10 @@
       const binanceUpdatedLabel = binanceSecondsAgo != null ? ` · actualizado hace ${binanceSecondsAgo}s` : '';
       const binanceNetAprSubtle = isBinance
         ? ((binanceOutstandingRatio < 0.999
-          ? `Saldo neto ${toPct(binanceOutstandingRatio, 0)} · tasa neta ${toPct(binanceNetAprBase, 2)}`
+          ? `Saldo neto ${toPct(binanceOutstandingRatio, 0)} · tasa neta ${toPct(binanceNetAnnualRate, 2)}`
           : (binanceNetAprOffset > 0
-            ? `Préstamo ${toPct(chosenAPR, 2)} − ajuste ${toPct(binanceNetAprOffset, 2)}`
-            : `Préstamo ${toPct(chosenAPR, 2)}`)) + binanceUpdatedLabel)
+            ? `Préstamo ${toPct(binanceBaseAnnualRate, 2)} − ajuste ${toPct(binanceNetAprOffset, 2)}`
+            : `Préstamo ${toPct(binanceBaseAnnualRate, 2)}`)) + binanceUpdatedLabel)
         : undefined;
 
       const extraCollateralForTarget = useMemo(() => {
@@ -4064,13 +4065,15 @@
                 { key: 'collateral-current', title: 'Colateral actual', value: formatUsd(totals.totalCollateralValue) },
                 { key: 'ltv-current', title: 'LTV inicial', value: toPct(binanceInitialLtv, 2), tone: binanceInitialLtvTone, subtle: binanceInitialCollateralSubtle },
                 { key: 'ltv-plan', title: 'LTV neto', value: toPct(currentOverallLTV, 2), tone: binanceCurrentLtvTone, subtle: binanceNetLtvSubtle },
-                { key: 'apr', title: 'Tasa anual (APR)', value: toPct(chosenAPR, 2), subtle: binanceBorrowLabel || undefined },
+                { key: 'apr', title: 'Tasa anual (APR)', value: toPct(isBinance ? binanceBaseAnnualRate : chosenAPR, 2), subtle: binanceBorrowLabel || undefined },
                 {
                   key: 'apr-net',
                   title: 'Tasa anual neta',
-                  value: toPct(netAnnualRate, 2),
+                  value: toPct(isBinance ? binanceNetAnnualRate : netAnnualRate, 2),
                   subtle: binanceNetAprSubtle,
-                  tone: netAnnualRate <= chosenAPR ? 'ok' : undefined,
+                  tone: isBinance
+                    ? (binanceNetAnnualRate <= binanceBaseAnnualRate ? 'ok' : undefined)
+                    : (netAnnualRate <= chosenAPR ? 'ok' : undefined),
                 },
                 {
                   key: 'interest-monthly',
@@ -5951,6 +5954,17 @@
       const liquidationPrice = Number.isFinite(item.liquidationPrice) && item.liquidationPrice > 0 ? item.liquidationPrice : null;
       const liquidationDigits = liquidationPrice != null && liquidationPrice < 0.1 ? { minimumFractionDigits: 6, maximumFractionDigits: 8 } : { minimumFractionDigits: 4, maximumFractionDigits: 6 };
       const liquidationPriceLabel = liquidationPrice != null ? `$${formatDecimal(liquidationPrice, liquidationDigits)}` : '—';
+      const liquidationLtv = Number.isFinite(item.liquidationThreshold) ? item.liquidationThreshold : null;
+      const marginCallLtv = Number.isFinite(item.marginCallThreshold) ? item.marginCallThreshold : null;
+      const autoLiquidationLtv = Number.isFinite(item.autoLiquidationThreshold) ? item.autoLiquidationThreshold : null;
+      const liquidationLtvLabel = liquidationLtv != null ? formatPercent(liquidationLtv, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '—';
+      const marginCallLtvLabel = marginCallLtv != null ? formatPercent(marginCallLtv, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : null;
+      const autoLiquidationLabel = autoLiquidationLtv != null ? formatPercent(autoLiquidationLtv, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : null;
+      const marginCallPrice = Number.isFinite(item.marginCallPrice) && item.marginCallPrice > 0 ? item.marginCallPrice : null;
+      const marginCallDigits = marginCallPrice != null && marginCallPrice < 0.1 ? { minimumFractionDigits: 6, maximumFractionDigits: 8 } : { minimumFractionDigits: 4, maximumFractionDigits: 6 };
+      const marginCallPriceLabel = marginCallPrice != null ? `$${formatDecimal(marginCallPrice, marginCallDigits)}` : '—';
+      const showMarginCall = marginCallLtvLabel != null && (liquidationLtv == null || Math.abs(marginCallLtv - liquidationLtv) > 0.0005 || marginCallPrice != null);
+      const showAutoLiquidation = autoLiquidationLabel != null && (liquidationLtv == null || Math.abs(autoLiquidationLtv - liquidationLtv) > 0.0005);
       const ltvApi = Number.isFinite(item.ltvFromApi) ? item.ltvFromApi : null;
       const ltvDrift = ltvApi != null ? item.actualLtv - ltvApi : null;
       const showLtvDrift = ltvDrift != null && Math.abs(ltvDrift) >= 0.0005;
@@ -5992,10 +6006,27 @@
                   </div>
                 )}
               </div>
-              <div>
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Parámetros Binance</div>
-                <div className="text-sm font-semibold text-neutral-800">{formatPercent(annualApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} APR</div>
-                <div className="text-[10px] text-neutral-500">Precio liquidación <span className="font-medium text-neutral-700">{liquidationPriceLabel}</span></div>
+              <div className="space-y-2">
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Tasa anual (APR)</div>
+                  <div className="text-sm font-semibold text-neutral-800">{formatPercent(annualApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Parámetros de liquidación</div>
+                  <div className="text-sm font-semibold text-neutral-800">{liquidationLtvLabel}</div>
+                  <div className="text-[10px] text-neutral-500">Precio liquidación <span className="font-medium text-neutral-700">{liquidationPriceLabel}</span></div>
+                  {showMarginCall && (
+                    <div className="text-[10px] text-neutral-500">
+                      Margin call <span className="font-medium text-neutral-700">{marginCallLtvLabel}</span>
+                      {marginCallPrice != null && (
+                        <> · precio <span className="font-medium text-neutral-700">{marginCallPriceLabel}</span></>
+                      )}
+                    </div>
+                  )}
+                  {showAutoLiquidation && (
+                    <div className="text-[10px] text-neutral-500">Auto-liquidación <span className="font-medium text-neutral-700">{autoLiquidationLabel}</span></div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -6009,7 +6040,7 @@
             </div>
           </div>
           <div className="mt-3">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">APR neta Binance</div>
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Tasa anual neta</div>
             <div className={`text-base font-semibold ${netTone}`}>{formatPercent(item.netApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
             {(borrowDate || lastUpdated) && (
               <div className="mt-1 text-[10px] text-neutral-500">
