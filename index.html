@@ -87,6 +87,22 @@
       transform:translateY(1px);
     }
     .nx-btn-sm{padding:.35rem .95rem; font-size:.8rem; border-radius:.9rem;}
+    .nx-tab{
+      border-radius:1.25rem;
+      background:var(--theme-tab-bg,linear-gradient(150deg,rgba(255,255,255,0.94) 0%,rgba(219,232,255,0.9) 100%));
+      border:1px solid var(--theme-tab-border,rgba(51,104,240,0.18));
+      box-shadow:var(--theme-tab-shadow,0 8px 18px rgba(32,82,193,0.1));
+      transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease;
+    }
+    .nx-tab:hover{
+      transform:translateY(-2px);
+      box-shadow:var(--theme-tab-hover-shadow,0 12px 24px rgba(32,82,193,0.16));
+      border-color:var(--theme-tab-border-hover,var(--theme-tab-border,rgba(51,104,240,0.18)));
+    }
+    .nx-tab:active{
+      transform:translateY(1px);
+      box-shadow:var(--theme-tab-active-shadow,0 6px 12px rgba(32,82,193,0.14));
+    }
   </style>
 </head>
 <body data-theme="nexo">
@@ -136,6 +152,12 @@
         '--theme-ghost-border': 'rgba(30,64,175,0.16)',
         '--theme-ghost-shadow': '0 10px 22px rgba(15,30,70,0.12)',
         '--theme-ghost-hover-shadow': '0 16px 26px rgba(15,30,70,0.18)',
+        '--theme-tab-bg': 'linear-gradient(150deg,#f2f6ff 0%,#dce7ff 100%)',
+        '--theme-tab-border': 'rgba(67,104,214,0.28)',
+        '--theme-tab-border-hover': 'rgba(51,94,201,0.42)',
+        '--theme-tab-shadow': '0 10px 20px rgba(32,82,193,0.12)',
+        '--theme-tab-hover-shadow': '0 16px 30px rgba(32,82,193,0.16)',
+        '--theme-tab-active-shadow': '0 6px 14px rgba(32,82,193,0.14)',
       },
       binance: {
         '--theme-surface-soft': 'linear-gradient(180deg,#fff6e6 0%,#ffedcc 100%)',
@@ -157,6 +179,12 @@
         '--theme-ghost-border': 'rgba(217,119,6,0.3)',
         '--theme-ghost-shadow': '0 10px 22px rgba(146,64,14,0.16)',
         '--theme-ghost-hover-shadow': '0 16px 26px rgba(124,45,18,0.22)',
+        '--theme-tab-bg': 'linear-gradient(150deg,#fff9eb 0%,#ffe3b8 100%)',
+        '--theme-tab-border': 'rgba(217,119,6,0.35)',
+        '--theme-tab-border-hover': 'rgba(194,92,6,0.45)',
+        '--theme-tab-shadow': '0 10px 20px rgba(217,119,6,0.14)',
+        '--theme-tab-hover-shadow': '0 16px 30px rgba(217,119,6,0.20)',
+        '--theme-tab-active-shadow': '0 6px 14px rgba(217,119,6,0.15)',
       },
       youhodler: {
         '--theme-surface-soft': 'linear-gradient(180deg,#e0f2ff 0%,#f5fbff 100%)',
@@ -178,6 +206,12 @@
         '--theme-ghost-border': 'rgba(59,130,246,0.22)',
         '--theme-ghost-shadow': '0 10px 22px rgba(37,99,235,0.12)',
         '--theme-ghost-hover-shadow': '0 16px 26px rgba(37,99,235,0.18)',
+        '--theme-tab-bg': 'linear-gradient(150deg,#f3f9ff 0%,#d8ecff 100%)',
+        '--theme-tab-border': 'rgba(37,99,235,0.24)',
+        '--theme-tab-border-hover': 'rgba(30,80,210,0.35)',
+        '--theme-tab-shadow': '0 10px 20px rgba(37,99,235,0.14)',
+        '--theme-tab-hover-shadow': '0 16px 30px rgba(37,99,235,0.18)',
+        '--theme-tab-active-shadow': '0 6px 14px rgba(37,99,235,0.14)',
       },
       ledn: {
         '--theme-surface-soft': 'linear-gradient(180deg,#f3f4f6 0%,#ffffff 100%)',
@@ -199,6 +233,12 @@
         '--theme-ghost-border': 'rgba(45,212,191,0.22)',
         '--theme-ghost-shadow': '0 10px 22px rgba(15,118,110,0.12)',
         '--theme-ghost-hover-shadow': '0 16px 26px rgba(15,118,110,0.18)',
+        '--theme-tab-bg': 'linear-gradient(150deg,#f2fdf9 0%,#d9f3ee 100%)',
+        '--theme-tab-border': 'rgba(20,184,166,0.26)',
+        '--theme-tab-border-hover': 'rgba(15,158,143,0.36)',
+        '--theme-tab-shadow': '0 10px 20px rgba(14,148,136,0.14)',
+        '--theme-tab-hover-shadow': '0 16px 30px rgba(14,148,136,0.18)',
+        '--theme-tab-active-shadow': '0 6px 14px rgba(14,148,136,0.14)',
       },
     });
 
@@ -4520,10 +4560,10 @@
             <div className="space-y-6">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
                 {summaryTiles.map((tile) => (
-                  <div key={tile.label} className="rounded-2xl border border-neutral-200 bg-white px-4 py-3">
-                    <div className="text-xs text-neutral-500 uppercase">{tile.label}</div>
+                  <div key={tile.label} className="nx-tab px-4 py-3 text-neutral-700">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-neutral-600">{tile.label}</div>
                     <div className={`text-lg font-semibold ${tile.tone}`}>{tile.value}</div>
-                    {tile.hint && <div className="text-[11px] text-neutral-500">{tile.hint}</div>}
+                    {tile.hint && <div className="text-[11px] text-neutral-600/80">{tile.hint}</div>}
                   </div>
                 ))}
               </div>
@@ -5219,7 +5259,7 @@
             {ranked.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                 {ranked.slice(0, 3).map((item, idx) => (
-                  <div key={`rank-${item.strategy.id}`} className="rounded-2xl border border-neutral-200 bg-white px-4 py-3">
+                  <div key={`rank-${item.strategy.id}`} className="nx-tab px-4 py-3 text-neutral-700">
                     <div className="text-[11px] uppercase text-neutral-400">Top {idx + 1}</div>
                     <div className="text-sm font-semibold text-neutral-700">{item.strategy.label || item.strategy.id}</div>
                     <div className="text-[11px] text-neutral-500">Spread ajustado {formatPercent(item.metrics.adjustedAnnual, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
