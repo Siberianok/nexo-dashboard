@@ -1615,7 +1615,12 @@
           .filter((marker, idx, arr) => marker.pct > 0 && idx === arr.findIndex((m) => m.pct === marker.pct));
       }, [ltvHealth, targetLtv, marginCallLtv, autoRepayLtv]);
 
-      const sanitizeTicker = (t) => (t || "").toUpperCase();
+      const sanitizeTicker = useCallback((t) => {
+        if (typeof t === "string") {
+          return t.trim().toUpperCase();
+        }
+        return "";
+      }, []);
 
       const binanceTimerRef = useRef(null);
       const binanceHmacKeyRef = useRef({ secret: null, key: null });
