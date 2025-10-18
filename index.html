@@ -3956,7 +3956,7 @@
               </section>
             )}
 
-            <section className="mb-10 grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
+            <section className="mb-10 grid grid-cols-1 gap-6 items-start xl:grid-cols-2">
               <div className="space-y-6">
                 {isBinance && (
                   <BinanceLivePanel
@@ -4107,29 +4107,6 @@
                   <TrendChart data={timeline} currency={currency} rate={loanRate} />
                 </Card>
 
-                <CashflowPlanner
-                  plan={cashflowPlan}
-                  derived={cashflowDerived}
-                  onPlanChange={updateCashflowPlan}
-                  currency={currency}
-                  rate={loanRate}
-                  fmt={fmt}
-                  loanAmount={loanAmount}
-                  chosenAPR={chosenAPR}
-                  interestCalc={interestCalc}
-                  daysUntilRepay={daysUntilRepay}
-                  repayDate={repayDate}
-                  totals={totals}
-                  targetLtv={targetLtv}
-                  marginCallLtv={marginCallLtv}
-                  autoRepayLtv={autoRepayLtv}
-                  scenarioDefaults={cashflowPlan?.scenarioShocks}
-                  focusRingClass={focusRingClass}
-                  earnMonthly={earnMonthly}
-                  earnEligible={earnEligible}
-                  minBalancePerks={minBalancePerks}
-                />
-
               </div>
 
               <div className="space-y-6">
@@ -4226,6 +4203,31 @@
                   </ul>
                   </Card>
                 )}
+              </div>
+
+              <div className="xl:col-span-2">
+                <CashflowPlanner
+                  plan={cashflowPlan}
+                  derived={cashflowDerived}
+                  onPlanChange={updateCashflowPlan}
+                  currency={currency}
+                  rate={loanRate}
+                  fmt={fmt}
+                  loanAmount={loanAmount}
+                  chosenAPR={chosenAPR}
+                  interestCalc={interestCalc}
+                  daysUntilRepay={daysUntilRepay}
+                  repayDate={repayDate}
+                  totals={totals}
+                  targetLtv={targetLtv}
+                  marginCallLtv={marginCallLtv}
+                  autoRepayLtv={autoRepayLtv}
+                  scenarioDefaults={cashflowPlan?.scenarioShocks}
+                  focusRingClass={focusRingClass}
+                  earnMonthly={earnMonthly}
+                  earnEligible={earnEligible}
+                  minBalancePerks={minBalancePerks}
+                />
               </div>
             </section>
 
