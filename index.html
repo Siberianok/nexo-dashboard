@@ -20,7 +20,69 @@
     .bn-gradient{background:linear-gradient(135deg,#1f2937 0%,#f59e0b 45%,#f97316 100%)}
     .yh-gradient{background:linear-gradient(135deg,#0ea5e9 0%,#2563eb 55%,#38bdf8 100%)}
     .ld-gradient{background:linear-gradient(135deg,#0f766e 0%,#14b8a6 55%,#2dd4bf 100%)}
-    .nx-card{border:1px solid var(--theme-card-border); box-shadow:var(--theme-card-shadow); border-radius:1.5rem; transition:box-shadow .3s ease,border-color .3s ease;}
+    .nx-card{
+      position:relative;
+      border:1px solid var(--theme-card-border);
+      box-shadow:var(--theme-card-shadow);
+      border-radius:1.5rem;
+      background:var(--theme-card-bg);
+      transition:box-shadow .3s ease,border-color .3s ease,background .3s ease;
+      backdrop-filter:blur(10px);
+    }
+    .nx-card::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      border-radius:inherit;
+      background:var(--theme-card-overlay,linear-gradient(180deg,rgba(255,255,255,0.55) 0%,rgba(255,255,255,0.12) 100%));
+      pointer-events:none;
+    }
+    .nx-card > *{
+      position:relative;
+      z-index:1;
+    }
+    .nx-card-secondary{
+      position:relative;
+      border-radius:1.5rem;
+      border:1px solid var(--theme-card-border-secondary,var(--theme-card-border));
+      background:var(--theme-card-bg-secondary,var(--theme-card-bg));
+      box-shadow:var(--theme-card-shadow-secondary,var(--theme-card-shadow));
+      backdrop-filter:blur(8px);
+      transition:box-shadow .3s ease,border-color .3s ease,background .3s ease;
+    }
+    .nx-card-secondary::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      border-radius:inherit;
+      background:var(--theme-card-overlay,linear-gradient(180deg,rgba(255,255,255,0.45) 0%,rgba(255,255,255,0.08) 100%));
+      pointer-events:none;
+    }
+    .nx-card-secondary > *{
+      position:relative;
+      z-index:1;
+    }
+    .nx-card-tertiary{
+      position:relative;
+      border-radius:1.1rem;
+      border:1px solid var(--theme-card-border-secondary,var(--theme-card-border));
+      background:var(--theme-card-bg-tertiary,var(--theme-card-bg-secondary,var(--theme-card-bg)));
+      box-shadow:var(--theme-card-shadow-tertiary,var(--theme-card-shadow-secondary,var(--theme-card-shadow)));
+      backdrop-filter:blur(6px);
+      transition:box-shadow .3s ease,border-color .3s ease,background .3s ease;
+    }
+    .nx-card-tertiary::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      border-radius:inherit;
+      background:var(--theme-card-overlay,linear-gradient(180deg,rgba(255,255,255,0.4) 0%,rgba(255,255,255,0.08) 100%));
+      pointer-events:none;
+    }
+    .nx-card-tertiary > *{
+      position:relative;
+      z-index:1;
+    }
     .nx-kpi{border:1px solid var(--theme-kpi-border); transition:border-color .3s ease;}
     .nx-kpi-btn{
       position:relative;
@@ -136,6 +198,10 @@
         '--theme-surface-soft': 'linear-gradient(180deg,#eef3ff 0%, #f6f9ff 100%)',
         '--theme-card-border': '#dfe6ff',
         '--theme-card-shadow': '0 12px 30px rgba(16,35,90,.08)',
+        '--theme-card-bg': 'linear-gradient(160deg, rgba(244,248,255,0.96) 0%, rgba(225,236,255,0.92) 100%)',
+        '--theme-card-border-secondary': 'rgba(99,132,241,0.45)',
+        '--theme-card-bg-secondary': 'linear-gradient(160deg, rgba(236,244,255,0.92) 0%, rgba(210,226,255,0.88) 100%)',
+        '--theme-card-shadow-secondary': '0 16px 32px rgba(32,82,193,0.18)',
         '--theme-kpi-border': '#e6eaf5',
         '--theme-kpi-bg': 'linear-gradient(155deg,#1c3fa0 0%,#2f5de0 45%,#4c8fff 100%)',
         '--theme-kpi-shadow': '0 16px 30px rgba(8,20,66,0.35)',
@@ -163,6 +229,10 @@
         '--theme-surface-soft': 'linear-gradient(180deg,#fff6e6 0%,#ffedcc 100%)',
         '--theme-card-border': 'rgba(251,191,36,0.35)',
         '--theme-card-shadow': '0 12px 30px rgba(146,64,14,0.15)',
+        '--theme-card-bg': 'linear-gradient(160deg, rgba(255,247,230,0.95) 0%, rgba(255,233,194,0.9) 100%)',
+        '--theme-card-border-secondary': 'rgba(234,179,8,0.5)',
+        '--theme-card-bg-secondary': 'linear-gradient(160deg, rgba(255,241,207,0.92) 0%, rgba(255,226,176,0.88) 100%)',
+        '--theme-card-shadow-secondary': '0 16px 32px rgba(146,64,14,0.18)',
         '--theme-kpi-border': 'rgba(253,224,71,0.45)',
         '--theme-kpi-bg': 'linear-gradient(155deg,#d97706 0%,#f59e0b 45%,#fbbf24 100%)',
         '--theme-kpi-shadow': '0 16px 30px rgba(146,64,14,0.32)',
@@ -190,6 +260,10 @@
         '--theme-surface-soft': 'linear-gradient(180deg,#e0f2ff 0%,#f5fbff 100%)',
         '--theme-card-border': 'rgba(59,130,246,0.25)',
         '--theme-card-shadow': '0 12px 30px rgba(30,64,175,0.12)',
+        '--theme-card-bg': 'linear-gradient(160deg, rgba(224,242,255,0.94) 0%, rgba(210,233,255,0.9) 100%)',
+        '--theme-card-border-secondary': 'rgba(59,130,246,0.38)',
+        '--theme-card-bg-secondary': 'linear-gradient(160deg, rgba(213,236,255,0.9) 0%, rgba(193,226,255,0.86) 100%)',
+        '--theme-card-shadow-secondary': '0 16px 32px rgba(37,99,235,0.16)',
         '--theme-kpi-border': 'rgba(125,211,252,0.6)',
         '--theme-kpi-bg': 'linear-gradient(155deg,#0ea5e9 0%,#2563eb 45%,#3b82f6 100%)',
         '--theme-kpi-shadow': '0 16px 30px rgba(14,165,233,0.28)',
@@ -217,6 +291,10 @@
         '--theme-surface-soft': 'linear-gradient(180deg,#f3f4f6 0%,#ffffff 100%)',
         '--theme-card-border': 'rgba(15,118,110,0.22)',
         '--theme-card-shadow': '0 12px 30px rgba(15,118,110,0.12)',
+        '--theme-card-bg': 'linear-gradient(160deg, rgba(230,252,247,0.94) 0%, rgba(210,245,236,0.9) 100%)',
+        '--theme-card-border-secondary': 'rgba(20,184,166,0.38)',
+        '--theme-card-bg-secondary': 'linear-gradient(160deg, rgba(214,245,236,0.9) 0%, rgba(193,237,225,0.86) 100%)',
+        '--theme-card-shadow-secondary': '0 16px 32px rgba(13,148,136,0.18)',
         '--theme-kpi-border': 'rgba(45,212,191,0.45)',
         '--theme-kpi-bg': 'linear-gradient(155deg,#0f766e 0%,#14b8a6 45%,#2dd4bf 100%)',
         '--theme-kpi-shadow': '0 16px 30px rgba(15,118,110,0.26)',
@@ -4087,7 +4165,7 @@
                   )}
                   <div className="mt-4 w-full">
                     {loanRequests.length > 0 ? (
-                      <div className="rounded-2xl border border-neutral-200 bg-white/70 p-3 shadow-inner">
+                      <div className="nx-card-secondary p-3">
                         <div className="flex flex-col gap-2">
                           {loanRequests.map((request) => {
                             const ticker = sanitizeTicker(request.ticker || '');
@@ -4098,7 +4176,7 @@
                             return (
                               <div
                                 key={request.id}
-                                className="grid grid-cols-1 gap-2 rounded-xl bg-neutral-50 px-3 py-2 text-sm text-neutral-700 shadow-sm md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center"
+                                className="grid grid-cols-1 gap-2 px-3 py-2 text-sm text-neutral-700 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center nx-card-tertiary"
                               >
                                 <div>
                                   <div className="font-semibold text-neutral-900">{label}</div>
@@ -4305,7 +4383,7 @@
                 )}
               </div>
 
-              <div className="overflow-x-auto rounded-2xl nx-card bg-white">
+              <div className="overflow-x-auto rounded-2xl nx-card">
                 <table className="min-w-full text-sm">
                   <thead className="bg-neutral-900 text-white sticky top-0 z-10">
                     <tr>
@@ -5294,7 +5372,7 @@
     }
     function Card({ title, children }) {
       return (
-        <div className="flex h-full flex-col rounded-2xl bg-white p-5 shadow-sm nx-card">
+        <div className="flex h-full flex-col rounded-2xl p-5 nx-card">
           <div className="mb-4 text-center">
             <h3 className="text-lg font-semibold tracking-tight text-neutral-800">{title}</h3>
           </div>
@@ -5794,32 +5872,32 @@
               </button>
             </div>
             <div className="grid gap-3 text-xs sm:grid-cols-2">
-              <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-3">
+              <div className="nx-card-secondary p-3">
                 <div className="text-[10px] font-semibold uppercase text-neutral-500">APR préstamo</div>
                 <div className="text-sm font-semibold text-neutral-800">{borrowApr != null ? formatPercent(borrowApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</div>
               </div>
-              <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-3">
+              <div className="nx-card-secondary p-3">
                 <div className="text-[10px] font-semibold uppercase text-neutral-500">APR neto</div>
                 <div className={`text-sm font-semibold ${netApr != null && netApr < 0 ? 'text-emerald-600' : 'text-neutral-800'}`}>
                   {netApr != null ? formatPercent(netApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
                 </div>
               </div>
-              <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-3">
+              <div className="nx-card-secondary p-3">
                 <div className="text-[10px] font-semibold uppercase text-neutral-500">Deuda total (USDT)</div>
                 <div className="text-sm font-semibold text-neutral-800">{borrowUsd != null ? formatUsd(borrowUsd, true) : '—'}</div>
               </div>
-              <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-3">
+              <div className="nx-card-secondary p-3">
                 <div className="text-[10px] font-semibold uppercase text-neutral-500">Colateral indexado</div>
                 <div className="text-sm font-semibold text-neutral-800">{collateralUsd != null ? formatUsd(collateralUsd, true) : '—'}</div>
               </div>
-              <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-3 sm:col-span-2">
+              <div className="nx-card-secondary p-3 sm:col-span-2">
                 <div className="text-[10px] font-semibold uppercase text-neutral-500">LTV (índice)</div>
                 <div className={`text-sm font-semibold ${ltv != null && ltv > 0.85 ? 'text-rose-600' : 'text-neutral-800'}`}>
                   {ltv != null ? formatPercent(ltv, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
                 </div>
               </div>
             </div>
-            <div className="rounded-xl bg-neutral-50 px-3 py-2 text-[11px] text-neutral-500">
+            <div className="nx-card-secondary px-3 py-2 text-[11px] text-neutral-500">
               Las credenciales requieren permisos READ para Loans y Simple Earn. Binance recomienda restringir la API por IP.
             </div>
           </div>
@@ -5847,7 +5925,7 @@
       const borrowDate = ledger.borrowDate;
       const lastUpdated = ledger.lastUpdated;
       return (
-        <div className="rounded-2xl border border-amber-100 bg-white/80 p-4 shadow-sm">
+        <div className="nx-card-secondary p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-neutral-900">{item.name}</div>
@@ -6035,7 +6113,7 @@
       }).filter((item) => item.share > 0);
       if (items.length === 0) {
         return (
-          <div className="rounded-2xl border border-amber-100 bg-white/80 p-4 shadow-sm text-sm text-neutral-500">
+          <div className="nx-card-secondary p-4 text-sm text-neutral-500">
             Activa al menos un colateral con préstamo asignado para ver la distribución.
           </div>
         );
@@ -6063,7 +6141,7 @@
       }).filter((item) => item.amount > 0);
       if (distribution.length === 0) {
         return (
-          <div className="rounded-2xl border border-amber-100 bg-white/80 p-4 shadow-sm text-sm text-neutral-500">
+          <div className="nx-card-secondary p-4 text-sm text-neutral-500">
             Activa al menos un colateral con préstamo asignado para ver la distribución.
           </div>
         );
@@ -6092,7 +6170,7 @@
       const overallLtvLabel = formatPercent(overallLTV, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
       return (
-        <div className="rounded-2xl border border-amber-100 bg-white/80 p-4 shadow-sm flex flex-col gap-4">
+        <div className="nx-card-secondary p-4 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div className="text-sm font-semibold text-neutral-900">Distribución del préstamo</div>
             <span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${toneBadge[overallTone]}`}>{overallLabel}</span>
