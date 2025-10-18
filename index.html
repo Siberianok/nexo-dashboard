@@ -332,7 +332,6 @@
     const LIVE_REFRESH_SECONDS = 5;
     const FX_REFRESH_MINUTES = 30;
     const BINANCE_INTEREST_REFRESH_MS = 60 * 1000;
-    const BINANCE_STALE_THRESHOLD_MS = 90 * 1000;
     const BINANCE_API_BASE = 'https://api.binance.com';
     const BINANCE_FAPI_BASE = 'https://fapi.binance.com';
     const BINANCE_SIGNED_RECV_WINDOW = 5000;
@@ -2581,11 +2580,6 @@
         }
       }, [isBinance, params.binanceApiKey, params.binanceApiSecret, params.binanceBorrowTicker, assets, loanRequests, liveBorrowPositions, sanitizeTicker, resetBinanceTimer]);
 
-      const handleBinanceManualRefresh = useCallback(() => {
-        resetBinanceTimer();
-        return triggerBinanceFetch('manual');
-      }, [resetBinanceTimer, triggerBinanceFetch]);
-
       useEffect(() => {
         if (!isBinance) {
           resetBinanceTimer();
@@ -3802,7 +3796,6 @@
       const renderNow = Date.now();
       const binanceLastUpdatedMs = binanceLiveMeta?.lastUpdated ?? null;
       const binanceSecondsAgo = binanceLastUpdatedMs != null ? Math.max(0, Math.floor((renderNow - binanceLastUpdatedMs) / 1000)) : null;
-      const binanceDataStale = binanceLastUpdatedMs != null ? (renderNow - binanceLastUpdatedMs > BINANCE_STALE_THRESHOLD_MS) : false;
       const binanceUpdatedLabel = binanceSecondsAgo != null ? ` · actualizado hace ${binanceSecondsAgo}s` : '';
       const binanceNetAprSubtle = isBinance
         ? ((binanceOutstandingRatio < 0.999
@@ -4003,20 +3996,6 @@
 
             <section className="mb-10 grid grid-cols-1 gap-6 items-start xl:grid-cols-2">
               <div className="space-y-6">
-                {isBinance && (
-                  <BinanceLivePanel
-                    apiKey={params.binanceApiKey || ''}
-                    apiSecret={params.binanceApiSecret || ''}
-                    onChangeKey={(value) => setParams({ ...params, binanceApiKey: value })}
-                    onChangeSecret={(value) => setParams({ ...params, binanceApiSecret: value })}
-                    onRefresh={handleBinanceManualRefresh}
-                    meta={binanceLiveMeta}
-                    aggregate={binanceAggregate}
-                    dataStale={binanceDataStale}
-                    secondsAgo={binanceSecondsAgo}
-                    formatUsd={formatUsd}
-                  />
-                )}
                 <Card title="Préstamo & Repago">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 justify-items-center">
                     <Field label={`Monto a pedir (${currency})`} align="center" className="w-full max-w-xs">
@@ -5705,125 +5684,6 @@
             </div>
           </div>
         </div>
-      );
-    }
-
-    function BinanceLivePanel({
-      apiKey,
-      apiSecret,
-      onChangeKey,
-      onChangeSecret,
-      onRefresh,
-      meta,
-      aggregate,
-      dataStale,
-      secondsAgo,
-      formatUsd,
-    }) {
-      const borrowApr = Number.isFinite(aggregate?.averageBorrowApr) ? aggregate.averageBorrowApr : null;
-      const netApr = Number.isFinite(aggregate?.averageNetApr) ? aggregate.averageNetApr : null;
-      const ltv = Number.isFinite(aggregate?.ltv) ? aggregate.ltv : null;
-      const borrowUsd = Number.isFinite(aggregate?.borrowUsd) ? aggregate.borrowUsd : null;
-      const collateralUsd = Number.isFinite(aggregate?.collateralUsd) ? aggregate.collateralUsd : null;
-      const loading = !!meta?.loading;
-      const error = meta?.error ? String(meta.error) : null;
-      const status = meta?.status || 'idle';
-      const statusLabel = (() => {
-        if (status === 'missing') return 'Configura tu API Key y Secret (solo lectura).';
-        if (status === 'incomplete') return 'Completa ambas credenciales para sincronizar.';
-        if (status === 'syncing' || status === 'syncing-manual') return 'Sincronizando con Binance…';
-        if (status === 'ok') {
-          if (secondsAgo != null) {
-            return secondsAgo === 0 ? 'Actualizado hace <1s' : `Actualizado hace ${secondsAgo}s`;
-          }
-          return 'Sincronizado con Binance';
-        }
-        if (status === 'error' && error) return error;
-        return 'Sincronización manual disponible.';
-      })();
-      const statusTone = status === 'error'
-        ? 'text-rose-600'
-        : dataStale && status !== 'missing' && status !== 'incomplete'
-          ? 'text-amber-600'
-          : 'text-neutral-800';
-      return (
-        <Card title="Binance Loans – API en vivo">
-          <div className="space-y-4 text-sm">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-semibold uppercase text-neutral-500">API Key (READ)</span>
-                <input
-                  type="password"
-                  autoComplete="off"
-                  className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-                  value={apiKey}
-                  onChange={(e) => onChangeKey(e.target.value.trim())}
-                  placeholder="Ingresa tu API Key"
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-semibold uppercase text-neutral-500">API Secret</span>
-                <input
-                  type="password"
-                  autoComplete="off"
-                  className="rounded-xl border border-neutral-300 px-3 py-2 text-sm"
-                  value={apiSecret}
-                  onChange={(e) => onChangeSecret(e.target.value.trim())}
-                  placeholder="Ingresa tu API Secret"
-                />
-              </label>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <div className="text-xs font-semibold uppercase text-neutral-500">Estado</div>
-                <div className={`text-sm font-semibold ${statusTone}`}>{statusLabel}</div>
-                {error && status !== 'error' && (
-                  <div className="text-xs text-rose-600 mt-1">{error}</div>
-                )}
-                {dataStale && !loading && status === 'ok' && (
-                  <div className="text-xs text-amber-600 mt-1">Datos con más de 90s · revisa la conexión.</div>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={onRefresh}
-                disabled={loading}
-                className="nx-btn nx-btn-sm self-start disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {loading ? 'Sincronizando…' : 'Sincronizar ahora'}
-              </button>
-            </div>
-            <div className="grid gap-3 text-xs sm:grid-cols-2">
-              <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-3">
-                <div className="text-[10px] font-semibold uppercase text-neutral-500">APR préstamo</div>
-                <div className="text-sm font-semibold text-neutral-800">{borrowApr != null ? formatPercent(borrowApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</div>
-              </div>
-              <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-3">
-                <div className="text-[10px] font-semibold uppercase text-neutral-500">APR neto</div>
-                <div className={`text-sm font-semibold ${netApr != null && netApr < 0 ? 'text-emerald-600' : 'text-neutral-800'}`}>
-                  {netApr != null ? formatPercent(netApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
-                </div>
-              </div>
-              <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-3">
-                <div className="text-[10px] font-semibold uppercase text-neutral-500">Deuda total (USDT)</div>
-                <div className="text-sm font-semibold text-neutral-800">{borrowUsd != null ? formatUsd(borrowUsd, true) : '—'}</div>
-              </div>
-              <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-3">
-                <div className="text-[10px] font-semibold uppercase text-neutral-500">Colateral indexado</div>
-                <div className="text-sm font-semibold text-neutral-800">{collateralUsd != null ? formatUsd(collateralUsd, true) : '—'}</div>
-              </div>
-              <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 p-3 sm:col-span-2">
-                <div className="text-[10px] font-semibold uppercase text-neutral-500">LTV (índice)</div>
-                <div className={`text-sm font-semibold ${ltv != null && ltv > 0.85 ? 'text-rose-600' : 'text-neutral-800'}`}>
-                  {ltv != null ? formatPercent(ltv, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
-                </div>
-              </div>
-            </div>
-            <div className="rounded-xl bg-neutral-50 px-3 py-2 text-[11px] text-neutral-500">
-              Las credenciales requieren permisos READ para Loans y Simple Earn. Binance recomienda restringir la API por IP.
-            </div>
-          </div>
-        </Card>
       );
     }
 
