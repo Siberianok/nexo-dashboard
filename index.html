@@ -322,6 +322,12 @@
 
     const DEFAULT_THEME = 'nexo';
 
+    const ACCENT_SURFACES = Object.freeze({
+      vivid: 'radial-gradient(130% 130% at 14% 0%, rgba(79,70,229,0.24) 0%, rgba(59,130,246,0.18) 42%, rgba(14,165,233,0.14) 100%)',
+      soft: 'linear-gradient(140deg, rgba(226,232,255,0.94) 0%, rgba(191,219,254,0.9) 52%, rgba(219,234,254,0.86) 100%)',
+      halo: 'radial-gradient(120% 120% at 50% 35%, rgba(59,130,246,0.22) 0%, rgba(191,219,254,0.18) 45%, rgba(248,250,252,0.92) 100%)',
+    });
+
     const ensureThemeStyles = () => {
       if (typeof document === 'undefined') return;
       if (document.getElementById('simulator-theme-styles')) return;
@@ -4690,7 +4696,10 @@
                 <TrendChart data={chartData} currency={currency} rate={rate} />
               </div>
 
-              <div className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-4">
+          <div
+            className="rounded-2xl border border-sky-200/70 p-4 space-y-4 shadow-sm"
+            style={{ background: ACCENT_SURFACES.soft }}
+          >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <div className="text-sm font-semibold text-neutral-700">Escenarios de estrés</div>
@@ -4761,7 +4770,11 @@
                     <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-500">No hay pagos definidos. Añade uno para proyectar obligaciones.</div>
                   )}
                   {(safePlan.payments || []).map((item) => (
-                    <div key={item.id} className="grid grid-cols-1 md:grid-cols-5 gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-xs">
+                    <div
+                      key={item.id}
+                      className="grid grid-cols-1 md:grid-cols-5 gap-2 rounded-2xl border border-sky-200/70 px-4 py-3 text-xs shadow-sm"
+                      style={{ background: ACCENT_SURFACES.halo }}
+                    >
                       <div>
                         <div className="text-[11px] uppercase text-neutral-400">Fecha</div>
                         <input type="date" value={item.date || ''} onChange={(e) => updateListItem('payments', item.id, { date: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
@@ -4812,7 +4825,11 @@
                     <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-500">Suma tus estrategias de rendimiento para cubrir el costo del préstamo.</div>
                   )}
                   {(safePlan.earns || []).map((item) => (
-                    <div key={item.id} className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-6 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-xs">
+                    <div
+                      key={item.id}
+                      className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-6 rounded-2xl border border-sky-200/70 px-4 py-3 text-xs shadow-sm"
+                      style={{ background: ACCENT_SURFACES.halo }}
+                    >
                       <div>
                         <div className="text-[11px] uppercase text-neutral-400">Inicio</div>
                         <input type="date" value={item.startDate || ''} onChange={(e) => updateListItem('earns', item.id, { startDate: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
@@ -4862,7 +4879,11 @@
                     <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-500">Registra recargas de colateral o retiros planificados.</div>
                   )}
                   {(safePlan.manual || []).map((item) => (
-                    <div key={item.id} className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-xs">
+                    <div
+                      key={item.id}
+                      className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5 rounded-2xl border border-sky-200/70 px-4 py-3 text-xs shadow-sm"
+                      style={{ background: ACCENT_SURFACES.halo }}
+                    >
                       <div>
                         <div className="text-[11px] uppercase text-neutral-400">Fecha</div>
                         <input type="date" value={item.date || ''} onChange={(e) => updateListItem('manual', item.id, { date: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
@@ -5257,7 +5278,10 @@
       return (
         <Card title="Benchmark CeFi vs. CeFi/DeFi">
           <div className="space-y-6 text-xs">
-            <div className="rounded-2xl border border-neutral-200 bg-neutral-50/70 px-4 py-3 space-y-1 text-neutral-600">
+            <div
+              className="rounded-2xl border border-sky-200/70 px-4 py-3 space-y-1 text-neutral-600 shadow-sm"
+              style={{ background: ACCENT_SURFACES.soft }}
+            >
               <div>Monto base: {formatMoney(baseAmount)} · APR préstamo: {formatPercent(chosenAPR, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · Plazo: {termDays} días</div>
               <div>Escenario cashflow: {scenarioName || 'Base'} · Saldo neto proyectado: {cashflowNet != null ? formatMoney(cashflowNet) : '—'}</div>
             </div>
@@ -5268,9 +5292,20 @@
                 <button className="nx-btn nx-btn-sm" onClick={addRate}>Agregar tasa</button>
               </div>
               <div className="space-y-2">
-                {matrix.length === 0 && <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-neutral-500">Define al menos una tasa APR/APY para combinar estrategias.</div>}
+                {matrix.length === 0 && (
+                  <div
+                    className="rounded-xl border border-sky-200/70 px-4 py-3 text-neutral-500 shadow-sm"
+                    style={{ background: ACCENT_SURFACES.soft }}
+                  >
+                    Define al menos una tasa APR/APY para combinar estrategias.
+                  </div>
+                )}
                 {matrix.map((item) => (
-                  <div key={item.id} className="grid grid-cols-1 md:grid-cols-5 gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-3">
+                  <div
+                    key={item.id}
+                    className="grid grid-cols-1 md:grid-cols-5 gap-2 rounded-2xl border border-sky-200/70 px-4 py-3 shadow-sm"
+                    style={{ background: ACCENT_SURFACES.halo }}
+                  >
                     <input type="text" value={item.platform || ''} onChange={(e) => updateRate(item.id, { platform: e.target.value })} className="rounded-full border border-neutral-300 px-2 py-1" placeholder="Plataforma" />
                     <input type="text" value={item.product || ''} onChange={(e) => updateRate(item.id, { product: e.target.value })} className="rounded-full border border-neutral-300 px-2 py-1" placeholder="Producto" />
                     <select value={item.type || 'APR'} onChange={(e) => updateRate(item.id, { type: e.target.value })} className="rounded-full border border-neutral-300 px-2 py-1">
@@ -5297,12 +5332,23 @@
                 <button className="nx-btn nx-btn-sm" onClick={addStrategy}>Agregar estrategia</button>
               </div>
               <div className="space-y-3">
-                {strategies.length === 0 && <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-neutral-500">Crea combinaciones préstamo → rendimiento para medir el spread neto.</div>}
+                {strategies.length === 0 && (
+                  <div
+                    className="rounded-xl border border-sky-200/70 px-4 py-3 text-neutral-500 shadow-sm"
+                    style={{ background: ACCENT_SURFACES.soft }}
+                  >
+                    Crea combinaciones préstamo → rendimiento para medir el spread neto.
+                  </div>
+                )}
                 {strategies.map((strategy) => {
                   const metrics = computeResult(strategy);
                   const position = ranked.findIndex((item) => item.strategy.id === strategy.id) + 1;
                   return (
-                    <div key={strategy.id} className="grid grid-cols-1 md:grid-cols-6 gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-3">
+                    <div
+                      key={strategy.id}
+                      className="grid grid-cols-1 md:grid-cols-6 gap-2 rounded-2xl border border-sky-200/70 px-4 py-3 shadow-sm"
+                      style={{ background: ACCENT_SURFACES.halo }}
+                    >
                       <div className="md:col-span-2 space-y-1">
                         <input type="text" value={strategy.label || ''} onChange={(e) => updateStrategy(strategy.id, { label: e.target.value })} className="w-full rounded-full border border-neutral-300 px-2 py-1" placeholder="Nombre de la estrategia" />
                         <select value={strategy.lenderRateId || ''} onChange={(e) => updateStrategy(strategy.id, { lenderRateId: e.target.value })} className="w-full rounded-full border border-neutral-300 px-2 py-1">
@@ -5650,6 +5696,16 @@
                 <stop offset="0%" stopColor="rgba(15,23,42,0.12)" />
                 <stop offset="100%" stopColor="rgba(15,23,42,0.02)" />
               </linearGradient>
+              <radialGradient id="gaugeBackdrop" cx="50%" cy="48%" r="72%">
+                <stop offset="0%" stopColor="rgba(191,219,254,0.42)" />
+                <stop offset="55%" stopColor="rgba(148,163,184,0.28)" />
+                <stop offset="100%" stopColor="rgba(226,232,240,0.9)" />
+              </radialGradient>
+              <radialGradient id="gaugeCore" cx="50%" cy="50%" r="65%">
+                <stop offset="0%" stopColor="rgba(30,64,175,0.35)" />
+                <stop offset="45%" stopColor="rgba(59,130,246,0.28)" />
+                <stop offset="100%" stopColor="rgba(14,165,233,0.18)" />
+              </radialGradient>
               <filter id="pointerShadow" x="-40%" y="-40%" width="180%" height="180%">
                 <feDropShadow dx="0" dy="3" stdDeviation="3" floodColor="rgba(15,23,42,0.35)" />
               </filter>
@@ -5658,7 +5714,7 @@
               </filter>
             </defs>
             <g filter="url(#ringShadow)">
-              <circle cx={center} cy={center} r={radius + 10} fill="#f8fafc" />
+              <circle cx={center} cy={center} r={radius + 10} fill="url(#gaugeBackdrop)" />
               <circle cx={center} cy={center} r={radius + 6} fill="url(#gaugeRing)" opacity="0.65" />
               <circle cx={center} cy={center} r={radius - ring * 0.15} fill="url(#gaugeDepth)" />
             </g>
@@ -5682,8 +5738,8 @@
             <g filter="url(#pointerShadow)">
               <path d={pointerPath} fill="#0f172a" opacity="0.92" />
             </g>
-            <circle cx={center} cy={center} r={18} fill="#1e3a8a" stroke="#f8fafc" strokeWidth="5" />
-            <circle cx={center} cy={center} r={6} fill="#f1f5f9" />
+            <circle cx={center} cy={center} r={18} fill="url(#gaugeCore)" stroke="rgba(191,219,254,0.65)" strokeWidth="5" />
+            <circle cx={center} cy={center} r={6} fill="rgba(255,255,255,0.8)" stroke="rgba(148,163,184,0.35)" strokeWidth="1.5" />
             <text
               x={center}
               y={valueLabelY}
@@ -6097,8 +6153,14 @@
 
       if (shapes.length === 0) {
         return (
-          <div className="relative flex h-36 w-36 items-center justify-center rounded-full bg-slate-100">
-            <div className="h-20 w-20 rounded-full bg-white shadow-inner" />
+          <div
+            className="relative flex h-36 w-36 items-center justify-center rounded-full shadow-lg"
+            style={{ background: ACCENT_SURFACES.halo }}
+          >
+            <div
+              className="h-20 w-20 rounded-full shadow-inner"
+              style={{ background: ACCENT_SURFACES.soft, border: '1px solid rgba(59,130,246,0.18)' }}
+            />
           </div>
         );
       }
@@ -6114,6 +6176,16 @@
             <filter id="donutShadow" x="-20%" y="-20%" width="140%" height="140%">
               <feDropShadow dx="0" dy="8" stdDeviation="8" floodColor="rgba(15,30,70,0.18)" />
             </filter>
+            <radialGradient id="donutCenterGlow" cx="50%" cy="45%" r="65%">
+              <stop offset="0%" stopColor="rgba(255,255,255,0.96)" />
+              <stop offset="55%" stopColor="rgba(219,234,254,0.82)" />
+              <stop offset="100%" stopColor="rgba(148,163,184,0.32)" />
+            </radialGradient>
+            <radialGradient id="donutCore" cx="50%" cy="50%" r="68%">
+              <stop offset="0%" stopColor="rgba(30,64,175,0.22)" />
+              <stop offset="45%" stopColor="rgba(37,99,235,0.18)" />
+              <stop offset="100%" stopColor="rgba(14,165,233,0.12)" />
+            </radialGradient>
           </defs>
           <g filter="url(#donutShadow)">
             {shapes.map((shape) => (
@@ -6129,10 +6201,25 @@
           <circle
             cx={center}
             cy={center}
+            r={innerRadius + 6}
+            fill="url(#donutCore)"
+            opacity="0.75"
+          />
+          <circle
+            cx={center}
+            cy={center}
             r={innerRadius - 4}
-            fill="#ffffff"
-            stroke="rgba(15,30,70,0.08)"
+            fill="url(#donutCenterGlow)"
+            stroke="rgba(59,130,246,0.18)"
             strokeWidth="2"
+          />
+          <circle
+            cx={center}
+            cy={center}
+            r={innerRadius * 0.32}
+            fill="rgba(255,255,255,0.65)"
+            stroke="rgba(148,163,184,0.28)"
+            strokeWidth="1"
           />
         </svg>
       );
