@@ -410,7 +410,6 @@
     const LIVE_REFRESH_SECONDS = 5;
     const FX_REFRESH_MINUTES = 30;
     const BINANCE_INTEREST_REFRESH_MS = 60 * 1000;
-    const BINANCE_STALE_THRESHOLD_MS = 90 * 1000;
     const BINANCE_API_BASE = 'https://api.binance.com';
     const BINANCE_FAPI_BASE = 'https://fapi.binance.com';
     const BINANCE_SIGNED_RECV_WINDOW = 5000;
@@ -2712,11 +2711,6 @@
         }
       }, [isBinance, params.binanceApiKey, params.binanceApiSecret, params.binanceBorrowTicker, assets, loanRequests, liveBorrowPositions, sanitizeTicker, resetBinanceTimer]);
 
-      const handleBinanceManualRefresh = useCallback(() => {
-        resetBinanceTimer();
-        return triggerBinanceFetch('manual');
-      }, [resetBinanceTimer, triggerBinanceFetch]);
-
       useEffect(() => {
         if (!isBinance) {
           resetBinanceTimer();
@@ -3933,7 +3927,6 @@
       const renderNow = Date.now();
       const binanceLastUpdatedMs = binanceLiveMeta?.lastUpdated ?? null;
       const binanceSecondsAgo = binanceLastUpdatedMs != null ? Math.max(0, Math.floor((renderNow - binanceLastUpdatedMs) / 1000)) : null;
-      const binanceDataStale = binanceLastUpdatedMs != null ? (renderNow - binanceLastUpdatedMs > BINANCE_STALE_THRESHOLD_MS) : false;
       const binanceUpdatedLabel = binanceSecondsAgo != null ? ` · actualizado hace ${binanceSecondsAgo}s` : '';
       const binanceNetAprSubtle = isBinance
         ? ((binanceOutstandingRatio < 0.999
@@ -4134,20 +4127,6 @@
 
             <section className="mb-10 grid grid-cols-1 gap-6 items-start xl:grid-cols-2">
               <div className="space-y-6">
-                {isBinance && (
-                  <BinanceLivePanel
-                    apiKey={params.binanceApiKey || ''}
-                    apiSecret={params.binanceApiSecret || ''}
-                    onChangeKey={(value) => setParams({ ...params, binanceApiKey: value })}
-                    onChangeSecret={(value) => setParams({ ...params, binanceApiSecret: value })}
-                    onRefresh={handleBinanceManualRefresh}
-                    meta={binanceLiveMeta}
-                    aggregate={binanceAggregate}
-                    dataStale={binanceDataStale}
-                    secondsAgo={binanceSecondsAgo}
-                    formatUsd={formatUsd}
-                  />
-                )}
                 <Card title="Préstamo & Repago">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 justify-items-center">
                     <Field label={`Monto a pedir (${currency})`} align="center" className="w-full max-w-xs">
