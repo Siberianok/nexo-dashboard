@@ -5306,7 +5306,7 @@
                 {matrix.map((item) => (
                   <div
                     key={item.id}
-                    className="grid grid-cols-1 md:grid-cols-5 gap-2 rounded-2xl border border-sky-200/70 px-4 py-3 shadow-sm"
+                    className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1.5fr)_minmax(0,0.8fr)_minmax(0,0.9fr)_minmax(0,0.6fr)] rounded-2xl border border-sky-200/70 px-4 py-3 shadow-sm"
                     style={{ background: ACCENT_SURFACES.halo }}
                   >
                     <input type="text" value={item.platform || ''} onChange={(e) => updateRate(item.id, { platform: e.target.value })} className="rounded-full border border-neutral-300 px-2 py-1" placeholder="Plataforma" />
@@ -5349,7 +5349,7 @@
                   return (
                     <div
                       key={strategy.id}
-                      className="grid grid-cols-1 md:grid-cols-6 gap-2 rounded-2xl border border-sky-200/70 px-4 py-3 shadow-sm"
+                      className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1.8fr)_minmax(0,1.2fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,0.6fr)] rounded-2xl border border-sky-200/70 px-4 py-3 shadow-sm"
                       style={{ background: ACCENT_SURFACES.halo }}
                     >
                       <div className="md:col-span-2 space-y-1">
