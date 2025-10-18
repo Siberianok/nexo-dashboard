@@ -2328,6 +2328,10 @@
           const n = Number(value);
           return Number.isFinite(n) ? n : 0;
         };
+        const parseNullable = (value) => {
+          const n = Number(value);
+          return Number.isFinite(n) ? n : null;
+        };
         const now = Date.now();
         setBinanceLiveMeta((prev) => ({
           ...prev,
@@ -2508,27 +2512,76 @@
             const borrowPrincipal = parseNumber(row?.loanAmount ?? row?.principal ?? row?.borrowAmount ?? totalDebt);
             const collateralAmount = parseNumber(row?.collateralAmount ?? row?.remainingCollateralAmount ?? row?.collateralAmt ?? 0);
             const interestAccrued = Math.max(0, totalDebt - borrowPrincipal);
+            const rowAnnual = parseNullable(row?.borrowerAnnualInterestRate ?? row?.annualInterestRate ?? row?.annualRate ?? row?.apr ?? row?.loanApr);
+            const rowHourly = parseNullable(row?.hourlyInterestRate ?? row?.hourlyRate ?? row?.rate);
+            const rowNetAnnual = parseNullable(row?.netAnnualInterestRate ?? row?.netAnnualRate ?? row?.netApr ?? row?.netInterestRate);
+            const rowNetHourly = parseNullable(row?.netHourlyInterestRate ?? row?.netHourlyRate ?? row?.netRate);
+            const rowCollateralApr = parseNullable(row?.collateralApr ?? row?.collateralAPR ?? row?.collateralAnnualRate ?? row?.collateralApy ?? row?.simpleEarnAPR ?? row?.earnApr);
             const borrowEntry = borrowAprByLoan[loanCoin] || {};
-            const borrowApr = Number.isFinite(borrowEntry.annual) ? borrowEntry.annual : null;
-            const borrowHourly = Number.isFinite(borrowEntry.hourly) ? borrowEntry.hourly : null;
+            const borrowApr = Number.isFinite(rowAnnual)
+              ? rowAnnual
+              : (Number.isFinite(borrowEntry.annual) ? borrowEntry.annual : 0);
+            const borrowHourly = Number.isFinite(rowHourly)
+              ? rowHourly
+              : (Number.isFinite(borrowEntry.hourly) ? borrowEntry.hourly : annualToHourly(borrowApr));
             const collateralAprEntry = collateralAprMap[collateralCoin] || {};
-            const collateralApr = Number.isFinite(collateralAprEntry.apr) ? collateralAprEntry.apr : 0;
+            const collateralApr = Number.isFinite(rowCollateralApr)
+              ? rowCollateralApr
+              : (Number.isFinite(collateralAprEntry.apr) ? collateralAprEntry.apr : 0);
             const paramsEntry = collateralParamsMap[collateralCoin] || {};
-            const initialLtv = Number.isFinite(paramsEntry.initialLTV) && paramsEntry.initialLTV > 0 ? paramsEntry.initialLTV : parseNumber(row?.collateralLTV ?? row?.initialLTV);
-            const marginCall = Number.isFinite(paramsEntry.marginCall) && paramsEntry.marginCall > 0 ? paramsEntry.marginCall : parseNumber(row?.marginCallLTV ?? row?.marginCall);
-            const liquidation = Number.isFinite(paramsEntry.liquidationLTV) && paramsEntry.liquidationLTV > 0 ? paramsEntry.liquidationLTV : parseNumber(row?.liquidationLTV ?? row?.liquidationLtv);
+            const rowInitialLtv = parseNullable(row?.initialLTV ?? row?.initialLtv ?? row?.collateralLTV);
+            const initialLtv = Number.isFinite(rowInitialLtv) && rowInitialLtv > 0
+              ? rowInitialLtv
+              : (Number.isFinite(paramsEntry.initialLTV) && paramsEntry.initialLTV > 0
+                ? paramsEntry.initialLTV
+                : null);
+            const rowMarginCall = parseNullable(row?.marginCallLTV ?? row?.marginCallLtv ?? row?.marginCall);
+            const marginCall = Number.isFinite(rowMarginCall) && rowMarginCall > 0
+              ? rowMarginCall
+              : (Number.isFinite(paramsEntry.marginCall) && paramsEntry.marginCall > 0 ? paramsEntry.marginCall : null);
+            const rowLiquidationLtv = parseNullable(row?.liquidationLTV ?? row?.liquidationLtv ?? row?.liquidation);
+            const liquidation = Number.isFinite(rowLiquidationLtv) && rowLiquidationLtv > 0
+              ? rowLiquidationLtv
+              : (Number.isFinite(paramsEntry.liquidationLTV) && paramsEntry.liquidationLTV > 0 ? paramsEntry.liquidationLTV : null);
             const borrowIndexPrice = Number.isFinite(indexPrices[loanCoin]) && indexPrices[loanCoin] > 0 ? indexPrices[loanCoin] : 1;
             const collateralIndexPrice = Number.isFinite(indexPrices[collateralCoin]) && indexPrices[collateralCoin] > 0 ? indexPrices[collateralCoin] : (assetPriceMap[collateralCoin] ?? null);
-            const collateralUsd = collateralIndexPrice != null ? collateralIndexPrice * collateralAmount : null;
-            const borrowUsd = borrowIndexPrice * totalDebt;
-            const ltvComputed = collateralUsd && collateralUsd > 0 ? borrowUsd / collateralUsd : null;
-            const currentLtvApi = parseNumber(row?.currentLTV ?? row?.currentLtv);
-            const netApr = Number.isFinite(initialLtv) && initialLtv > 0 ? ((Number.isFinite(borrowApr) ? borrowApr : 0) - (collateralApr / initialLtv)) : (borrowApr ?? 0);
+            const rowCollateralUsd = parseNullable(row?.collateralValue ?? row?.collateralUsd ?? row?.collateralAmountInUSDT ?? row?.collateralInUsd);
+            const collateralUsd = Number.isFinite(rowCollateralUsd) && rowCollateralUsd > 0
+              ? rowCollateralUsd
+              : (collateralIndexPrice != null ? collateralIndexPrice * collateralAmount : null);
+            const rowBorrowUsd = parseNullable(row?.loanValue ?? row?.loanAmountInUSDT ?? row?.borrowUsd ?? row?.loanAmountUsd ?? row?.borrowAmountInUsd);
+            const borrowUsd = Number.isFinite(rowBorrowUsd) && rowBorrowUsd > 0
+              ? rowBorrowUsd
+              : (borrowIndexPrice * totalDebt);
+            const currentLtvApi = parseNullable(row?.currentLTV ?? row?.currentLtv);
+            const ltvComputed = Number.isFinite(currentLtvApi) && currentLtvApi > 0
+              ? currentLtvApi
+              : (collateralUsd && collateralUsd > 0 ? borrowUsd / collateralUsd : null);
+            const ltvForNet = Number.isFinite(ltvComputed) && ltvComputed > 0
+              ? ltvComputed
+              : (Number.isFinite(initialLtv) && initialLtv > 0 ? initialLtv : null);
+            const netApr = Number.isFinite(rowNetAnnual)
+              ? rowNetAnnual
+              : (Number.isFinite(borrowApr)
+                ? (borrowApr - (Number.isFinite(collateralApr) && Number.isFinite(ltvForNet) && ltvForNet > 0 ? (collateralApr / ltvForNet) : 0))
+                : null);
             const aprOffset = Number.isFinite(borrowApr) && Number.isFinite(netApr) ? borrowApr - netApr : null;
-            const netHourly = annualToHourly(Number.isFinite(netApr) ? netApr : 0);
+            const netHourly = Number.isFinite(rowNetHourly)
+              ? rowNetHourly
+              : (Number.isFinite(netApr) ? annualToHourly(netApr) : null);
             const collateralQty = collateralAmount > 0 ? collateralAmount : parseNumber(row?.collateralQty);
-            const liquidationPrice = (Number.isFinite(liquidation) && liquidation > 0 && collateralQty > 0) ? (borrowIndexPrice * totalDebt) / (liquidation * collateralQty) : null;
-            const marginCallPrice = (Number.isFinite(marginCall) && marginCall > 0 && collateralQty > 0) ? (borrowIndexPrice * totalDebt) / (marginCall * collateralQty) : null;
+            const rowLiquidationPrice = parseNullable(row?.liquidationPrice ?? row?.liquidationPriceUsd);
+            const liquidationPrice = Number.isFinite(rowLiquidationPrice) && rowLiquidationPrice > 0
+              ? rowLiquidationPrice
+              : (Number.isFinite(liquidation) && liquidation > 0 && collateralQty > 0
+                ? (borrowIndexPrice * totalDebt) / (liquidation * collateralQty)
+                : null);
+            const rowMarginCallPrice = parseNullable(row?.marginCallPrice ?? row?.marginCallPriceUsd);
+            const marginCallPrice = Number.isFinite(rowMarginCallPrice) && rowMarginCallPrice > 0
+              ? rowMarginCallPrice
+              : (Number.isFinite(marginCall) && marginCall > 0 && collateralQty > 0
+                ? (borrowIndexPrice * totalDebt) / (marginCall * collateralQty)
+                : null);
             const createdTime = parseNumber(row?.createdTime ?? row?.createTime ?? row?.loanDate);
             return {
               loanCoin,
