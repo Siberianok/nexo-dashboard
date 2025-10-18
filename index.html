@@ -4516,234 +4516,238 @@
 
       return (
         <Card title="Planificador de cashflow">
-          <div className="space-y-6 text-sm">
-            <div className="grid grid-cols-1 gap-3">
-              {summaryTiles.map((tile) => (
-                <div key={tile.label} className="rounded-2xl border border-neutral-200 bg-white px-4 py-3">
-                  <div className="text-xs text-neutral-500 uppercase">{tile.label}</div>
-                  <div className={`text-lg font-semibold ${tile.tone}`}>{tile.value}</div>
-                  {tile.hint && <div className="text-[11px] text-neutral-500">{tile.hint}</div>}
-                </div>
-              ))}
-            </div>
-
-            <div>
-              <h4 className="mb-2 text-sm font-semibold text-neutral-700">Curva de saldo neto</h4>
-              <TrendChart data={chartData} currency={currency} rate={rate} />
-            </div>
-
-            <div className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold text-neutral-700">Escenarios de estrés</div>
-                  <p className="text-xs text-neutral-500">Define shocks de precio (%) y selecciona cuál alimenta el velocímetro de LTV.</p>
-                </div>
-                <select value={activeScenario} onChange={(e) => setActiveScenario(e.target.value)} className={`rounded-full border border-neutral-300 px-3 py-1.5 text-sm font-semibold focus:outline-none focus:ring-2 ${focusRingClass}`}>
-                  {scenarioKeys.map((key) => (
-                    <option key={key} value={key}>{scenarioLabels[key] || key}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2 xl:grid-cols-3">
-                {scenarioKeys.map((key) => (
-                  <div key={`scenario-${key}`} className={`rounded-2xl border ${activeScenario === key ? 'border-blue-400 bg-blue-50/40' : 'border-neutral-200 bg-neutral-50/60'} p-3 space-y-2`}>
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-neutral-700">{scenarioLabels[key] || key}</span>
-                      <LocaleNumberInput
-                        value={(combinedShocks[key] ?? 0) * 100}
-                        onChange={(v) => setScenarioShock(key, v)}
-                        decimals={2}
-                        allowNegative
-                        className={`w-20 rounded-full border border-neutral-300 px-2 py-1 text-right focus:outline-none focus:ring-2 ${focusRingClass}`}
-                      />
-                    </div>
-                    <div className="text-[11px] text-neutral-500">Shock sobre colateral</div>
-                    <div className="text-[11px] text-neutral-600">LTV final: {derived?.scenarioSummaries?.[key]?.last != null && Number.isFinite(derived.scenarioSummaries[key].last) ? formatPercent(derived.scenarioSummaries[key].last, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—'}</div>
-                    <div className="text-[11px] text-neutral-600">Saldo: {derived?.scenarioSummaries?.[key]?.net != null ? formatMoney(derived.scenarioSummaries[key].net) : formatMoney(netFinal)}</div>
+          <div className="grid gap-6 text-sm lg:grid-cols-[1.1fr_minmax(0,1fr)]">
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+                {summaryTiles.map((tile) => (
+                  <div key={tile.label} className="rounded-2xl border border-neutral-200 bg-white px-4 py-3">
+                    <div className="text-xs text-neutral-500 uppercase">{tile.label}</div>
+                    <div className={`text-lg font-semibold ${tile.tone}`}>{tile.value}</div>
+                    {tile.hint && <div className="text-[11px] text-neutral-500">{tile.hint}</div>}
                   </div>
                 ))}
               </div>
-              {alerts.length > 0 && (
-                <div className="space-y-2 text-xs">
-                  {alerts.map((alert) => {
-                    const tone = ALERT_TONE_STYLES[alert.tone] || ALERT_TONE_STYLES.info;
-                    return (
-                      <div
-                        key={alert.id}
-                        className={`rounded-2xl border px-3 py-2 ${tone.border} ${tone.bg} ${tone.text}`}
-                      >
-                        {alert.message}
+
+              <div>
+                <h4 className="mb-2 text-sm font-semibold text-neutral-700">Curva de saldo neto</h4>
+                <TrendChart data={chartData} currency={currency} rate={rate} />
+              </div>
+
+              <div className="rounded-2xl border border-neutral-200 bg-white p-4 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-neutral-700">Escenarios de estrés</div>
+                    <p className="text-xs text-neutral-500">Define shocks de precio (%) y selecciona cuál alimenta el velocímetro de LTV.</p>
+                  </div>
+                  <select value={activeScenario} onChange={(e) => setActiveScenario(e.target.value)} className={`rounded-full border border-neutral-300 px-3 py-1.5 text-sm font-semibold focus:outline-none focus:ring-2 ${focusRingClass}`}>
+                    {scenarioKeys.map((key) => (
+                      <option key={key} value={key}>{scenarioLabels[key] || key}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2 xl:grid-cols-3">
+                  {scenarioKeys.map((key) => (
+                    <div key={`scenario-${key}`} className={`rounded-2xl border ${activeScenario === key ? 'border-blue-400 bg-blue-50/40' : 'border-neutral-200 bg-neutral-50/60'} p-3 space-y-2`}>
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-neutral-700">{scenarioLabels[key] || key}</span>
+                        <LocaleNumberInput
+                          value={(combinedShocks[key] ?? 0) * 100}
+                          onChange={(v) => setScenarioShock(key, v)}
+                          decimals={2}
+                          allowNegative
+                          className={`w-20 rounded-full border border-neutral-300 px-2 py-1 text-right focus:outline-none focus:ring-2 ${focusRingClass}`}
+                        />
                       </div>
-                    );
-                  })}
+                      <div className="text-[11px] text-neutral-500">Shock sobre colateral</div>
+                      <div className="text-[11px] text-neutral-600">LTV final: {derived?.scenarioSummaries?.[key]?.last != null && Number.isFinite(derived.scenarioSummaries[key].last) ? formatPercent(derived.scenarioSummaries[key].last, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—'}</div>
+                      <div className="text-[11px] text-neutral-600">Saldo: {derived?.scenarioSummaries?.[key]?.net != null ? formatMoney(derived.scenarioSummaries[key].net) : formatMoney(netFinal)}</div>
+                    </div>
+                  ))}
+                </div>
+                {alerts.length > 0 && (
+                  <div className="space-y-2 text-xs">
+                    {alerts.map((alert) => {
+                      const tone = ALERT_TONE_STYLES[alert.tone] || ALERT_TONE_STYLES.info;
+                      return (
+                        <div
+                          key={alert.id}
+                          className={`rounded-2xl border px-3 py-2 ${tone.border} ${tone.bg} ${tone.text}`}
+                        >
+                          {alert.message}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {fundingGaps.length > 0 && (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+                  <div className="font-semibold mb-1">Gaps de liquidez detectados</div>
+                  <ul className="list-disc pl-5 space-y-1">
+                    {fundingGaps.map((gap, idx) => (
+                      <li key={`gap-${idx}`}>Día {gap.day} ({gap.date}) · saldo neto {formatMoney(gap.net)}</li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </div>
 
-            {fundingGaps.length > 0 && (
-              <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
-                <div className="font-semibold mb-1">Gaps de liquidez detectados</div>
-                <ul className="list-disc pl-5 space-y-1">
-                  {fundingGaps.map((gap, idx) => (
-                    <li key={`gap-${idx}`}>Día {gap.day} ({gap.date}) · saldo neto {formatMoney(gap.net)}</li>
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-neutral-700">Pagos programados</h4>
+                  <button className="nx-btn nx-btn-sm" onClick={addPayment}>Agregar pago</button>
+                </div>
+                <div className="space-y-3">
+                  {(safePlan.payments || []).length === 0 && (
+                    <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-500">No hay pagos definidos. Añade uno para proyectar obligaciones.</div>
+                  )}
+                  {(safePlan.payments || []).map((item) => (
+                    <div key={item.id} className="grid grid-cols-1 md:grid-cols-5 gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-xs">
+                      <div>
+                        <div className="text-[11px] uppercase text-neutral-400">Fecha</div>
+                        <input type="date" value={item.date || ''} onChange={(e) => updateListItem('payments', item.id, { date: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
+                      </div>
+                      <div>
+                        <div className="text-[11px] uppercase text-neutral-400">Monto total</div>
+                        <LocaleNumberInput
+                          value={item.amount ?? item.principal ?? 0}
+                          onChange={(v) => updateListItem('payments', item.id, { amount: Math.max(0, v) })}
+                          decimals={2}
+                          min={0}
+                          className={`w-full rounded-full border border-neutral-300 px-2 py-1 text-right focus:outline-none focus:ring-2 ${focusRingClass}`}
+                        />
+                        <div className="mt-1 text-[10px] text-neutral-500">Se descuenta interés acumulado primero.</div>
+                      </div>
+                      <div>
+                        <div className="text-[11px] uppercase text-neutral-400">Cripto</div>
+                        <select
+                          value={item.ticker || ''}
+                          onChange={(e) => updateListItem('payments', item.id, { ticker: normalizeTicker(e.target.value) })}
+                          className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`}
+                        >
+                          <option value="">General / proporcional</option>
+                          {paymentTickerOptions.map((ticker) => (
+                            <option key={`payment-token-${ticker}`} value={ticker}>{ticker}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="md:col-span-1">
+                        <div className="text-[11px] uppercase text-neutral-400">Nota</div>
+                        <input type="text" value={item.label || ''} onChange={(e) => updateListItem('payments', item.id, { label: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
+                      </div>
+                      <div className="flex items-end justify-end sm:col-span-2 xl:col-span-1">
+                        <button className="text-rose-600 hover:underline" onClick={() => removeListItem('payments', item.id)}>Eliminar</button>
+                      </div>
+                    </div>
                   ))}
-                </ul>
+                </div>
               </div>
-            )}
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-neutral-700">Pagos programados</h4>
-                <button className="nx-btn nx-btn-sm" onClick={addPayment}>Agregar pago</button>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-neutral-700">Flujos de Earn / staking</h4>
+                  <button className="nx-btn nx-btn-sm" onClick={addEarn}>Agregar flujo</button>
+                </div>
+                <div className="space-y-3">
+                  {(safePlan.earns || []).length === 0 && (
+                    <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-500">Suma tus estrategias de rendimiento para cubrir el costo del préstamo.</div>
+                  )}
+                  {(safePlan.earns || []).map((item) => (
+                    <div key={item.id} className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-6 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-xs">
+                      <div>
+                        <div className="text-[11px] uppercase text-neutral-400">Inicio</div>
+                        <input type="date" value={item.startDate || ''} onChange={(e) => updateListItem('earns', item.id, { startDate: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
+                      </div>
+                      <div>
+                        <div className="text-[11px] uppercase text-neutral-400">Fin</div>
+                        <input type="date" value={item.endDate || ''} onChange={(e) => updateListItem('earns', item.id, { endDate: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
+                      </div>
+                      <div>
+                        <div className="text-[11px] uppercase text-neutral-400">Frecuencia</div>
+                        <select value={item.frequency || 'monthly'} onChange={(e) => updateListItem('earns', item.id, { frequency: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`}>
+                          <option value="daily">Diario</option>
+                          <option value="weekly">Semanal</option>
+                          <option value="monthly">Mensual</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div className="text-[11px] uppercase text-neutral-400">Monto</div>
+                        <LocaleNumberInput
+                          value={item.amount ?? 0}
+                          onChange={(v) => updateListItem('earns', item.id, { amount: Math.max(0, v) })}
+                          decimals={2}
+                          min={0}
+                          className={`w-full rounded-full border border-neutral-300 px-2 py-1 text-right focus:outline-none focus:ring-2 ${focusRingClass}`}
+                        />
+                      </div>
+                      <div>
+                        <div className="text-[11px] uppercase text-neutral-400">Origen</div>
+                        <input type="text" value={item.platform || ''} onChange={(e) => updateListItem('earns', item.id, { platform: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
+                      </div>
+                      <div className="flex items-end justify-between gap-2 sm:col-span-2 xl:col-span-1">
+                        <input type="text" value={item.token || ''} placeholder="Token" onChange={(e) => updateListItem('earns', item.id, { token: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
+                        <button className="text-rose-600 hover:underline" onClick={() => removeListItem('earns', item.id)}>Eliminar</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="space-y-3">
-                {(safePlan.payments || []).length === 0 && (
-                  <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-500">No hay pagos definidos. Añade uno para proyectar obligaciones.</div>
-                )}
-                {(safePlan.payments || []).map((item) => (
-                  <div key={item.id} className="grid grid-cols-1 md:grid-cols-5 gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-xs">
-                    <div>
-                      <div className="text-[11px] uppercase text-neutral-400">Fecha</div>
-                      <input type="date" value={item.date || ''} onChange={(e) => updateListItem('payments', item.id, { date: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
-                    </div>
-                    <div>
-                      <div className="text-[11px] uppercase text-neutral-400">Monto total</div>
-                      <LocaleNumberInput
-                        value={item.amount ?? item.principal ?? 0}
-                        onChange={(v) => updateListItem('payments', item.id, { amount: Math.max(0, v) })}
-                        decimals={2}
-                        min={0}
-                        className={`w-full rounded-full border border-neutral-300 px-2 py-1 text-right focus:outline-none focus:ring-2 ${focusRingClass}`}
-                      />
-                      <div className="mt-1 text-[10px] text-neutral-500">Se descuenta interés acumulado primero.</div>
-                    </div>
-                    <div>
-                      <div className="text-[11px] uppercase text-neutral-400">Cripto</div>
-                      <select
-                        value={item.ticker || ''}
-                        onChange={(e) => updateListItem('payments', item.id, { ticker: normalizeTicker(e.target.value) })}
-                        className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`}
-                      >
-                        <option value="">General / proporcional</option>
-                        {paymentTickerOptions.map((ticker) => (
-                          <option key={`payment-token-${ticker}`} value={ticker}>{ticker}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="md:col-span-1">
-                      <div className="text-[11px] uppercase text-neutral-400">Nota</div>
-                      <input type="text" value={item.label || ''} onChange={(e) => updateListItem('payments', item.id, { label: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
-                    </div>
-                    <div className="flex items-end justify-end sm:col-span-2 xl:col-span-1">
-                      <button className="text-rose-600 hover:underline" onClick={() => removeListItem('payments', item.id)}>Eliminar</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-neutral-700">Flujos de Earn / staking</h4>
-                <button className="nx-btn nx-btn-sm" onClick={addEarn}>Agregar flujo</button>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-semibold text-neutral-700">Eventos manuales</h4>
+                  <button className="nx-btn nx-btn-sm" onClick={addManual}>Agregar evento</button>
+                </div>
+                <div className="space-y-3">
+                  {(safePlan.manual || []).length === 0 && (
+                    <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-500">Registra recargas de colateral o retiros planificados.</div>
+                  )}
+                  {(safePlan.manual || []).map((item) => (
+                    <div key={item.id} className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-xs">
+                      <div>
+                        <div className="text-[11px] uppercase text-neutral-400">Fecha</div>
+                        <input type="date" value={item.date || ''} onChange={(e) => updateListItem('manual', item.id, { date: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
+                      </div>
+                      <div>
+                        <div className="text-[11px] uppercase text-neutral-400">Monto</div>
+                        <LocaleNumberInput
+                          value={item.amount ?? 0}
+                          onChange={(v) => updateListItem('manual', item.id, { amount: v })}
+                          decimals={2}
+                          allowNegative
+                          className={`w-full rounded-full border border-neutral-300 px-2 py-1 text-right focus:outline-none focus:ring-2 ${focusRingClass}`}
+                        />
+                      </div>
+                      <div>
+                        <div className="text-[11px] uppercase text-neutral-400">Dirección</div>
+                        <select value={item.direction || 'outflow'} onChange={(e) => updateListItem('manual', item.id, { direction: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`}>
+                          <option value="outflow">Salida</option>
+                          <option value="inflow">Entrada</option>
+                        </select>
+                      </div>
+                      <div>
+                        <div className="text-[11px] uppercase text-neutral-400">Colateral</div>
+                        <select value={item.collateralImpact || 'increase'} onChange={(e) => updateListItem('manual', item.id, { collateralImpact: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`}>
+                          <option value="increase">Aumenta</option>
+                          <option value="decrease">Disminuye</option>
+                          <option value="none">Sin cambio</option>
+                        </select>
+                      </div>
+                      <div className="flex items-end justify-between gap-2 sm:col-span-2 xl:col-span-1">
+                        <input type="text" value={item.label || ''} placeholder="Descripción" onChange={(e) => updateListItem('manual', item.id, { label: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
+                        <button className="text-rose-600 hover:underline" onClick={() => removeListItem('manual', item.id)}>Eliminar</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="space-y-3">
-                {(safePlan.earns || []).length === 0 && (
-                  <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-500">Suma tus estrategias de rendimiento para cubrir el costo del préstamo.</div>
-                )}
-                {(safePlan.earns || []).map((item) => (
-                  <div key={item.id} className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-6 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-xs">
-                    <div>
-                      <div className="text-[11px] uppercase text-neutral-400">Inicio</div>
-                      <input type="date" value={item.startDate || ''} onChange={(e) => updateListItem('earns', item.id, { startDate: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
-                    </div>
-                    <div>
-                      <div className="text-[11px] uppercase text-neutral-400">Fin</div>
-                      <input type="date" value={item.endDate || ''} onChange={(e) => updateListItem('earns', item.id, { endDate: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
-                    </div>
-                    <div>
-                      <div className="text-[11px] uppercase text-neutral-400">Frecuencia</div>
-                      <select value={item.frequency || 'monthly'} onChange={(e) => updateListItem('earns', item.id, { frequency: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`}>
-                        <option value="daily">Diario</option>
-                        <option value="weekly">Semanal</option>
-                        <option value="monthly">Mensual</option>
-                      </select>
-                    </div>
-                    <div>
-                      <div className="text-[11px] uppercase text-neutral-400">Monto</div>
-                      <LocaleNumberInput
-                        value={item.amount ?? 0}
-                        onChange={(v) => updateListItem('earns', item.id, { amount: Math.max(0, v) })}
-                        decimals={2}
-                        min={0}
-                        className={`w-full rounded-full border border-neutral-300 px-2 py-1 text-right focus:outline-none focus:ring-2 ${focusRingClass}`}
-                      />
-                    </div>
-                    <div>
-                      <div className="text-[11px] uppercase text-neutral-400">Origen</div>
-                      <input type="text" value={item.platform || ''} onChange={(e) => updateListItem('earns', item.id, { platform: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
-                    </div>
-                    <div className="flex items-end justify-between gap-2 sm:col-span-2 xl:col-span-1">
-                      <input type="text" value={item.token || ''} placeholder="Token" onChange={(e) => updateListItem('earns', item.id, { token: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
-                      <button className="text-rose-600 hover:underline" onClick={() => removeListItem('earns', item.id)}>Eliminar</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-semibold text-neutral-700">Eventos manuales</h4>
-                <button className="nx-btn nx-btn-sm" onClick={addManual}>Agregar evento</button>
+              <div className="rounded-2xl border border-neutral-200 bg-neutral-50/70 px-4 py-3 text-[11px] text-neutral-600 space-y-1">
+                <div>APR: {formatPercent(chosenAPR, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · Interés total estimado: {formatMoney(interestCalc?.total || 0)} · Plazo restante: {daysUntilRepay} días</div>
+                <div>Colateral: {formatMoney(totals.totalCollateralValue || 0)} · Objetivo LTV: {formatPercent(targetLtv, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} · Margin call: {formatPercent(marginCallLtv, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} · Auto-repay: {formatPercent(autoRepayLtv, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
               </div>
-              <div className="space-y-3">
-                {(safePlan.manual || []).length === 0 && (
-                  <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-500">Registra recargas de colateral o retiros planificados.</div>
-                )}
-                {(safePlan.manual || []).map((item) => (
-                  <div key={item.id} className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5 rounded-2xl border border-neutral-200 bg-white px-4 py-3 text-xs">
-                    <div>
-                      <div className="text-[11px] uppercase text-neutral-400">Fecha</div>
-                      <input type="date" value={item.date || ''} onChange={(e) => updateListItem('manual', item.id, { date: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
-                    </div>
-                    <div>
-                      <div className="text-[11px] uppercase text-neutral-400">Monto</div>
-                      <LocaleNumberInput
-                        value={item.amount ?? 0}
-                        onChange={(v) => updateListItem('manual', item.id, { amount: v })}
-                        decimals={2}
-                        allowNegative
-                        className={`w-full rounded-full border border-neutral-300 px-2 py-1 text-right focus:outline-none focus:ring-2 ${focusRingClass}`}
-                      />
-                    </div>
-                    <div>
-                      <div className="text-[11px] uppercase text-neutral-400">Dirección</div>
-                      <select value={item.direction || 'outflow'} onChange={(e) => updateListItem('manual', item.id, { direction: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`}>
-                        <option value="outflow">Salida</option>
-                        <option value="inflow">Entrada</option>
-                      </select>
-                    </div>
-                    <div>
-                      <div className="text-[11px] uppercase text-neutral-400">Colateral</div>
-                      <select value={item.collateralImpact || 'increase'} onChange={(e) => updateListItem('manual', item.id, { collateralImpact: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`}>
-                        <option value="increase">Aumenta</option>
-                        <option value="decrease">Disminuye</option>
-                        <option value="none">Sin cambio</option>
-                      </select>
-                    </div>
-                    <div className="flex items-end justify-between gap-2 sm:col-span-2 xl:col-span-1">
-                      <input type="text" value={item.label || ''} placeholder="Descripción" onChange={(e) => updateListItem('manual', item.id, { label: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
-                      <button className="text-rose-600 hover:underline" onClick={() => removeListItem('manual', item.id)}>Eliminar</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-neutral-200 bg-neutral-50/70 px-4 py-3 text-[11px] text-neutral-600 space-y-1">
-              <div>APR: {formatPercent(chosenAPR, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · Interés total estimado: {formatMoney(interestCalc?.total || 0)} · Plazo restante: {daysUntilRepay} días</div>
-              <div>Colateral: {formatMoney(totals.totalCollateralValue || 0)} · Objetivo LTV: {formatPercent(targetLtv, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} · Margin call: {formatPercent(marginCallLtv, { minimumFractionDigits: 0, maximumFractionDigits: 0 })} · Auto-repay: {formatPercent(autoRepayLtv, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
             </div>
           </div>
         </Card>
