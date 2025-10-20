@@ -902,6 +902,36 @@
       return formatted.replace(/\s*%/, '%');
     };
 
+    const parseTimestamp = (value) => {
+      if (value == null) return null;
+      if (typeof value === 'number' && Number.isFinite(value)) return value;
+      if (value instanceof Date && Number.isFinite(value.getTime())) return value.getTime();
+      if (typeof value === 'string' && value.trim()) {
+        const parsed = Date.parse(value);
+        if (Number.isFinite(parsed)) return parsed;
+      }
+      return null;
+    };
+
+    const formatRelativeTime = (value, { now = Date.now(), fallback = null } = {}) => {
+      const timestamp = parseTimestamp(value);
+      if (!Number.isFinite(now) || timestamp == null) return fallback;
+      const diffMs = Math.max(0, now - timestamp);
+      if (diffMs < 1000) return '<1s';
+      const totalSeconds = Math.floor(diffMs / 1000);
+      if (totalSeconds < 60) return `${totalSeconds}s`;
+      const totalMinutes = Math.floor(totalSeconds / 60);
+      if (totalMinutes < 60) return `${totalMinutes}m`;
+      const totalHours = Math.floor(totalMinutes / 60);
+      if (totalHours < 24) {
+        const remainingMinutes = totalMinutes % 60;
+        return remainingMinutes > 0 ? `${totalHours}h ${remainingMinutes}m` : `${totalHours}h`;
+      }
+      const totalDays = Math.floor(totalHours / 24);
+      const remainingHours = totalHours % 24;
+      return remainingHours > 0 ? `${totalDays}d ${remainingHours}h` : `${totalDays}d`;
+    };
+
     const parseLocaleNumber = (value) => {
       if (value == null) return NaN;
       if (typeof value === 'number') return value;
@@ -4219,6 +4249,11 @@
           </div>
 
           <div className="mx-auto max-w-7xl px-4 py-6">
+            {isBinance && (
+              <div className="mb-6">
+                <BinanceBaselineStatus meta={binanceBaselineMeta} nowTs={nowTs} />
+              </div>
+            )}
             <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
               {(isBinance ? [
                 { key: 'loan-current', title: 'Préstamo original', value: formatLoan(binanceOriginalPrincipalTotal), subtle: binanceOriginalPrincipalTotal > 0 ? 'Capital original' : '—' },
@@ -6030,6 +6065,112 @@
               <div className="text-sm font-semibold text-violet-700">{fmt(lastPoint.balance * rate, currency)}</div>
             </div>
           </div>
+        </div>
+      );
+    }
+
+    function BinanceBaselineStatus({ meta, nowTs }) {
+      if (!meta) return null;
+      const status = meta.status || 'idle';
+      const error = meta.error ? String(meta.error) : null;
+      const lastUpdatedInput = meta.lastUpdated ?? meta.fetchedAt ?? null;
+      const lastUpdatedTs = parseTimestamp(lastUpdatedInput);
+      const lastUpdatedLabel = formatRelativeTime(lastUpdatedInput, { now: nowTs });
+      const lastAttemptLabel = formatRelativeTime(meta.lastAttempt, { now: nowTs });
+      const formatAbsolute = (value) => {
+        const ts = parseTimestamp(value);
+        if (ts == null) return null;
+        try {
+          return new Intl.DateTimeFormat(DEFAULT_LOCALE, {
+            dateStyle: 'short',
+            timeStyle: 'medium',
+          }).format(new Date(ts));
+        } catch (error) {
+          return new Date(ts).toISOString();
+        }
+      };
+      const absoluteLabel = formatAbsolute(lastUpdatedInput);
+      const rowCount = Number.isFinite(meta.rowCount) ? Number(meta.rowCount) : null;
+      const endpointLabel = meta?.metadata?.endpoint || null;
+      const sourceLabel = meta?.source || null;
+      const runningFromFile = typeof window !== 'undefined' && window.location.protocol === 'file:';
+      let tone = 'info';
+      let title = '';
+      const detailLines = [];
+      if (status === 'loading' || status === 'refreshing') {
+        tone = 'info';
+        title = status === 'refreshing'
+          ? 'Actualizando preset de Binance…'
+          : 'Sincronizando preset de Binance…';
+        detailLines.push('El backend está consultando /api/binance/loans.');
+        if (lastUpdatedLabel) {
+          detailLines.push(`Última actualización exitosa hace ${lastUpdatedLabel}.`);
+        }
+      } else if (status === 'ready') {
+        tone = 'info';
+        title = 'Preset de Binance actualizado';
+        if (lastUpdatedLabel) {
+          detailLines.push(`Actualizado hace ${lastUpdatedLabel}.`);
+        }
+        if (!lastUpdatedLabel && absoluteLabel) {
+          detailLines.push(`Última sincronización: ${absoluteLabel}.`);
+        }
+        if (absoluteLabel && lastUpdatedLabel) {
+          detailLines.push(`Hora local: ${absoluteLabel}.`);
+        }
+        if (rowCount != null) {
+          detailLines.push(`Activos sincronizados: ${rowCount}.`);
+        }
+        if (sourceLabel || endpointLabel) {
+          const descriptor = [sourceLabel, endpointLabel].filter(Boolean).join(' · ');
+          detailLines.push(`Fuente: ${descriptor}.`);
+        }
+        detailLines.push('Compará LTV, APR y precio de liquidación con el panel oficial para validar la sincronización.');
+      } else if (status === 'error') {
+        tone = 'danger';
+        title = 'No se pudo sincronizar Binance Loans';
+        if (error) {
+          detailLines.push(error);
+        }
+        if (lastAttemptLabel) {
+          detailLines.push(`Último intento hace ${lastAttemptLabel}.`);
+        }
+        detailLines.push('Verifica que el servidor Node (`npm run dev`) esté activo y que BINANCE_API_KEY / BINANCE_API_SECRET estén definidos en .env.');
+        if (runningFromFile) {
+          detailLines.push('Abrí http://localhost:3000 (no file://) para permitir que el front-end contacte al backend.');
+        }
+      } else {
+        tone = 'warn';
+        title = 'Preset estático en uso';
+        detailLines.push('Todavía no se descargó el preset dinámico desde el backend.');
+        detailLines.push('Ejecuta `npm run dev` tras definir BINANCE_API_KEY y BINANCE_API_SECRET en `.env` para cargar los datos reales.');
+        if (runningFromFile) {
+          detailLines.push('Actualmente estás viendo el archivo directamente (file://). Usa el servidor para habilitar la API.');
+        }
+      }
+      if (status === 'ready' && lastUpdatedTs != null && Number.isFinite(nowTs)) {
+        const stale = nowTs - lastUpdatedTs > 30 * 60 * 1000;
+        if (stale) {
+          tone = 'warn';
+          detailLines.push('Los datos tienen más de 30 minutos. Forzá una recarga si necesitás valores más recientes.');
+        }
+      }
+      const toneStyles = ALERT_TONE_STYLES[tone] || ALERT_TONE_STYLES.info;
+      const detailClass = tone === 'danger'
+        ? 'text-rose-700'
+        : tone === 'warn'
+          ? 'text-amber-700'
+          : 'text-neutral-600';
+      return (
+        <div className={`rounded-2xl border ${toneStyles.border} ${toneStyles.bg} px-4 py-3`}>
+          <div className={`text-sm font-semibold ${toneStyles.text}`}>{title}</div>
+          {detailLines.length > 0 && (
+            <ul className={`mt-1 space-y-1 text-xs ${detailClass}`}>
+              {detailLines.map((line, idx) => (
+                <li key={idx}>{line}</li>
+              ))}
+            </ul>
+          )}
         </div>
       );
     }
