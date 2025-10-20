@@ -50,14 +50,18 @@ const fetchJson = async (url, options = {}) => {
   const response = await fetch(url, options);
   if (!response.ok) {
     let details = '';
+    let payload;
     try {
-      const payload = await response.json();
+      payload = await response.json();
       details = payload?.msg || payload?.message || JSON.stringify(payload);
     } catch (error) {
       details = await response.text();
     }
     const error = new Error(details || `HTTP ${response.status}`);
     error.status = response.status;
+    if (payload && typeof payload === 'object' && payload.code != null) {
+      error.code = payload.code;
+    }
     throw error;
   }
   return response.json();
@@ -72,14 +76,22 @@ const fetchServerTime = async (apiBase) => {
   return serverTime;
 };
 
-const signedRequest = async (apiBase, path, params = {}, { recvWindow = DEFAULT_RECV_WINDOW } = {}) => {
+const signedRequest = async (
+  apiBase,
+  path,
+  params = {},
+  { recvWindow = DEFAULT_RECV_WINDOW, timestamp } = {},
+) => {
   ensureCredentials();
   const query = new URLSearchParams();
   Object.entries(params || {}).forEach(([key, value]) => {
     if (value === undefined || value === null || value === '') return;
     query.append(key, value);
   });
-  query.append('timestamp', `${Date.now()}`);
+  const resolvedTimestamp = Number.isFinite(Number(timestamp))
+    ? Number(timestamp)
+    : Date.now();
+  query.append('timestamp', `${Math.max(0, Math.floor(resolvedTimestamp))}`);
   if (recvWindow) {
     query.append('recvWindow', `${recvWindow}`);
   }
@@ -156,30 +168,65 @@ const transformLoanable = (rows = []) => {
   };
 };
 
-export const fetchBinanceLoanSnapshot = async ({ apiBase = DEFAULT_API_BASE, loanCoin, collateralCoin } = {}) => {
+export const fetchBinanceLoanSnapshot = async ({
+  apiBase = DEFAULT_API_BASE,
+  loanCoin,
+  collateralCoin,
+} = {}) => {
   ensureCredentials();
   const serverTime = await fetchServerTime(apiBase);
   const originalNow = Date.now();
   const clockSkew = serverTime - originalNow;
-  const path = USE_VIP_ENDPOINT ? '/sapi/v1/loan/vip/loanable/data' : '/sapi/v1/loan/loanable/data';
+  const preferredPath = USE_VIP_ENDPOINT
+    ? '/sapi/v1/loan/vip/loanable/data'
+    : '/sapi/v1/loan/loanable/data';
+  const fallbackPath = USE_VIP_ENDPOINT
+    ? '/sapi/v1/loan/loanable/data'
+    : '/sapi/v1/loan/vip/loanable/data';
   const params = {};
   if (loanCoin) params.loanCoin = loanCoin;
   if (collateralCoin) params.collateralCoin = collateralCoin;
 
-  const payload = await signedRequest(apiBase, path, params, { recvWindow: DEFAULT_RECV_WINDOW });
+  const requestOptions = {
+    recvWindow: DEFAULT_RECV_WINDOW,
+    timestamp: originalNow + clockSkew,
+  };
+
+  const performRequest = (path) => signedRequest(apiBase, path, params, requestOptions);
+
+  let activePath = preferredPath;
+  let payload;
+  try {
+    payload = await performRequest(preferredPath);
+  } catch (error) {
+    const shouldRetryWithFallback =
+      error?.status === 404 && fallbackPath && fallbackPath !== preferredPath;
+    if (!shouldRetryWithFallback) {
+      throw error;
+    }
+    payload = await performRequest(fallbackPath);
+    activePath = fallbackPath;
+  }
   const rows = normalizeArray(payload);
   const transformed = transformLoanable(rows);
 
+  const usedFallback = activePath !== preferredPath;
+
   return {
-    source: USE_VIP_ENDPOINT ? 'binance_vip_loanable' : 'binance_standard_loanable',
+    source:
+      activePath === '/sapi/v1/loan/vip/loanable/data'
+        ? 'binance_vip_loanable'
+        : 'binance_standard_loanable',
     fetchedAt: new Date().toISOString(),
     serverTime,
     clockSkew,
     rowCount: rows.length,
     config: transformed,
     metadata: {
-      endpoint: path,
+      endpoint: activePath,
       requestParams: params,
+      attemptedVipEndpoint: USE_VIP_ENDPOINT,
+      fallbackUsed: usedFallback,
     },
     raw: {
       loanable: rows,
