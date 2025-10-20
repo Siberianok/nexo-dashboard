@@ -27,4 +27,18 @@ sincronizar parámetros de Binance Loans en tiempo real.
 
 ## 🔄 Sincronización automática con Binance Loans
 
-El repositorio incluye un micro-servicio Node.js que consulta la API oficial de Binance Loans (endpoint SAPI) y entrega los parámetros actualizados al simulador. Desde la interfaz podés ingresar tu API Key y tu API Secret para habilitar la sincronización y visualizar los datos en tiempo real. Si la API no responde o las credenciales faltan, el simulador recurre automáticamente a los valores predeterminados embebidos en `index.html`.
+El repositorio ahora incluye un micro-servicio Node.js que consulta la API oficial de Binance Loans (endpoint SAPI) y entrega los
+parámetros actualizados al simulador.
+
+1. Copiá `.env.example` a `.env` y completá `BINANCE_API_KEY` y `BINANCE_API_SECRET` con una API key de Binance con permisos para
+   Loans (lectura).
+2. Instalá dependencias: `npm install`.
+3. Levantá el servidor: `npm run dev`.
+4. Abrí `http://localhost:3000` (o el puerto configurado en `PORT`). El front-end buscará `/api/binance/loans` y actualizará los
+   LTV, tasas y precios de liquidación según la respuesta.
+
+> **Nota:** las claves se firman en el backend; el front-end sólo recibe datos agregados. El servidor mantiene la respuesta en
+> caché (TTL configurable vía `BINANCE_CACHE_TTL_MS`).
+
+Si la API no responde o las credenciales faltan, el simulador recurre a los valores predeterminados embebidos en `index.html`.
+

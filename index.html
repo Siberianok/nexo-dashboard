@@ -1782,74 +1782,36 @@
       const loyaltyModelFallback = platformDefaultParams?.loyaltyModel ?? loyaltyModels[0]?.id ?? "vsRest";
       const isBinance = id === "binance";
       const [nowTs, setNowTs] = useState(() => Date.now());
-      const [binanceBaselineMeta, setBinanceBaselineMeta] = useState({
-        status: 'idle',
-        error: null,
-        lastUpdated: null,
-        fetchedAt: null,
-        source: null,
-        rowCount: null,
-        metadata: null,
-        lastAttempt: null,
-        loading: false,
-        lastErrorAt: null,
-      });
+      const [binanceBaselineMeta, setBinanceBaselineMeta] = useState({ status: 'idle', lastUpdated: null, error: null });
       useEffect(() => {
         let cancelled = false;
         const updateBaseline = async (reason = 'initial') => {
-          const attemptStarted = Date.now();
           try {
             setBinanceBaselineMeta((prev) => ({
               ...prev,
               status: reason === 'refresh' ? 'refreshing' : 'loading',
               error: null,
-              loading: true,
-              lastAttempt: attemptStarted,
+              lastAttempt: Date.now(),
             }));
             const response = await fetch(BINANCE_BASELINE_ENDPOINT, {
               headers: { Accept: 'application/json' },
             });
-            let payload = null;
-            if (response.ok) {
-              payload = await response.json();
-            } else {
-              let message = `HTTP ${response.status}`;
-              try {
-                const problem = await response.json();
-                const details = problem?.message || problem?.msg || problem?.error;
-                if (details && typeof details === 'string') {
-                  message = details;
-                }
-              } catch (jsonError) {
-                try {
-                  const text = await response.text();
-                  if (text && typeof text === 'string') {
-                    message = text;
-                  }
-                } catch (_) {}
-              }
-              const error = new Error(message);
-              error.status = response.status;
-              throw error;
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
             }
+            const payload = await response.json();
             const incomingConfig = payload?.config;
-            const normalizedRowCount = Number(payload?.rowCount);
-            const safeRowCount = Number.isFinite(normalizedRowCount) ? normalizedRowCount : undefined;
-            const extraMetadataRaw = {
+            const extraMetadata = {
               ...(payload?.metadata || {}),
               fetchedAt: payload?.fetchedAt,
               source: payload?.source,
-              rowCount: safeRowCount,
             };
-            const extraMetadata = Object.fromEntries(
-              Object.entries(extraMetadataRaw).filter(([, value]) => value != null && value !== '')
-            );
             if (incomingConfig && typeof incomingConfig === 'object') {
               setPlatformConfigs((prev) => {
                 const prevBinance = prev.binance || PLATFORM_BASE_CONFIGS.binance || {};
                 const mergedBinance = mergeBinanceBaselineConfig(prevBinance, {
                   ...incomingConfig,
-                  ...(Object.keys(extraMetadata).length > 0 ? { metadata: extraMetadata } : {}),
+                  metadata: extraMetadata,
                   lastUpdated: payload?.lastUpdated || payload?.fetchedAt,
                   source: payload?.source,
                 });
@@ -1864,26 +1826,15 @@
                 ...prev,
                 status: 'ready',
                 error: null,
-                loading: false,
                 lastUpdated: payload?.lastUpdated || payload?.fetchedAt || prev.lastUpdated,
-                fetchedAt: payload?.fetchedAt || prev.fetchedAt,
-                source: payload?.source || prev.source,
-                rowCount: safeRowCount != null ? safeRowCount : prev.rowCount,
-                metadata: extraMetadata && Object.keys(extraMetadata).length > 0
-                  ? { ...(prev.metadata || {}), ...extraMetadata }
-                  : prev.metadata,
-                lastAttempt: attemptStarted,
               }));
             }
           } catch (error) {
             if (!cancelled) {
               setBinanceBaselineMeta((prev) => ({
                 ...prev,
-                status: 'error',
+                status: prev.status === 'ready' ? 'ready' : 'error',
                 error: error?.message || 'No se pudo sincronizar con Binance.',
-                loading: false,
-                lastErrorAt: Date.now(),
-                lastAttempt: attemptStarted,
               }));
             }
           }
