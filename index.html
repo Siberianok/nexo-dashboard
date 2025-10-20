@@ -420,6 +420,92 @@
     const BINANCE_FAPI_BASE = 'https://fapi.binance.com';
     const BINANCE_SIGNED_RECV_WINDOW = 5000;
     const BINANCE_SYNC_TIMEOUT_MS = 15000;
+    const BINANCE_BASELINE_ENDPOINT = '/api/binance/loans';
+    const BINANCE_BASELINE_REFRESH_MS = 15 * 60 * 1000;
+    const shallowEqual = (a, b) => {
+      if (a === b) return true;
+      if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
+      const keysA = Object.keys(a);
+      const keysB = Object.keys(b);
+      if (keysA.length !== keysB.length) return false;
+      for (const key of keysA) {
+        if (a[key] !== b[key]) return false;
+      }
+      return true;
+    };
+    const mergeBinanceBaselineConfig = (current = {}, incoming = {}) => {
+      if (!incoming || typeof incoming !== 'object') return current;
+      let changed = false;
+      const next = { ...current };
+      const mergeSimple = (key) => {
+        const incomingValue = incoming[key];
+        if (!incomingValue || typeof incomingValue !== 'object') return;
+        const prevValue = current[key] || {};
+        const nextValue = { ...prevValue, ...incomingValue };
+        if (!shallowEqual(prevValue, nextValue)) {
+          next[key] = nextValue;
+          changed = true;
+        }
+      };
+      const mergeNestedEntries = (key) => {
+        const incomingSection = incoming[key];
+        if (!incomingSection || typeof incomingSection !== 'object') return;
+        const prevSection = current[key] || {};
+        const nextSection = { ...prevSection };
+        let sectionChanged = false;
+        Object.entries(incomingSection).forEach(([entryKey, entryValue]) => {
+          if (entryValue && typeof entryValue === 'object' && !Array.isArray(entryValue)) {
+            const prevEntry = prevSection[entryKey] || {};
+            const nextEntry = { ...prevEntry, ...entryValue };
+            if (!shallowEqual(prevEntry, nextEntry)) {
+              nextSection[entryKey] = nextEntry;
+              sectionChanged = true;
+            }
+          } else if (prevSection[entryKey] !== entryValue) {
+            nextSection[entryKey] = entryValue;
+            sectionChanged = true;
+          }
+        });
+        if (sectionChanged) {
+          next[key] = nextSection;
+          changed = true;
+        }
+      };
+      mergeSimple('ltvByTicker');
+      mergeSimple('earnAprTop');
+      mergeSimple('policies');
+      mergeSimple('apr');
+      mergeSimple('ltvHealth');
+      mergeSimple('diagnosticSources');
+      mergeSimple('defaultParams');
+      mergeNestedEntries('borrowRates');
+      mergeNestedEntries('loanLedger');
+      if (incoming.name && incoming.name !== current.name) {
+        next.name = incoming.name;
+        changed = true;
+      }
+      if (incoming.tagline && incoming.tagline !== current.tagline) {
+        next.tagline = incoming.tagline;
+        changed = true;
+      }
+      if (incoming.metadata && typeof incoming.metadata === 'object') {
+        const prevMeta = current.metadata || {};
+        const nextMeta = { ...prevMeta, ...incoming.metadata };
+        if (!shallowEqual(prevMeta, nextMeta)) {
+          next.metadata = nextMeta;
+          changed = true;
+        }
+      }
+      if (incoming.lastUpdated && incoming.lastUpdated !== current.lastUpdated) {
+        next.lastUpdated = incoming.lastUpdated;
+        changed = true;
+      }
+      if (incoming.source && incoming.source !== current.source) {
+        next.source = incoming.source;
+        changed = true;
+      }
+      return changed ? next : current;
+    };
 
     const fetchWithTimeout = async (url, options = {}, timeoutMs = BINANCE_SYNC_TIMEOUT_MS) => {
       const { signal, ...rest } = options || {};
@@ -816,6 +902,36 @@
       return formatted.replace(/\s*%/, '%');
     };
 
+    const parseTimestamp = (value) => {
+      if (value == null) return null;
+      if (typeof value === 'number' && Number.isFinite(value)) return value;
+      if (value instanceof Date && Number.isFinite(value.getTime())) return value.getTime();
+      if (typeof value === 'string' && value.trim()) {
+        const parsed = Date.parse(value);
+        if (Number.isFinite(parsed)) return parsed;
+      }
+      return null;
+    };
+
+    const formatRelativeTime = (value, { now = Date.now(), fallback = null } = {}) => {
+      const timestamp = parseTimestamp(value);
+      if (!Number.isFinite(now) || timestamp == null) return fallback;
+      const diffMs = Math.max(0, now - timestamp);
+      if (diffMs < 1000) return '<1s';
+      const totalSeconds = Math.floor(diffMs / 1000);
+      if (totalSeconds < 60) return `${totalSeconds}s`;
+      const totalMinutes = Math.floor(totalSeconds / 60);
+      if (totalMinutes < 60) return `${totalMinutes}m`;
+      const totalHours = Math.floor(totalMinutes / 60);
+      if (totalHours < 24) {
+        const remainingMinutes = totalMinutes % 60;
+        return remainingMinutes > 0 ? `${totalHours}h ${remainingMinutes}m` : `${totalHours}h`;
+      }
+      const totalDays = Math.floor(totalHours / 24);
+      const remainingHours = totalHours % 24;
+      return remainingHours > 0 ? `${totalDays}d ${remainingHours}h` : `${totalDays}d`;
+    };
+
     const parseLocaleNumber = (value) => {
       if (value == null) return NaN;
       if (typeof value === 'number') return value;
@@ -866,7 +982,7 @@
     };
     const FX_SYMBOLS = SUPPORTED_CURRENCIES.filter((c) => !['USD', 'USDT'].includes(c.code)).map((c) => c.code);
 
-    const PLATFORM_CONFIGS = {
+    const PLATFORM_BASE_CONFIGS = {
       nexo: {
         id: "nexo",
         name: "Nexo",
@@ -1593,8 +1709,8 @@
       },
     };
 
-    const PLATFORM_IDS = Object.keys(PLATFORM_CONFIGS);
-    const GLOBAL_COINGECKO_IDS = Object.values(PLATFORM_CONFIGS).reduce((acc, cfg) => ({ ...acc, ...(cfg.coingeckoIds || {}) }), {});
+    const PLATFORM_IDS = Object.keys(PLATFORM_BASE_CONFIGS);
+    const BASE_GLOBAL_COINGECKO_IDS = Object.values(PLATFORM_BASE_CONFIGS).reduce((acc, cfg) => ({ ...acc, ...(cfg.coingeckoIds || {}) }), {});
 
     const fmt = (value, currency = "USD", showCurrency = true) => {
       if (!Number.isFinite(value)) return showCurrency ? '—' : '0';
@@ -1615,7 +1731,14 @@
         }
       });
 
-      const platform = PLATFORM_CONFIGS[platformId] ?? PLATFORM_CONFIGS[initialPlatformId];
+      const [platformConfigs, setPlatformConfigs] = useState(PLATFORM_BASE_CONFIGS);
+      const globalCoingeckoIds = useMemo(() => {
+        return Object.values(platformConfigs || {}).reduce((acc, cfg) => ({
+          ...acc,
+          ...(cfg?.coingeckoIds || {}),
+        }), {});
+      }, [platformConfigs]);
+      const platform = platformConfigs[platformId] ?? platformConfigs[initialPlatformId];
       const {
         id,
         name: platformName,
@@ -1659,6 +1782,119 @@
       const loyaltyModelFallback = platformDefaultParams?.loyaltyModel ?? loyaltyModels[0]?.id ?? "vsRest";
       const isBinance = id === "binance";
       const [nowTs, setNowTs] = useState(() => Date.now());
+      const [binanceBaselineMeta, setBinanceBaselineMeta] = useState({
+        status: 'idle',
+        error: null,
+        lastUpdated: null,
+        fetchedAt: null,
+        source: null,
+        rowCount: null,
+        metadata: null,
+        lastAttempt: null,
+        loading: false,
+        lastErrorAt: null,
+      });
+      useEffect(() => {
+        let cancelled = false;
+        const updateBaseline = async (reason = 'initial') => {
+          const attemptStarted = Date.now();
+          try {
+            setBinanceBaselineMeta((prev) => ({
+              ...prev,
+              status: reason === 'refresh' ? 'refreshing' : 'loading',
+              error: null,
+              loading: true,
+              lastAttempt: attemptStarted,
+            }));
+            const response = await fetch(BINANCE_BASELINE_ENDPOINT, {
+              headers: { Accept: 'application/json' },
+            });
+            let payload = null;
+            if (response.ok) {
+              payload = await response.json();
+            } else {
+              let message = `HTTP ${response.status}`;
+              try {
+                const problem = await response.json();
+                const details = problem?.message || problem?.msg || problem?.error;
+                if (details && typeof details === 'string') {
+                  message = details;
+                }
+              } catch (jsonError) {
+                try {
+                  const text = await response.text();
+                  if (text && typeof text === 'string') {
+                    message = text;
+                  }
+                } catch (_) {}
+              }
+              const error = new Error(message);
+              error.status = response.status;
+              throw error;
+            }
+            const incomingConfig = payload?.config;
+            const normalizedRowCount = Number(payload?.rowCount);
+            const safeRowCount = Number.isFinite(normalizedRowCount) ? normalizedRowCount : undefined;
+            const extraMetadataRaw = {
+              ...(payload?.metadata || {}),
+              fetchedAt: payload?.fetchedAt,
+              source: payload?.source,
+              rowCount: safeRowCount,
+            };
+            const extraMetadata = Object.fromEntries(
+              Object.entries(extraMetadataRaw).filter(([, value]) => value != null && value !== '')
+            );
+            if (incomingConfig && typeof incomingConfig === 'object') {
+              setPlatformConfigs((prev) => {
+                const prevBinance = prev.binance || PLATFORM_BASE_CONFIGS.binance || {};
+                const mergedBinance = mergeBinanceBaselineConfig(prevBinance, {
+                  ...incomingConfig,
+                  ...(Object.keys(extraMetadata).length > 0 ? { metadata: extraMetadata } : {}),
+                  lastUpdated: payload?.lastUpdated || payload?.fetchedAt,
+                  source: payload?.source,
+                });
+                if (mergedBinance === prevBinance) {
+                  return prev;
+                }
+                return { ...prev, binance: mergedBinance };
+              });
+            }
+            if (!cancelled) {
+              setBinanceBaselineMeta((prev) => ({
+                ...prev,
+                status: 'ready',
+                error: null,
+                loading: false,
+                lastUpdated: payload?.lastUpdated || payload?.fetchedAt || prev.lastUpdated,
+                fetchedAt: payload?.fetchedAt || prev.fetchedAt,
+                source: payload?.source || prev.source,
+                rowCount: safeRowCount != null ? safeRowCount : prev.rowCount,
+                metadata: extraMetadata && Object.keys(extraMetadata).length > 0
+                  ? { ...(prev.metadata || {}), ...extraMetadata }
+                  : prev.metadata,
+                lastAttempt: attemptStarted,
+              }));
+            }
+          } catch (error) {
+            if (!cancelled) {
+              setBinanceBaselineMeta((prev) => ({
+                ...prev,
+                status: 'error',
+                error: error?.message || 'No se pudo sincronizar con Binance.',
+                loading: false,
+                lastErrorAt: Date.now(),
+                lastAttempt: attemptStarted,
+              }));
+            }
+          }
+        };
+        updateBaseline('initial');
+        const interval = setInterval(() => updateBaseline('refresh'), BINANCE_BASELINE_REFRESH_MS);
+        return () => {
+          cancelled = true;
+          clearInterval(interval);
+        };
+      }, []);
       const clamp01 = (v) => Math.max(0, Math.min(1, Number(v) || 0));
       const toPct = (value, digits = 0) => formatPercent(Number(value), {
         minimumFractionDigits: digits,
@@ -3209,7 +3445,7 @@
 
       const tickerToId = (ticker) => {
         const key = sanitizeTicker(ticker);
-        return coingeckoIds[key] ?? GLOBAL_COINGECKO_IDS[key];
+        return coingeckoIds[key] ?? globalCoingeckoIds[key] ?? BASE_GLOBAL_COINGECKO_IDS[key];
       };
 
       const tickersKey = useMemo(() => assets.filter(a=>a.priceAuto!==false).map(a=>sanitizeTicker(a.ticker)).sort().join(','), [assets]);
@@ -4031,7 +4267,7 @@
                       <label className="text-sm font-medium">Plataforma</label>
                       <select value={platformId} onChange={(e) => setPlatformId(PLATFORM_IDS.includes(e.target.value) ? e.target.value : initialPlatformId)} className="rounded-xl border border-white/40 bg-white/15 px-3 py-1.5 text-sm font-semibold text-white shadow-sm backdrop-blur focus:outline-none focus:ring-2 focus:ring-white/80">
                         {PLATFORM_IDS.map((pid) => (
-                          <option key={pid} value={pid} className="text-neutral-900">{PLATFORM_CONFIGS[pid]?.name ?? pid}</option>
+                          <option key={pid} value={pid} className="text-neutral-900">{platformConfigs[pid]?.name ?? pid}</option>
                         ))}
                       </select>
                     </div>
@@ -4062,6 +4298,11 @@
           </div>
 
           <div className="mx-auto max-w-7xl px-4 py-6">
+            {isBinance && (
+              <div className="mb-6">
+                <BinanceBaselineStatus meta={binanceBaselineMeta} nowTs={nowTs} />
+              </div>
+            )}
             <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
               {(isBinance ? [
                 { key: 'loan-current', title: 'Préstamo original', value: formatLoan(binanceOriginalPrincipalTotal), subtle: binanceOriginalPrincipalTotal > 0 ? 'Capital original' : '—' },
@@ -5877,6 +6118,112 @@
       );
     }
 
+    function BinanceBaselineStatus({ meta, nowTs }) {
+      if (!meta) return null;
+      const status = meta.status || 'idle';
+      const error = meta.error ? String(meta.error) : null;
+      const lastUpdatedInput = meta.lastUpdated ?? meta.fetchedAt ?? null;
+      const lastUpdatedTs = parseTimestamp(lastUpdatedInput);
+      const lastUpdatedLabel = formatRelativeTime(lastUpdatedInput, { now: nowTs });
+      const lastAttemptLabel = formatRelativeTime(meta.lastAttempt, { now: nowTs });
+      const formatAbsolute = (value) => {
+        const ts = parseTimestamp(value);
+        if (ts == null) return null;
+        try {
+          return new Intl.DateTimeFormat(DEFAULT_LOCALE, {
+            dateStyle: 'short',
+            timeStyle: 'medium',
+          }).format(new Date(ts));
+        } catch (error) {
+          return new Date(ts).toISOString();
+        }
+      };
+      const absoluteLabel = formatAbsolute(lastUpdatedInput);
+      const rowCount = Number.isFinite(meta.rowCount) ? Number(meta.rowCount) : null;
+      const endpointLabel = meta?.metadata?.endpoint || null;
+      const sourceLabel = meta?.source || null;
+      const runningFromFile = typeof window !== 'undefined' && window.location.protocol === 'file:';
+      let tone = 'info';
+      let title = '';
+      const detailLines = [];
+      if (status === 'loading' || status === 'refreshing') {
+        tone = 'info';
+        title = status === 'refreshing'
+          ? 'Actualizando preset de Binance…'
+          : 'Sincronizando preset de Binance…';
+        detailLines.push('El backend está consultando /api/binance/loans.');
+        if (lastUpdatedLabel) {
+          detailLines.push(`Última actualización exitosa hace ${lastUpdatedLabel}.`);
+        }
+      } else if (status === 'ready') {
+        tone = 'info';
+        title = 'Preset de Binance actualizado';
+        if (lastUpdatedLabel) {
+          detailLines.push(`Actualizado hace ${lastUpdatedLabel}.`);
+        }
+        if (!lastUpdatedLabel && absoluteLabel) {
+          detailLines.push(`Última sincronización: ${absoluteLabel}.`);
+        }
+        if (absoluteLabel && lastUpdatedLabel) {
+          detailLines.push(`Hora local: ${absoluteLabel}.`);
+        }
+        if (rowCount != null) {
+          detailLines.push(`Activos sincronizados: ${rowCount}.`);
+        }
+        if (sourceLabel || endpointLabel) {
+          const descriptor = [sourceLabel, endpointLabel].filter(Boolean).join(' · ');
+          detailLines.push(`Fuente: ${descriptor}.`);
+        }
+        detailLines.push('Compará LTV, APR y precio de liquidación con el panel oficial para validar la sincronización.');
+      } else if (status === 'error') {
+        tone = 'danger';
+        title = 'No se pudo sincronizar Binance Loans';
+        if (error) {
+          detailLines.push(error);
+        }
+        if (lastAttemptLabel) {
+          detailLines.push(`Último intento hace ${lastAttemptLabel}.`);
+        }
+        detailLines.push('Verifica que el servidor Node (`npm run dev`) esté activo y que BINANCE_API_KEY / BINANCE_API_SECRET estén definidos en .env.');
+        if (runningFromFile) {
+          detailLines.push('Abrí http://localhost:3000 (no file://) para permitir que el front-end contacte al backend.');
+        }
+      } else {
+        tone = 'warn';
+        title = 'Preset estático en uso';
+        detailLines.push('Todavía no se descargó el preset dinámico desde el backend.');
+        detailLines.push('Ejecuta `npm run dev` tras definir BINANCE_API_KEY y BINANCE_API_SECRET en `.env` para cargar los datos reales.');
+        if (runningFromFile) {
+          detailLines.push('Actualmente estás viendo el archivo directamente (file://). Usa el servidor para habilitar la API.');
+        }
+      }
+      if (status === 'ready' && lastUpdatedTs != null && Number.isFinite(nowTs)) {
+        const stale = nowTs - lastUpdatedTs > 30 * 60 * 1000;
+        if (stale) {
+          tone = 'warn';
+          detailLines.push('Los datos tienen más de 30 minutos. Forzá una recarga si necesitás valores más recientes.');
+        }
+      }
+      const toneStyles = ALERT_TONE_STYLES[tone] || ALERT_TONE_STYLES.info;
+      const detailClass = tone === 'danger'
+        ? 'text-rose-700'
+        : tone === 'warn'
+          ? 'text-amber-700'
+          : 'text-neutral-600';
+      return (
+        <div className={`rounded-2xl border ${toneStyles.border} ${toneStyles.bg} px-4 py-3`}>
+          <div className={`text-sm font-semibold ${toneStyles.text}`}>{title}</div>
+          {detailLines.length > 0 && (
+            <ul className={`mt-1 space-y-1 text-xs ${detailClass}`}>
+              {detailLines.map((line, idx) => (
+                <li key={idx}>{line}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      );
+    }
+
     function BinanceLivePanel({
       apiKey,
       apiSecret,
@@ -6358,14 +6705,14 @@
     function approxEq(a, b, eps = 1e-6) { return Math.abs(a - b) <= eps; }
     function runDevTests() {
       try {
-        const nexo = PLATFORM_CONFIGS.nexo;
-        const binance = PLATFORM_CONFIGS.binance;
-        const youhodler = PLATFORM_CONFIGS.youhodler;
-        const ledn = PLATFORM_CONFIGS.ledn;
+        const nexo = PLATFORM_BASE_CONFIGS.nexo;
+        const binance = PLATFORM_BASE_CONFIGS.binance;
+        const youhodler = PLATFORM_BASE_CONFIGS.youhodler;
+        const ledn = PLATFORM_BASE_CONFIGS.ledn;
         console.assert(approxEq((nexo.policies?.targetLtv ?? 0), 0.20), 'Test1: Target LTV Nexo 20%');
         console.assert(approxEq((nexo.ltvByTicker?.BTC ?? 0), 0.50), 'Test2: LTV BTC Nexo 50%');
         console.assert((binance.earnAprTop?.BNB ?? 0) >= 0.05, 'Test3: Earn BNB Binance ≥5%');
-        console.assert(GLOBAL_COINGECKO_IDS.BTC === 'bitcoin', 'Test4: CoinGecko BTC');
+        console.assert(BASE_GLOBAL_COINGECKO_IDS.BTC === 'bitcoin', 'Test4: CoinGecko BTC');
         console.assert(PLATFORM_IDS.includes('nexo') && PLATFORM_IDS.includes('binance'), 'Test5: plataformas registradas');
         const lowCostNexo = nexo.apr?.lowCostEligibleTiers || [];
         console.assert(lowCostNexo.includes('Gold') && lowCostNexo.includes('Platinum'), 'Test6: Low-Cost tiers Nexo');
