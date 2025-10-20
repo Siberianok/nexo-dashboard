@@ -37,6 +37,14 @@ app.get('/api/binance/loans', async (req, res) => {
         message: 'Define BINANCE_API_KEY y BINANCE_API_SECRET para sincronizar los datos de Binance.',
       });
     }
+    if (Number(error?.status) === 404) {
+      return res.status(502).json({
+        error: 'binance_endpoint_not_found',
+        message:
+          'Binance devolvió HTTP 404 al consultar Loans. Verifica BINANCE_API_BASE/BINANCE_USE_VIP_LOANABLE o tu acceso a Binance Loans.',
+        details: error?.message,
+      });
+    }
     const status = error?.status && Number(error.status) >= 400 ? Number(error.status) : 502;
     return res.status(status).json({
       error: 'binance_sync_failed',
