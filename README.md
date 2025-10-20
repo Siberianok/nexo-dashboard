@@ -1,7 +1,8 @@
 # Simulador de Préstamos — HTML (portable)
 
 Simulador multiplataforma (Nexo, Binance, etc.) con **precios en vivo**, **LTV**, **APR por tier**, **cap low-cost (≤20%)**, cálculo de **intereses** y estimación de **Earn**.
-Es 100% estático: un solo `index.html` con TailwindCDN, React UMD y CoinGecko (sin API key).
+Incluye un `index.html` auto-contenido con TailwindCDN, React UMD y CoinGecko (sin API key) más un micro-servicio opcional para
+sincronizar parámetros de Binance Loans en tiempo real.
 
 ## 🧩 Características
 - **Selector de plataforma** con presets para Nexo y Binance.
@@ -18,9 +19,26 @@ Es 100% estático: un solo `index.html` con TailwindCDN, React UMD y CoinGecko (
 - Más detalles en [`docs/simulador-unico-plan.md`](docs/simulador-unico-plan.md).
 
 ## 🚀 Uso rápido
-1. Abrí `index.html` en el navegador.  
+1. Abrí `index.html` en el navegador.
    **Sugerido**: servirlo con un mini-servidor local para evitar bloqueos CORS.
 2. Editá tus activos (cantidad, toggle “Auto” para precios en vivo, marcar como colateral).
 3. Ajustá parámetros (USD→ARS, frecuencia de refresco, Earn On/Off).
 4. Simulá un préstamo (monto + fecha de repago).
+
+## 🔄 Sincronización automática con Binance Loans
+
+El repositorio ahora incluye un micro-servicio Node.js que consulta la API oficial de Binance Loans (endpoint SAPI) y entrega los
+parámetros actualizados al simulador.
+
+1. Copiá `.env.example` a `.env` y completá `BINANCE_API_KEY` y `BINANCE_API_SECRET` con una API key de Binance con permisos para
+   Loans (lectura).
+2. Instalá dependencias: `npm install`.
+3. Levantá el servidor: `npm run dev`.
+4. Abrí `http://localhost:3000` (o el puerto configurado en `PORT`). El front-end buscará `/api/binance/loans` y actualizará los
+   LTV, tasas y precios de liquidación según la respuesta.
+
+> **Nota:** las claves se firman en el backend; el front-end sólo recibe datos agregados. El servidor mantiene la respuesta en
+> caché (TTL configurable vía `BINANCE_CACHE_TTL_MS`).
+
+Si la API no responde o las credenciales faltan, el simulador recurre a los valores predeterminados embebidos en `index.html`.
 

@@ -420,6 +420,92 @@
     const BINANCE_FAPI_BASE = 'https://fapi.binance.com';
     const BINANCE_SIGNED_RECV_WINDOW = 5000;
     const BINANCE_SYNC_TIMEOUT_MS = 15000;
+    const BINANCE_BASELINE_ENDPOINT = '/api/binance/loans';
+    const BINANCE_BASELINE_REFRESH_MS = 15 * 60 * 1000;
+    const shallowEqual = (a, b) => {
+      if (a === b) return true;
+      if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
+      const keysA = Object.keys(a);
+      const keysB = Object.keys(b);
+      if (keysA.length !== keysB.length) return false;
+      for (const key of keysA) {
+        if (a[key] !== b[key]) return false;
+      }
+      return true;
+    };
+    const mergeBinanceBaselineConfig = (current = {}, incoming = {}) => {
+      if (!incoming || typeof incoming !== 'object') return current;
+      let changed = false;
+      const next = { ...current };
+      const mergeSimple = (key) => {
+        const incomingValue = incoming[key];
+        if (!incomingValue || typeof incomingValue !== 'object') return;
+        const prevValue = current[key] || {};
+        const nextValue = { ...prevValue, ...incomingValue };
+        if (!shallowEqual(prevValue, nextValue)) {
+          next[key] = nextValue;
+          changed = true;
+        }
+      };
+      const mergeNestedEntries = (key) => {
+        const incomingSection = incoming[key];
+        if (!incomingSection || typeof incomingSection !== 'object') return;
+        const prevSection = current[key] || {};
+        const nextSection = { ...prevSection };
+        let sectionChanged = false;
+        Object.entries(incomingSection).forEach(([entryKey, entryValue]) => {
+          if (entryValue && typeof entryValue === 'object' && !Array.isArray(entryValue)) {
+            const prevEntry = prevSection[entryKey] || {};
+            const nextEntry = { ...prevEntry, ...entryValue };
+            if (!shallowEqual(prevEntry, nextEntry)) {
+              nextSection[entryKey] = nextEntry;
+              sectionChanged = true;
+            }
+          } else if (prevSection[entryKey] !== entryValue) {
+            nextSection[entryKey] = entryValue;
+            sectionChanged = true;
+          }
+        });
+        if (sectionChanged) {
+          next[key] = nextSection;
+          changed = true;
+        }
+      };
+      mergeSimple('ltvByTicker');
+      mergeSimple('earnAprTop');
+      mergeSimple('policies');
+      mergeSimple('apr');
+      mergeSimple('ltvHealth');
+      mergeSimple('diagnosticSources');
+      mergeSimple('defaultParams');
+      mergeNestedEntries('borrowRates');
+      mergeNestedEntries('loanLedger');
+      if (incoming.name && incoming.name !== current.name) {
+        next.name = incoming.name;
+        changed = true;
+      }
+      if (incoming.tagline && incoming.tagline !== current.tagline) {
+        next.tagline = incoming.tagline;
+        changed = true;
+      }
+      if (incoming.metadata && typeof incoming.metadata === 'object') {
+        const prevMeta = current.metadata || {};
+        const nextMeta = { ...prevMeta, ...incoming.metadata };
+        if (!shallowEqual(prevMeta, nextMeta)) {
+          next.metadata = nextMeta;
+          changed = true;
+        }
+      }
+      if (incoming.lastUpdated && incoming.lastUpdated !== current.lastUpdated) {
+        next.lastUpdated = incoming.lastUpdated;
+        changed = true;
+      }
+      if (incoming.source && incoming.source !== current.source) {
+        next.source = incoming.source;
+        changed = true;
+      }
+      return changed ? next : current;
+    };
 
     const fetchWithTimeout = async (url, options = {}, timeoutMs = BINANCE_SYNC_TIMEOUT_MS) => {
       const { signal, ...rest } = options || {};
@@ -866,7 +952,7 @@
     };
     const FX_SYMBOLS = SUPPORTED_CURRENCIES.filter((c) => !['USD', 'USDT'].includes(c.code)).map((c) => c.code);
 
-    const PLATFORM_CONFIGS = {
+    const PLATFORM_BASE_CONFIGS = {
       nexo: {
         id: "nexo",
         name: "Nexo",
@@ -1593,8 +1679,8 @@
       },
     };
 
-    const PLATFORM_IDS = Object.keys(PLATFORM_CONFIGS);
-    const GLOBAL_COINGECKO_IDS = Object.values(PLATFORM_CONFIGS).reduce((acc, cfg) => ({ ...acc, ...(cfg.coingeckoIds || {}) }), {});
+    const PLATFORM_IDS = Object.keys(PLATFORM_BASE_CONFIGS);
+    const BASE_GLOBAL_COINGECKO_IDS = Object.values(PLATFORM_BASE_CONFIGS).reduce((acc, cfg) => ({ ...acc, ...(cfg.coingeckoIds || {}) }), {});
 
     const fmt = (value, currency = "USD", showCurrency = true) => {
       if (!Number.isFinite(value)) return showCurrency ? '—' : '0';
@@ -1615,7 +1701,14 @@
         }
       });
 
-      const platform = PLATFORM_CONFIGS[platformId] ?? PLATFORM_CONFIGS[initialPlatformId];
+      const [platformConfigs, setPlatformConfigs] = useState(PLATFORM_BASE_CONFIGS);
+      const globalCoingeckoIds = useMemo(() => {
+        return Object.values(platformConfigs || {}).reduce((acc, cfg) => ({
+          ...acc,
+          ...(cfg?.coingeckoIds || {}),
+        }), {});
+      }, [platformConfigs]);
+      const platform = platformConfigs[platformId] ?? platformConfigs[initialPlatformId];
       const {
         id,
         name: platformName,
@@ -1659,6 +1752,70 @@
       const loyaltyModelFallback = platformDefaultParams?.loyaltyModel ?? loyaltyModels[0]?.id ?? "vsRest";
       const isBinance = id === "binance";
       const [nowTs, setNowTs] = useState(() => Date.now());
+      const [binanceBaselineMeta, setBinanceBaselineMeta] = useState({ status: 'idle', lastUpdated: null, error: null });
+      useEffect(() => {
+        let cancelled = false;
+        const updateBaseline = async (reason = 'initial') => {
+          try {
+            setBinanceBaselineMeta((prev) => ({
+              ...prev,
+              status: reason === 'refresh' ? 'refreshing' : 'loading',
+              error: null,
+              lastAttempt: Date.now(),
+            }));
+            const response = await fetch(BINANCE_BASELINE_ENDPOINT, {
+              headers: { Accept: 'application/json' },
+            });
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
+            const payload = await response.json();
+            const incomingConfig = payload?.config;
+            const extraMetadata = {
+              ...(payload?.metadata || {}),
+              fetchedAt: payload?.fetchedAt,
+              source: payload?.source,
+            };
+            if (incomingConfig && typeof incomingConfig === 'object') {
+              setPlatformConfigs((prev) => {
+                const prevBinance = prev.binance || PLATFORM_BASE_CONFIGS.binance || {};
+                const mergedBinance = mergeBinanceBaselineConfig(prevBinance, {
+                  ...incomingConfig,
+                  metadata: extraMetadata,
+                  lastUpdated: payload?.lastUpdated || payload?.fetchedAt,
+                  source: payload?.source,
+                });
+                if (mergedBinance === prevBinance) {
+                  return prev;
+                }
+                return { ...prev, binance: mergedBinance };
+              });
+            }
+            if (!cancelled) {
+              setBinanceBaselineMeta((prev) => ({
+                ...prev,
+                status: 'ready',
+                error: null,
+                lastUpdated: payload?.lastUpdated || payload?.fetchedAt || prev.lastUpdated,
+              }));
+            }
+          } catch (error) {
+            if (!cancelled) {
+              setBinanceBaselineMeta((prev) => ({
+                ...prev,
+                status: prev.status === 'ready' ? 'ready' : 'error',
+                error: error?.message || 'No se pudo sincronizar con Binance.',
+              }));
+            }
+          }
+        };
+        updateBaseline('initial');
+        const interval = setInterval(() => updateBaseline('refresh'), BINANCE_BASELINE_REFRESH_MS);
+        return () => {
+          cancelled = true;
+          clearInterval(interval);
+        };
+      }, []);
       const clamp01 = (v) => Math.max(0, Math.min(1, Number(v) || 0));
       const toPct = (value, digits = 0) => formatPercent(Number(value), {
         minimumFractionDigits: digits,
@@ -3209,7 +3366,7 @@
 
       const tickerToId = (ticker) => {
         const key = sanitizeTicker(ticker);
-        return coingeckoIds[key] ?? GLOBAL_COINGECKO_IDS[key];
+        return coingeckoIds[key] ?? globalCoingeckoIds[key] ?? BASE_GLOBAL_COINGECKO_IDS[key];
       };
 
       const tickersKey = useMemo(() => assets.filter(a=>a.priceAuto!==false).map(a=>sanitizeTicker(a.ticker)).sort().join(','), [assets]);
@@ -4031,7 +4188,7 @@
                       <label className="text-sm font-medium">Plataforma</label>
                       <select value={platformId} onChange={(e) => setPlatformId(PLATFORM_IDS.includes(e.target.value) ? e.target.value : initialPlatformId)} className="rounded-xl border border-white/40 bg-white/15 px-3 py-1.5 text-sm font-semibold text-white shadow-sm backdrop-blur focus:outline-none focus:ring-2 focus:ring-white/80">
                         {PLATFORM_IDS.map((pid) => (
-                          <option key={pid} value={pid} className="text-neutral-900">{PLATFORM_CONFIGS[pid]?.name ?? pid}</option>
+                          <option key={pid} value={pid} className="text-neutral-900">{platformConfigs[pid]?.name ?? pid}</option>
                         ))}
                       </select>
                     </div>
@@ -6358,14 +6515,14 @@
     function approxEq(a, b, eps = 1e-6) { return Math.abs(a - b) <= eps; }
     function runDevTests() {
       try {
-        const nexo = PLATFORM_CONFIGS.nexo;
-        const binance = PLATFORM_CONFIGS.binance;
-        const youhodler = PLATFORM_CONFIGS.youhodler;
-        const ledn = PLATFORM_CONFIGS.ledn;
+        const nexo = PLATFORM_BASE_CONFIGS.nexo;
+        const binance = PLATFORM_BASE_CONFIGS.binance;
+        const youhodler = PLATFORM_BASE_CONFIGS.youhodler;
+        const ledn = PLATFORM_BASE_CONFIGS.ledn;
         console.assert(approxEq((nexo.policies?.targetLtv ?? 0), 0.20), 'Test1: Target LTV Nexo 20%');
         console.assert(approxEq((nexo.ltvByTicker?.BTC ?? 0), 0.50), 'Test2: LTV BTC Nexo 50%');
         console.assert((binance.earnAprTop?.BNB ?? 0) >= 0.05, 'Test3: Earn BNB Binance ≥5%');
-        console.assert(GLOBAL_COINGECKO_IDS.BTC === 'bitcoin', 'Test4: CoinGecko BTC');
+        console.assert(BASE_GLOBAL_COINGECKO_IDS.BTC === 'bitcoin', 'Test4: CoinGecko BTC');
         console.assert(PLATFORM_IDS.includes('nexo') && PLATFORM_IDS.includes('binance'), 'Test5: plataformas registradas');
         const lowCostNexo = nexo.apr?.lowCostEligibleTiers || [];
         console.assert(lowCostNexo.includes('Gold') && lowCostNexo.includes('Platinum'), 'Test6: Low-Cost tiers Nexo');
