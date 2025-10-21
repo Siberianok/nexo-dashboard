@@ -1831,10 +1831,20 @@
             }
           } catch (error) {
             if (!cancelled) {
+              const rawMessage = error?.message ? String(error.message) : '';
+              const friendlyMessage = (() => {
+                if (/HTTP\s*404/.test(rawMessage)) {
+                  return 'HTTP 404 — el backend no expone /api/binance/loans. Asegúrate de ejecutar `npm run dev` en este proyecto (o ajusta BINANCE_API_BASE si usas un proxy).';
+                }
+                if (/Failed to fetch/i.test(rawMessage) || /NetworkError/i.test(rawMessage)) {
+                  return 'No se pudo contactar al backend. ¿Está activo el servidor (`npm run dev`) y accesible desde este navegador?';
+                }
+                return rawMessage || 'No se pudo sincronizar con Binance.';
+              })();
               setBinanceBaselineMeta((prev) => ({
                 ...prev,
                 status: prev.status === 'ready' ? 'ready' : 'error',
-                error: error?.message || 'No se pudo sincronizar con Binance.',
+                error: friendlyMessage,
               }));
             }
           }
