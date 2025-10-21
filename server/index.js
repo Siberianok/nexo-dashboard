@@ -37,7 +37,9 @@ app.get('/api/binance/loans', async (req, res) => {
         message: 'Define BINANCE_API_KEY y BINANCE_API_SECRET para sincronizar los datos de Binance.',
       });
     }
-    if (Number(error?.status) === 404) {
+
+    const upstreamStatus = Number(error?.status);
+    if (Number.isFinite(upstreamStatus) && upstreamStatus === 404) {
       return res.status(502).json({
         error: 'binance_endpoint_not_found',
         message:
@@ -45,7 +47,8 @@ app.get('/api/binance/loans', async (req, res) => {
         details: error?.message,
       });
     }
-    const status = error?.status && Number(error.status) >= 400 ? Number(error.status) : 502;
+
+    const status = Number.isFinite(upstreamStatus) && upstreamStatus >= 400 ? upstreamStatus : 502;
     return res.status(status).json({
       error: 'binance_sync_failed',
       message: error?.message || 'No se pudo sincronizar con Binance.',
