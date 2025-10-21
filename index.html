@@ -420,7 +420,49 @@
     const BINANCE_FAPI_BASE = 'https://fapi.binance.com';
     const BINANCE_SIGNED_RECV_WINDOW = 5000;
     const BINANCE_SYNC_TIMEOUT_MS = 15000;
-    const BINANCE_BASELINE_ENDPOINT = '/api/binance/loans';
+    const DEFAULT_BINANCE_BASELINE_ENDPOINT = './api/binance/loans';
+    const resolveBinanceBaselineEndpoint = () => {
+      if (typeof window === 'undefined') return DEFAULT_BINANCE_BASELINE_ENDPOINT;
+
+      const globalOverride =
+        (typeof window.__BINANCE_BASELINE_ENDPOINT__ === 'string' && window.__BINANCE_BASELINE_ENDPOINT__.trim()) ||
+        (typeof window.__BINANCE_BASELINE_URL__ === 'string' && window.__BINANCE_BASELINE_URL__.trim());
+      if (globalOverride) {
+        return globalOverride;
+      }
+
+      const searchParams = new URLSearchParams(window.location.search || '');
+      const queryOverride = (searchParams.get('binanceApiEndpoint') || searchParams.get('binance_api_endpoint') || '').trim();
+      if (queryOverride) {
+        try {
+          localStorage.setItem('spm_binanceBaselineEndpoint', queryOverride);
+        } catch (error) {
+          console.warn('No se pudo persistir binanceApiEndpoint en localStorage:', error);
+        }
+        return queryOverride;
+      }
+
+      try {
+        const storedOverride = (localStorage.getItem('spm_binanceBaselineEndpoint') || '').trim();
+        if (storedOverride) {
+          return storedOverride;
+        }
+      } catch (error) {
+        console.warn('No se pudo leer binanceApiEndpoint desde localStorage:', error);
+      }
+
+      if (window.location.protocol === 'file:') {
+        return 'http://localhost:3000/api/binance/loans';
+      }
+
+      try {
+        return new URL(DEFAULT_BINANCE_BASELINE_ENDPOINT, window.location.href).toString();
+      } catch (error) {
+        console.warn('No se pudo resolver el endpoint base de Binance, usando valor por defecto.', error);
+        return DEFAULT_BINANCE_BASELINE_ENDPOINT.replace(/^\./, '');
+      }
+    };
+    const BINANCE_BASELINE_ENDPOINT = resolveBinanceBaselineEndpoint();
     const BINANCE_BASELINE_REFRESH_MS = 15 * 60 * 1000;
     const shallowEqual = (a, b) => {
       if (a === b) return true;
