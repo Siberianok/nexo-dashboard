@@ -34,8 +34,14 @@ parámetros actualizados al simulador.
    Loans (lectura).
 2. Instalá dependencias: `npm install`.
 3. Levantá el servidor: `npm run dev`.
-4. Abrí `http://localhost:3000` (o el puerto configurado en `PORT`). El front-end buscará `/api/binance/loans` y actualizará los
-   LTV, tasas y precios de liquidación según la respuesta.
+4. Abrí `http://localhost:3000` (o el puerto configurado en `PORT`). El front-end buscará `./api/binance/loans` (o el endpoint que
+   definas con `?binanceApiEndpoint=`) y actualizará los LTV, tasas y precios de liquidación según la respuesta.
+
+   > ¿Servís el HTML desde otra URL/base path o desde `file://`?
+   > - Añadí `?binanceApiEndpoint=https://tu-servidor/api/binance/loans` a la URL o definí la variable global
+   >   `window.__BINANCE_BASELINE_ENDPOINT__` antes del script para apuntar al backend correcto.
+   > - El valor se guarda en `localStorage` (`spm_binanceBaselineEndpoint`) para evitar repetir la query.
+   > - Si abrís el HTML directamente desde `file://`, el simulador probará `http://localhost:3000/api/binance/loans` por defecto.
 
 > **Nota:** las claves se firman en el backend; el front-end sólo recibe datos agregados. El servidor mantiene la respuesta en
 > caché (TTL configurable vía `BINANCE_CACHE_TTL_MS`).
