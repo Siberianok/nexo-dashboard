@@ -1,13 +1,17 @@
-// Binance client — Flexible Loans v2 con timeout
-import crypto from 'crypto';
-import fetch from 'node-fetch';
+// Binance client — Flexible Loans v2 con timeout y firma HMAC
+// Requiere: BINANCE_API_KEY y BINANCE_API_SECRET en variables de entorno
 
+import crypto from 'crypto';
+import fetch from 'node-fetch'; // si preferís fetch nativo (Node 18+), podés quitar esta línea y la dep en package.json
+
+// === Config ===
 const DEFAULT_API_BASE = process.env.BINANCE_API_BASE || 'https://api.binance.com';
 const DEFAULT_RECV_WINDOW = Number(process.env.BINANCE_RECV_WINDOW || 5000) || 5000;
 const API_KEY = process.env.BINANCE_API_KEY || '';
 const API_SECRET = process.env.BINANCE_API_SECRET || '';
-const DEFAULT_TIMEOUT_MS = Number(process.env.BINANCE_HTTP_TIMEOUT_MS || 10000) || 10000; // <-- timeout
+const DEFAULT_TIMEOUT_MS = Number(process.env.BINANCE_HTTP_TIMEOUT_MS || 10000) || 10000; // timeout por request
 
+// === Helpers numéricos (respetando tu estilo) ===
 const parseNumber = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 const parseRatio = (v) => {
   const num = Number(v);
@@ -24,6 +28,7 @@ const normalizeArray = (payload) => {
   return [];
 };
 
+// === Firma y requests ===
 const createSignature = (payload, secret) =>
   crypto.createHmac('sha256', secret).update(payload).digest('hex');
 
@@ -35,13 +40,12 @@ const ensureCredentials = () => {
   }
 };
 
-// --- NUEVO: fetch con timeout duro
+// fetch con timeout duro (AbortController)
 function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(new Error(`timeout after ${timeoutMs}ms`)), timeoutMs);
   const opts = { ...options, signal: controller.signal };
-  return fetch(url, opts)
-    .finally(() => clearTimeout(id));
+  return fetch(url, opts).finally(() => clearTimeout(id));
 }
 
 const fetchJson = async (url, options = {}) => {
@@ -94,19 +98,23 @@ const signedRequest = async (
   return fetchJson(url, init);
 };
 
-// Endpoints v2
+// === Endpoints v2 (Flexible Rate) ===
+
+// Tasas/límites por asset a pedir
 export async function getLoanableDataV2({ apiBase = DEFAULT_API_BASE, loanCoin } = {}) {
   const params = {};
   if (loanCoin) params.loanCoin = loanCoin;
   return signedRequest(apiBase, '/sapi/v2/loan/flexible/loanable/data', params);
 }
 
+// LTVs/límites por colateral
 export async function getCollateralDataV2({ apiBase = DEFAULT_API_BASE, collateralCoin } = {}) {
   const params = {};
   if (collateralCoin) params.collateralCoin = collateralCoin;
   return signedRequest(apiBase, '/sapi/v2/loan/flexible/collateral/data', params);
 }
 
+// Préstamos activos (ongoing orders)
 export async function getOngoingLoans({ apiBase = DEFAULT_API_BASE, loanCoin, collateralCoin } = {}) {
   const params = {};
   if (loanCoin) params.loanCoin = loanCoin;
@@ -114,10 +122,11 @@ export async function getOngoingLoans({ apiBase = DEFAULT_API_BASE, loanCoin, co
   return signedRequest(apiBase, '/sapi/v2/loan/flexible/ongoing/orders', params);
 }
 
-// Transform combinado
+// === Transform combinado (loanable + collateral) para la UI ===
 const transformV2 = (loanableRows = [], collateralRows = []) => {
   const ltvByTicker = {};
   const collateralLedger = {};
+
   normalizeArray(collateralRows).forEach((row) => {
     const c = String(row?.collateralCoin).toUpperCase();
     if (!c) return;
@@ -125,25 +134,35 @@ const transformV2 = (loanableRows = [], collateralRows = []) => {
     const marginCallLtv = parseRatio(row?.marginCallLTV);
     const liquidationLtv = parseRatio(row?.liquidationLTV);
     const maxLimit = parseNumber(row?.maxLimit);
+
     if (initialLtv != null) {
       const prev = ltvByTicker[c];
       ltvByTicker[c] = prev == null ? initialLtv : Math.max(prev, initialLtv);
     }
-    collateralLedger[c] = { collateralAsset: c, initialLtv, marginCallLtv, liquidationLtv, collateralMaxLimitUSD: maxLimit };
+    collateralLedger[c] = {
+      collateralAsset: c,
+      initialLtv,
+      marginCallLtv,
+      liquidationLtv,
+      collateralMaxLimitUSD: maxLimit,
+    };
   });
 
   const borrowRates = {};
   const loanLedger = {};
+
   normalizeArray(loanableRows).forEach((row) => {
     const loanCoin = String(row?.loanCoin).toUpperCase();
     if (!loanCoin) return;
+
+    // flexibleInterestRate es por HORA → anual = hora * 24 * 365
     const hourly = parseNumber(row?.flexibleInterestRate);
     const annual = hourly != null ? hourly * 24 * 365 : null;
 
     borrowRates[loanCoin] = {
       label: loanCoin,
       loanAsset: loanCoin,
-      collateralAsset: null,
+      collateralAsset: null, // v2 separa colaterales
       annual: annual ?? 0,
       hourly: hourly ?? hourlyFromAnnual(annual ?? 0) ?? 0,
       netAnnual: annual ?? 0,
@@ -169,7 +188,7 @@ const transformV2 = (loanableRows = [], collateralRows = []) => {
   return { ltvByTicker, borrowRates, loanLedger, collateralLedger };
 };
 
-// Snapshot combinado (loanable + collateral)
+// === Snapshot combinado para la UI (loanable + collateral) ===
 export const fetchBinanceLoanSnapshot = async ({
   apiBase = DEFAULT_API_BASE,
   loanCoin,
@@ -181,7 +200,6 @@ export const fetchBinanceLoanSnapshot = async ({
   const clockSkew = serverTime - Date.now();
   const requestOptions = { recvWindow: DEFAULT_RECV_WINDOW, timestamp: Date.now() + clockSkew };
 
-  // Pedimos ambas fuentes en paralelo; si una tarda mucho, el caller debe cortar (server/index.js).
   const [loanablePayload, collateralPayload] = await Promise.all([
     signedRequest(apiBase, '/sapi/v2/loan/flexible/loanable/data', loanCoin ? { loanCoin } : {}, requestOptions),
     signedRequest(apiBase, '/sapi/v2/loan/flexible/collateral/data', collateralCoin ? { collateralCoin } : {}, requestOptions),
