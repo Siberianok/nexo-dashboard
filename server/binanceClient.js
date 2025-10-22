@@ -7,7 +7,10 @@ const DEFAULT_RECV_WINDOW = Number(process.env.BINANCE_RECV_WINDOW || 5000) || 5
 const API_KEY = process.env.BINANCE_API_KEY || '';
 const API_SECRET = process.env.BINANCE_API_SECRET || '';
 
-const DEFAULT_HTTP_TIMEOUT_MS = Number(process.env.BINANCE_HTTP_TIMEOUT_MS || 12000) || 12000; // timeout por request
+// AUMENTAMOS timeout por request; puedes ajustar con env BINANCE_HTTP_TIMEOUT_MS
+const DEFAULT_HTTP_TIMEOUT_MS = Number(process.env.BINANCE_HTTP_TIMEOUT_MS || 25000) || 25000;
+
+// Monedas para fallback de loanable
 const FALLBACK_LOAN_COINS = (process.env.BINANCE_FALLBACK_LOAN_COINS || 'USDT,USDC,FDUSD')
   .split(',')
   .map(s => s.trim().toUpperCase())
@@ -20,7 +23,6 @@ const parseRatio = (v) => {
   if (!Number.isFinite(num)) return null;
   return Math.abs(num) > 1 ? num / 100 : num;
 };
-const hourlyFromAnnual = (a) => (a == null ? null : a / (365 * 24));
 const annualFromHourly = (h) => (h == null ? null : h * 24 * 365);
 
 const normalizeArray = (payload) => {
@@ -127,7 +129,6 @@ export async function getOngoingLoans({ apiBase = DEFAULT_API_BASE, loanCoin, co
 
 // ============== Fallback por lotes para loanable ==============
 // Consulta loanable por loanCoin (USDT/USDC/FDUSD…) y combina resultados.
-// Secuencial, con pausa breve, para evitar picos de weight.
 async function getLoanableDataV2Batch({
   apiBase = DEFAULT_API_BASE,
   loanCoins = FALLBACK_LOAN_COINS,
