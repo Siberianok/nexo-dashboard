@@ -1,32 +1,32 @@
+// server/index.js
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import {
-  getOngoingLoans,
-  getLoanableDataV2,
-  getCollateralDataV2,
-  fetchBinanceLoanSnapshot,
+  fetchBinanceLoanSnapshot, // snapshot combinado (loanable + collateral) para la UI
+  getOngoingLoans,          // posiciones activas (ongoing orders)
+  getLoanableDataV2,        // tasas/límites por asset a pedir
+  getCollateralDataV2       // LTVs y límites por colateral
 } from './binanceClient.js';
 
 const app = express();
 
-// CORS: define origins permitidos (separa por comas si sumás otros)
+// ===== CORS (lee ALLOWED_ORIGINS, separado por comas) =====
 const allow = (process.env.ALLOWED_ORIGINS || 'https://siberianok.github.io')
   .split(',')
-  .map((s) => s.trim())
+  .map(s => s.trim().replace(/\/$/, '')) // normaliza (sin barra final)
   .filter(Boolean);
 
-app.use(
-  cors({
-    origin: (origin, cb) => {
-      if (!origin) return cb(null, true); // curl/local
-      if (allow.includes(origin)) return cb(null, true);
-      return cb(new Error(`CORS: origin not allowed: ${origin}`));
-    },
-  })
-);
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true); // curl / server-to-server
+    const o = origin.replace(/\/$/, '');
+    if (allow.includes(o)) return cb(null, true);
+    return cb(new Error(`CORS: origin not allowed: ${origin}`));
+  },
+}));
 
-// Healthcheck
+// ===== Healthcheck =====
 app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
@@ -35,7 +35,7 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-// Helper de errores con mensajes claros para tu UI
+// ===== Manejo estándar de errores de Binance =====
 function handleError(res, err) {
   const msg = String(err?.message || 'Unknown error');
 
@@ -60,18 +60,32 @@ function handleError(res, err) {
   });
 }
 
-// Loans activos (v2)
+// ===== Rutas de negocio =====
+
+// IMPORTANTE: ahora /api/binance/loans devuelve el SNAPSHOT v2 (parámetros de mercado)
+// para que tu simulador cuadre APR/LTV/limits como la web de Binance.
 app.get('/api/binance/loans', async (req, res) => {
   try {
     const { loanCoin, collateralCoin } = req.query;
-    const data = await getOngoingLoans({ loanCoin, collateralCoin });
+    const data = await fetchBinanceLoanSnapshot({ loanCoin, collateralCoin });
     res.json(data);
   } catch (err) {
     handleError(res, err);
   }
 });
 
-// Loanable (tasas y límites) v2
+// Posiciones activas (ongoing orders v2) — si querés ver deuda/LTV actual
+app.get('/api/binance/positions', async (req, res) => {
+  try {
+    const { loanCoin, collateralCoin } = req.query;
+    const rows = await getOngoingLoans({ loanCoin, collateralCoin });
+    res.json(rows);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+// Loanable (tasas/límites por asset a pedir)
 app.get('/api/binance/loanable', async (req, res) => {
   try {
     const { loanCoin } = req.query;
@@ -82,7 +96,7 @@ app.get('/api/binance/loanable', async (req, res) => {
   }
 });
 
-// Collateral (LTVs y límites) v2
+// Collateral (LTVs/límites por colateral)
 app.get('/api/binance/collateral', async (req, res) => {
   try {
     const { collateralCoin } = req.query;
@@ -93,7 +107,7 @@ app.get('/api/binance/collateral', async (req, res) => {
   }
 });
 
-// Snapshot combinado para tu UI (loanable + collateral + transform)
+// Snapshot explícito (idéntico a /api/binance/loans, lo dejo por claridad)
 app.get('/api/binance/snapshot', async (req, res) => {
   try {
     const { loanCoin, collateralCoin } = req.query;
@@ -104,8 +118,8 @@ app.get('/api/binance/snapshot', async (req, res) => {
   }
 });
 
-// Arranque
-const port = process.env.PORT || 10000;
+// ===== Arranque del servidor =====
+const port = process.env.PORT || 10000; // Render inyecta PORT
 app.listen(port, () => {
   console.log(`Servidor iniciado en http://localhost:${port}`);
 });
