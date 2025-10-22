@@ -1,67 +1,104 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
+import 'dotenv/config';
 import express from 'express';
-import { config as loadEnv } from 'dotenv';
-import { MemoryCache } from './cache.js';
-import { fetchBinanceLoanSnapshot } from './binanceClient.js';
-
-loadEnv();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const ROOT_DIR = path.resolve(__dirname, '..');
+import cors from 'cors';
+import {
+  syncServerTime,
+  getOngoingLoans,
+  getBorrowHistory,
+  getLoanableData,
+  getCollateralData,
+} from './binanceClient.js';
 
 const app = express();
-const port = Number(process.env.PORT || 3000) || 3000;
-const cacheTtlMs = Number(process.env.BINANCE_CACHE_TTL_MS || 300000) || 300000;
-const cache = new MemoryCache(cacheTtlMs);
 
-app.get('/api/binance/loans', async (req, res) => {
-  const cacheKey = 'binance-loans';
-  try {
-    const cached = cache.get(cacheKey);
-    if (cached) {
-      return res.json({ ...cached, cacheHit: true });
-    }
-    const snapshot = await fetchBinanceLoanSnapshot({
-      loanCoin: req.query?.loanCoin,
-      collateralCoin: req.query?.collateralCoin,
-    });
-    const payload = { ...snapshot, cacheHit: false };
-    cache.set(cacheKey, payload);
-    return res.json(payload);
-  } catch (error) {
-    if (error?.code === 'BINANCE_CREDENTIALS_MISSING') {
-      return res.status(503).json({
-        error: 'missing_credentials',
-        message: 'Define BINANCE_API_KEY y BINANCE_API_SECRET para sincronizar los datos de Binance.',
-      });
-    }
+// Allowlist CORS desde env (separa por comas si agregás más)
+const allow = (process.env.ALLOWED_ORIGINS || 'https://siberianok.github.io')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 
-    const upstreamStatus = Number(error?.status);
-    if (Number.isFinite(upstreamStatus) && upstreamStatus === 404) {
-      return res.status(502).json({
-        error: 'binance_endpoint_not_found',
-        message:
-          'Binance devolvió HTTP 404 al consultar Loans. Verifica BINANCE_API_BASE/BINANCE_USE_VIP_LOANABLE o tu acceso a Binance Loans.',
-        details: error?.message,
-      });
-    }
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true); // curl/local
+      if (allow.includes(origin)) return cb(null, true);
+      return cb(new Error(`CORS: origin not allowed: ${origin}`));
+    },
+  })
+);
 
-    const status = Number.isFinite(upstreamStatus) && upstreamStatus >= 400 ? upstreamStatus : 502;
-    return res.status(status).json({
+app.get('/api/health', (_req, res) => {
+  res.json({
+    ok: true,
+    ts: Date.now(),
+    region: process.env.RENDER_REGION || null,
+  });
+});
+
+function handleError(res, err) {
+  const msg = String(err?.message || 'Unknown error');
+
+  if (/restricted location/i.test(msg)) {
+    return res.status(503).json({
       error: 'binance_sync_failed',
-      message: error?.message || 'No se pudo sincronizar con Binance.',
+      message: 'Servicio no disponible desde la región del servidor.',
+      hint: 'Despliega el backend en EU (Frankfurt) o Singapore.',
     });
+  }
+
+  if (/deprecated/i.test(msg)) {
+    return res.status(410).json({
+      error: 'binance_sync_failed',
+      message: 'Endpoint retirado por Binance. Usa SAPI v2.',
+      hint: 'Actualiza a /sapi/v2/loan/flexible/... en el cliente/servidor.',
+    });
+  }
+
+  return res.status(err?.status || 502).json({
+    error: 'binance_sync_failed',
+    message: msg,
+    binance: err?.binance ?? undefined,
+  });
+}
+
+app.get('/api/binance/loans', async (_req, res) => {
+  try {
+    const data = await getOngoingLoans();
+    res.json(data);
+  } catch (err) {
+    handleError(res, err);
   }
 });
 
-app.use(express.static(ROOT_DIR));
-
-app.get('*', (req, res) => {
-  res.sendFile(path.join(ROOT_DIR, 'index.html'));
+app.get('/api/binance/loans/history', async (_req, res) => {
+  try {
+    const data = await getBorrowHistory();
+    res.json(data);
+  } catch (err) {
+    handleError(res, err);
+  }
 });
 
+app.get('/api/binance/loanable', async (_req, res) => {
+  try {
+    const data = await getLoanableData();
+    res.json(data);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+app.get('/api/binance/collateral', async (_req, res) => {
+  try {
+    const data = await getCollateralData();
+    res.json(data);
+  } catch (err) {
+    handleError(res, err);
+  }
+});
+
+const port = process.env.PORT || 10000;
+syncServerTime().catch(() => {});
 app.listen(port, () => {
   console.log(`Servidor iniciado en http://localhost:${port}`);
 });
