@@ -2,7 +2,7 @@
 // Requiere: BINANCE_API_KEY y BINANCE_API_SECRET en variables de entorno
 
 import crypto from 'crypto';
-import fetch from 'node-fetch'; // Si usás Node >=18, podés cambiar a fetch nativo y quitar esta dep.
+import fetch from 'node-fetch'; // Con Node >=18 podés usar fetch nativo y quitar esta dependencia
 
 const DEFAULT_API_BASE = process.env.BINANCE_API_BASE || 'https://api.binance.com';
 const DEFAULT_RECV_WINDOW = Number(process.env.BINANCE_RECV_WINDOW || 5000) || 5000;
@@ -49,7 +49,6 @@ const fetchJson = async (url, options = {}) => {
   const res = await fetchWithTimeout(url, options, DEFAULT_TIMEOUT_MS);
   const used = res.headers.get('x-mbx-used-weight');
   const used1m = res.headers.get('x-mbx-used-weight-1m');
-  // Log informativo para vigilar peso por IP
   console.log(`[binance] ${options?.method || 'GET'} ${url} -> ${res.status} used=${used} used1m=${used1m}`);
 
   let data = null;
@@ -157,7 +156,7 @@ const transformV2 = (loanableRows = [], collateralRows = []) => {
       loanAsset: loanCoin,
       collateralAsset: null, // v2 separa colaterales
       annual: annual ?? 0,
-      hourly: hourly ?? hourlyFromAnnual(annual ?? 0) ?? 0,
+      hourly: hourly ?? (annual != null ? annual / (365 * 24) : 0),
       netAnnual: annual ?? 0,
       adjustmentAnnual: 0,
       vipLevel: null,
