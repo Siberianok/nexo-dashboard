@@ -2,16 +2,15 @@
 // Requiere: BINANCE_API_KEY y BINANCE_API_SECRET en variables de entorno
 
 import crypto from 'crypto';
-import fetch from 'node-fetch'; // si quieres, puedes usar fetch nativo (Node 18+), y quitar esta línea
+import fetch from 'node-fetch'; // si preferís fetch nativo (Node 18+), podés quitar esta línea y la dep en package.json
 
 // === Config ===
 const DEFAULT_API_BASE = process.env.BINANCE_API_BASE || 'https://api.binance.com';
 const DEFAULT_RECV_WINDOW = Number(process.env.BINANCE_RECV_WINDOW || 5000) || 5000;
-// v2 ya no distingue VIP/standard en estos endpoints; dejamos la var pero no se usa.
 const API_KEY = process.env.BINANCE_API_KEY || '';
 const API_SECRET = process.env.BINANCE_API_SECRET || '';
 
-// === Utils de parseo (respetando tus helpers) ===
+// === Utils de parseo (respetando tu estilo) ===
 const parseNumber = (value) => {
   const num = Number(value);
   return Number.isFinite(num) ? num : null;
@@ -47,11 +46,7 @@ const ensureCredentials = () => {
 const fetchJson = async (url, options = {}) => {
   const res = await fetch(url, options);
   let data = null;
-  try {
-    data = await res.clone().json();
-  } catch {
-    // noop
-  }
+  try { data = await res.clone().json(); } catch {}
   if (!res.ok) {
     const details = data?.msg || data?.message || (await res.text());
     const err = new Error(details || `HTTP ${res.status}`);
@@ -90,10 +85,7 @@ const signedRequest = async (
   query.append('signature', signature);
 
   const url = `${apiBase}${path}${method === 'GET' ? `?${query.toString()}` : ''}`;
-  const init = {
-    method,
-    headers: { 'X-MBX-APIKEY': API_KEY },
-  };
+  const init = { method, headers: { 'X-MBX-APIKEY': API_KEY } };
   if (method !== 'GET') {
     init.headers['content-type'] = 'application/x-www-form-urlencoded';
     init.body = query.toString();
@@ -102,21 +94,21 @@ const signedRequest = async (
 };
 
 // === Endpoints v2 (Flexible Rate) ===
-// Doc oficial: /sapi/v2/loan/flexible/loanable/data, /collateral/data, /ongoing/orders (todas USER_DATA firmadas).
-// Ver: developers.binance.com (Flexible Rate -> Market Data / User Information) y anuncio de /v2. :contentReference[oaicite:1]{index=1}
-
+// Loanable (tasas y límites por asset a pedir)
 export async function getLoanableDataV2({ apiBase = DEFAULT_API_BASE, loanCoin } = {}) {
   const params = {};
   if (loanCoin) params.loanCoin = loanCoin;
   return signedRequest(apiBase, '/sapi/v2/loan/flexible/loanable/data', params);
 }
 
+// Collateral (LTVs, márgenes, límites por colateral)
 export async function getCollateralDataV2({ apiBase = DEFAULT_API_BASE, collateralCoin } = {}) {
   const params = {};
   if (collateralCoin) params.collateralCoin = collateralCoin;
   return signedRequest(apiBase, '/sapi/v2/loan/flexible/collateral/data', params);
 }
 
+// Órdenes en curso (loans activos)
 export async function getOngoingLoans({ apiBase = DEFAULT_API_BASE, loanCoin, collateralCoin } = {}) {
   const params = {};
   if (loanCoin) params.loanCoin = loanCoin;
@@ -124,12 +116,11 @@ export async function getOngoingLoans({ apiBase = DEFAULT_API_BASE, loanCoin, co
   return signedRequest(apiBase, '/sapi/v2/loan/flexible/ongoing/orders', params);
 }
 
-// === Transform: unifica loanable (tasas/limites por loanCoin) + collateral (LTV por collateralCoin) ===
+// === Transform: combina loanable + collateral para tu UI ===
 const transformV2 = (loanableRows = [], collateralRows = []) => {
   // Collaterals → mapas de LTV y límites
   const ltvByTicker = {};
-  const collateralLedger = {}; // detalle por collateral
-
+  const collateralLedger = {};
   normalizeArray(collateralRows).forEach((row) => {
     const collateral = String(row?.collateralCoin).toUpperCase();
     if (!collateral) return;
@@ -151,31 +142,31 @@ const transformV2 = (loanableRows = [], collateralRows = []) => {
     };
   });
 
-  // Loanable → tasas por loanCoin
+  // Loanable → tasas por asset a pedir
   const borrowRates = {};
   const loanLedger = {};
-
   normalizeArray(loanableRows).forEach((row) => {
     const loanCoin = String(row?.loanCoin).toUpperCase();
     if (!loanCoin) return;
-    // flexibleInterestRate: unidad horaria (según doc; ejemplo 0.00000491 → ~43% anual) → anual = r * 24 * 365
-    const hourly = parseNumber(row?.flexibleInterestRate); // ya es ratio por hora
+
+    // flexibleInterestRate es por HORA → anual = hora * 24 * 365
+    const hourly = parseNumber(row?.flexibleInterestRate);
     const annual = hourly != null ? hourly * 24 * 365 : null;
 
     borrowRates[loanCoin] = {
       label: loanCoin,
       loanAsset: loanCoin,
-      collateralAsset: null, // v2 separa colaterales; no hay 1:1
+      collateralAsset: null, // v2 separa colaterales
       annual: annual ?? 0,
       hourly: hourly ?? hourlyFromAnnual(annual ?? 0) ?? 0,
-      netAnnual: annual ?? 0,          // sin VIP “net” en v2 público
+      netAnnual: annual ?? 0,
       adjustmentAnnual: 0,
       vipLevel: null,
       limitNote: 'Flexible Loan (v2) – datos firmados',
     };
 
     loanLedger[loanCoin] = {
-      collateralAsset: null, // desconocido aquí
+      collateralAsset: null,
       loanAsset: loanCoin,
       initialLtv: null,
       marginCallLtv: null,
@@ -191,7 +182,7 @@ const transformV2 = (loanableRows = [], collateralRows = []) => {
   return { ltvByTicker, borrowRates, loanLedger, collateralLedger };
 };
 
-// === API pública compatible con tu UI: snapshot combinado (loanable + collateral) ===
+// === Snapshot combinado para la UI ===
 export const fetchBinanceLoanSnapshot = async ({
   apiBase = DEFAULT_API_BASE,
   loanCoin,
@@ -203,7 +194,6 @@ export const fetchBinanceLoanSnapshot = async ({
   const clockSkew = serverTime - Date.now();
   const requestOptions = { recvWindow: DEFAULT_RECV_WINDOW, timestamp: Date.now() + clockSkew };
 
-  // v2: pedimos ambas fuentes y combinamos
   const [loanablePayload, collateralPayload] = await Promise.all([
     signedRequest(apiBase, '/sapi/v2/loan/flexible/loanable/data', loanCoin ? { loanCoin } : {}, requestOptions),
     signedRequest(apiBase, '/sapi/v2/loan/flexible/collateral/data', collateralCoin ? { collateralCoin } : {}, requestOptions),
@@ -218,10 +208,7 @@ export const fetchBinanceLoanSnapshot = async ({
     fetchedAt: new Date().toISOString(),
     serverTime,
     clockSkew,
-    rowCount: {
-      loanable: loanableRows.length,
-      collateral: collateralRows.length,
-    },
+    rowCount: { loanable: loanableRows.length, collateral: collateralRows.length },
     config: transformed,
     metadata: {
       endpoints: {
@@ -230,9 +217,6 @@ export const fetchBinanceLoanSnapshot = async ({
       },
       requestParams: { loanCoin, collateralCoin },
     },
-    raw: {
-      loanable: loanableRows,
-      collateral: collateralRows,
-    },
+    raw: { loanable: loanableRows, collateral: collateralRows },
   };
 };
