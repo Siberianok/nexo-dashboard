@@ -4,6 +4,68 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Simulador de Préstamos / Plataforma</title>
+  <script>
+  /**
+   * Shim CORS-aware para GitHub Pages:
+   * - Redirige cualquier fetch a rutas relativas /api/binance/* hacia tu backend
+   *   nexo-dashboard en Render (Singapore).
+   * - Si en el futuro querés cambiar el backend, solo cambiás DEFAULT_BACKEND.
+   */
+  (function () {
+    const DEFAULT_BACKEND = 'https://nexo-dashboard.onrender.com'; // <— TU servicio
+    const API_PREFIX = '/api/binance/';
+
+    // Permite override por query param (útil para debug) o por localStorage
+    const url = new URL(location.href);
+    const q = url.searchParams.get('binanceApiEndpoint');
+    const saved = localStorage.getItem('spm_binanceBaselineEndpoint');
+
+    // Si viene por query param, lo persistimos
+    if (q) localStorage.setItem('spm_binanceBaselineEndpoint', q);
+
+    // Endpoint base final (si no hay saved/param, usamos backend + /api/binance/loans)
+    // Nota: /api/binance/loans ahora entrega el snapshot v2 (APR/LTV/etc.)
+    const defaultEndpoint = DEFAULT_BACKEND + '/api/binance/loans';
+    const BASELINE_ENDPOINT = (q || saved || defaultEndpoint).replace(/\/$/, '');
+
+    // Guardamos global para quien lo necesite
+    window.__BINANCE_BASELINE_ENDPOINT__ = BASELINE_ENDPOINT;
+
+    // Monkey-patch de fetch: si el front pide '/api/binance/loans' (u otra /api/binance/*),
+    // lo traducimos a `${DEFAULT_BACKEND}/api/binance/...`
+    const _fetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      try {
+        // input puede ser string o Request
+        let url = typeof input === 'string' ? input : (input && input.url) || '';
+        if (url.startsWith(API_PREFIX)) {
+          url = DEFAULT_BACKEND + url; // redirección transparente
+          if (typeof input === 'string') {
+            return _fetch(url, init);
+          } else {
+            // Si es un Request, creamos uno nuevo con la URL reescrita
+            const reqInit = {
+              method: input.method,
+              headers: input.headers,
+              body: input.body,
+              mode: 'cors',
+              credentials: input.credentials,
+              cache: input.cache,
+              redirect: input.redirect,
+              referrer: input.referrer,
+              referrerPolicy: input.referrerPolicy,
+              integrity: input.integrity,
+              keepalive: input.keepalive,
+              signal: input.signal
+            };
+            return _fetch(url, reqInit);
+          }
+        }
+      } catch (_) {}
+      return _fetch(input, init);
+    };
+  })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
