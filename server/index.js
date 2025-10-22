@@ -3,10 +3,10 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import {
-  fetchBinanceLoanSnapshot, // snapshot de parámetros (APR/LTV/limits) — hace 2 llamadas a Binance
-  getOngoingLoans,
-  getLoanableDataV2,
-  getCollateralDataV2
+  fetchBinanceLoanSnapshot, // snapshot: APR/LTV/limits (v2) - usa 2 endpoints de Binance
+  getOngoingLoans,          // posiciones activas (opcional)
+  getLoanableDataV2,        // tasas/límites por asset a pedir (opcional)
+  getCollateralDataV2       // LTVs por colateral (opcional)
 } from './binanceClient.js';
 
 const app = express();
@@ -40,20 +40,20 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, ts: Date.now(), region: process.env.RENDER_REGION || null });
 });
 
-/* ============ C O N F I G  B A C K E N D ============ */
-// Refrescamos snapshot en background y servimos caché a los clientes
-const REFRESH_INTERVAL_MS    = Number(process.env.REFRESH_INTERVAL_MS    || 60000)  || 60000;  // 60s
-const SNAPSHOT_CACHE_TTL_MS  = Number(process.env.SNAPSHOT_CACHE_TTL_MS  || 120000) || 120000; // 120s “fresco”
-const RATE_LIMIT_COOLDOWN_MS = Number(process.env.RATE_LIMIT_COOLDOWN_MS || 180000) || 180000; // 3 min
-const SNAPSHOT_TIMEOUT_MS    = Number(process.env.SNAPSHOT_TIMEOUT_MS    || 12000)  || 12000;  // corte total
+/* ================== R O O T  (evita 404 en HEAD /) ================== */
+app.get('/', (_req, res) => {
+  res.type('text/plain').send('nexo-dashboard backend: OK');
+});
 
-// Estado del snapshot (una única “key”, si luego querés por loanCoin/collateralCoin lo generalizamos)
-let SNAPSHOT = {
-  ts: 0,            // timestamp última actualización OK
-  data: null,       // último snapshot
-  inflight: null,   // promesa en vuelo
-  cooldownUntil: 0, // epoch en ms si estamos rate-limited/banned
-};
+/* ======= Config interna (sin tocar env) para loans/snapshot ======= */
+const REQUEST_TIMEOUT_MS   = 12000;   // corte duro si Binance cuelga (12s)
+const CACHE_TTL_MS         = 60000;   // snapshot fresco por 60s
+const COOLDOWN_DEFAULT_MS  = 120000;  // 2 min de freno si hay 429/-1003
+
+// Estado en memoria
+let CACHE = { ts: 0, data: null };
+let INFLIGHT = null;      // promesa en curso (dedupe)
+let BAN_UNTIL_MS = 0;     // cooldown por rate limit
 
 // util: carrera con timeout
 const withTimeout = (p, ms) =>
@@ -62,209 +62,167 @@ const withTimeout = (p, ms) =>
     new Promise((_, rej) => setTimeout(() => rej(new Error(`upstream timeout after ${ms}ms`)), ms)),
   ]);
 
-// si recibimos -1003/429, fijamos cooldown
+// marca cooldown cuando Binance tira -1003/429
 function noteRateLimit(err) {
   const txt = String(err?.message || '');
   const m = txt.match(/until\s+(\d{13})/i); // “IP banned until 1761112376252”
   if (m) {
-    SNAPSHOT.cooldownUntil = Number(m[1]);
+    BAN_UNTIL_MS = Number(m[1]);
   } else {
-    SNAPSHOT.cooldownUntil = Date.now() + RATE_LIMIT_COOLDOWN_MS;
+    BAN_UNTIL_MS = Date.now() + COOLDOWN_DEFAULT_MS;
   }
-  console.warn(`[binance] rate limited. Cooldown hasta ${new Date(SNAPSHOT.cooldownUntil).toISOString()}`);
+  console.warn(`[binance] rate limited. Cooldown hasta ${new Date(BAN_UNTIL_MS).toISOString()}`);
 }
 
-// refresco “seguro” del snapshot (no bloquea respuestas)
-async function refreshSnapshotSafe() {
-  const now = Date.now();
-  if (now < SNAPSHOT.cooldownUntil) return; // en cooldown, no peguemos a Binance
+/* ==================== H A N D L E R S  A P I ==================== */
 
-  if (SNAPSHOT.inflight) {
-    // ya hay una en curso; dejemos que termine
-    return SNAPSHOT.inflight;
-  }
-
-  SNAPSHOT.inflight = (async () => {
-    try {
-      const data = await withTimeout(fetchBinanceLoanSnapshot({}), SNAPSHOT_TIMEOUT_MS);
-      SNAPSHOT.data = data;
-      SNAPSHOT.ts = Date.now();
-      return data;
-    } catch (err) {
-      // -1003/429 → cooldown
-      if (err?.code === -1003 || /IP banned|too much request weight|429/i.test(String(err?.message || ''))) {
-        noteRateLimit(err);
-      }
-      throw err;
-    } finally {
-      SNAPSHOT.inflight = null;
-    }
-  })();
-
-  try {
-    return await SNAPSHOT.inflight;
-  } catch {
-    // errores se registran arriba; no re-lanzamos aquí para no cortar el scheduler
-    return null;
-  }
-}
-
-// scheduler de refresco en background (con un poco de jitter para no pegar “en el minuto”)
-function startScheduler() {
-  const jitter = Math.floor(Math.random() * 5000); // 0–5s
-  setTimeout(() => {
-    refreshSnapshotSafe().finally(() => {
-      startScheduler(); // reprograma
-    });
-  }, REFRESH_INTERVAL_MS + jitter).unref?.();
-}
-
-// arranque: calentamos caché una vez (no bloqueante) y lanzamos scheduler
-refreshSnapshotSafe().finally(() => startScheduler());
-
-/* ================ M A N E J O  E R R O R E S =============== */
-function handleError(res, err) {
-  const msg = String(err?.message || 'Unknown error');
-
-  if (err?.code === -1003 || /IP banned|too much request weight|429/i.test(msg)) {
-    const retrySec = Math.max(1, Math.ceil((SNAPSHOT.cooldownUntil - Date.now()) / 1000));
-    res.set('Retry-After', String(retrySec));
-    return res.status(429).json({ error: 'binance_rate_limited', message: msg, retryAfterSec: retrySec, cooldownUntil: SNAPSHOT.cooldownUntil });
-  }
-  if (/restricted location/i.test(msg)) {
-    return res.status(503).json({ error: 'binance_sync_failed', message: 'Servicio no disponible desde la región del servidor.' });
-  }
-  if (/deprecated/i.test(msg)) {
-    return res.status(410).json({ error: 'binance_sync_failed', message: 'Endpoint retirado por Binance. Usa SAPI v2.' });
-  }
-  return res.status(err?.status || 502).json({ error: 'binance_sync_failed', message: msg, binance: err?.binance ?? undefined });
-}
-
-/* ==================== R U T A S  A P I ==================== */
-
-// /loans ahora SIEMPRE sirve desde caché; si está “stale” lo indica.
-// Nunca bloquea al usuario esperando a Binance.
+// /api/binance/loans — sirve snapshot con cache+dedupe+cooldown. Nunca 502 opaco.
 app.get('/api/binance/loans', async (_req, res) => {
   res.set('Cache-Control', 'no-store');
-
   const now = Date.now();
-  const ageMs = SNAPSHOT.ts ? (now - SNAPSHOT.ts) : null;
-  const nextRefreshInMs = Math.max(0, (SNAPSHOT.ts + REFRESH_INTERVAL_MS) - now);
 
-  // si estamos en cooldown y hay caché → servimos stale con 200
-  if (now < SNAPSHOT.cooldownUntil && SNAPSHOT.data) {
-    return res.json({
-      ...SNAPSHOT.data,
-      cached: true,
-      stale: true,
-      ageMs,
-      nextRefreshInMs,
-      cooldownUntil: SNAPSHOT.cooldownUntil,
-    });
-  }
-
-  // si hay caché “fresco” => sirve
-  if (SNAPSHOT.data && now - SNAPSHOT.ts < SNAPSHOT_CACHE_TTL_MS) {
-    return res.json({
-      ...SNAPSHOT.data,
-      cached: true,
-      stale: false,
-      ageMs,
-      nextRefreshInMs,
-      cooldownUntil: SNAPSHOT.cooldownUntil || null,
-    });
-  }
-
-  // no hay caché fresco: lanzamos refresh en background (si no está ya)
-  refreshSnapshotSafe().catch(() => {});
-
-  // si existe algún snapshot anterior aunque sea viejo → lo devolvemos como stale
-  if (SNAPSHOT.data) {
-    return res.json({
-      ...SNAPSHOT.data,
-      cached: true,
-      stale: true,
-      ageMs,
-      nextRefreshInMs,
-      cooldownUntil: SNAPSHOT.cooldownUntil || null,
-    });
-  }
-
-  // primera vez y sin datos: si hay cooldown → 429 con Retry-After
-  if (now < SNAPSHOT.cooldownUntil) {
-    const retrySec = Math.max(1, Math.ceil((SNAPSHOT.cooldownUntil - now) / 1000));
-    res.set('Retry-After', String(retrySec));
-    return res.status(429).json({
-      error: 'binance_rate_limited',
-      message: 'Temporarily rate limited; warmup pending.',
-      retryAfterSec: retrySec,
-      cooldownUntil: SNAPSHOT.cooldownUntil,
-    });
-  }
-
-  // primera vez, sin cooldown → intentamos un fetch directo con timeout
   try {
-    const data = await withTimeout(fetchBinanceLoanSnapshot({}), SNAPSHOT_TIMEOUT_MS);
-    SNAPSHOT.data = data;
-    SNAPSHOT.ts = Date.now();
+    // 1) Si estamos en cooldown y hay cache → servir STALE (200)
+    if (now < BAN_UNTIL_MS && CACHE.data) {
+      return res.json({
+        ...CACHE.data,
+        cached: true,
+        stale: true,
+        ageMs: now - CACHE.ts,
+        cooldownUntil: BAN_UNTIL_MS,
+      });
+    }
+
+    // 2) Si el cache es fresco → servir FRESCO (200)
+    if (CACHE.data && now - CACHE.ts < CACHE_TTL_MS) {
+      return res.json({
+        ...CACHE.data,
+        cached: true,
+        stale: false,
+        ageMs: now - CACHE.ts,
+        cooldownUntil: now < BAN_UNTIL_MS ? BAN_UNTIL_MS : null,
+      });
+    }
+
+    // 3) Deduplicación: si ya hay una fetch en curso, esperar esa
+    if (INFLIGHT) {
+      const data = await INFLIGHT;
+      return res.json({
+        ...data,
+        cached: true,
+        stale: false,
+        ageMs: Date.now() - CACHE.ts,
+        cooldownUntil: now < BAN_UNTIL_MS ? BAN_UNTIL_MS : null,
+      });
+    }
+
+    // 4) Hacer fetch a Binance con timeout y actualizar cache
+    INFLIGHT = (async () => {
+      const data = await withTimeout(fetchBinanceLoanSnapshot({}), REQUEST_TIMEOUT_MS);
+      CACHE = { ts: Date.now(), data };
+      return data;
+    })();
+
+    const fresh = await INFLIGHT;
+    INFLIGHT = null;
+
     return res.json({
-      ...data,
+      ...fresh,
       cached: false,
       stale: false,
       ageMs: 0,
-      nextRefreshInMs: REFRESH_INTERVAL_MS,
       cooldownUntil: null,
     });
+
   } catch (err) {
-    if (err?.code === -1003 || /IP banned|too much request weight|429/i.test(String(err?.message || ''))) {
-      noteRateLimit(err);
-      const retrySec = Math.max(1, Math.ceil((SNAPSHOT.cooldownUntil - Date.now()) / 1000));
-      res.set('Retry-After', String(retrySec));
-      return res.status(429).json({ error: 'binance_rate_limited', message: String(err.message || ''), retryAfterSec: retrySec, cooldownUntil: SNAPSHOT.cooldownUntil });
+    INFLIGHT = null; // limpia dedupe si falló
+    const msg = String(err?.message || '');
+    const code = err?.code;
+
+    console.error('[loans] error:', { code, msg, status: err?.status });
+
+    // Timeout claro → 504
+    if (/timeout/i.test(msg)) {
+      return res.status(504).json({ error: 'binance_timeout', message: msg });
     }
-    return handleError(res, err);
+
+    // Rate limit / ban → activar cooldown y, si hay cache, servir STALE; si no, 429 con Retry-After
+    if (code === -1003 || /IP banned|too much request weight|429/i.test(msg)) {
+      noteRateLimit(err);
+      if (CACHE.data) {
+        return res.json({
+          ...CACHE.data,
+          cached: true,
+          stale: true,
+          ageMs: Date.now() - CACHE.ts,
+          cooldownUntil: BAN_UNTIL_MS,
+        });
+      }
+      const retrySec = Math.max(1, Math.ceil((BAN_UNTIL_MS - Date.now()) / 1000));
+      res.set('Retry-After', String(retrySec));
+      return res.status(429).json({
+        error: 'binance_rate_limited',
+        message: msg,
+        retryAfterSec: retrySec,
+        cooldownUntil: BAN_UNTIL_MS,
+      });
+    }
+
+    // Otros errores de Binance → usar status si viene; si no, 502 con mensaje (no opaco)
+    return res.status(err?.status || 502).json({
+      error: 'binance_sync_failed',
+      message: msg || 'Unknown upstream error',
+      binance: err?.binance ?? undefined,
+    });
   }
 });
 
-// Posiciones activas (si las necesitás, recomendable también cachearlas con TTL corto)
+// Posiciones activas (opcional; sin cache global)
 app.get('/api/binance/positions', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
   try {
     const { loanCoin, collateralCoin } = req.query;
-    const rows = await getOngoingLoans({ loanCoin, collateralCoin });
-    res.set('Cache-Control', 'no-store');
+    const rows = await withTimeout(getOngoingLoans({ loanCoin, collateralCoin }), REQUEST_TIMEOUT_MS);
     res.json(rows);
   } catch (err) {
-    handleError(res, err);
+    const msg = String(err?.message || '');
+    if (/timeout/i.test(msg)) return res.status(504).json({ error: 'binance_timeout', message: msg });
+    return res.status(err?.status || 502).json({ error: 'binance_sync_failed', message: msg });
   }
 });
 
-// Loanable directo (sin cache global; úsalo con cuidado)
+// Loanable directo (opcional; úsalo con cuidado por rate limit)
 app.get('/api/binance/loanable', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
   try {
     const { loanCoin } = req.query;
-    const data = await getLoanableDataV2({ loanCoin });
-    res.set('Cache-Control', 'no-store');
+    const data = await withTimeout(getLoanableDataV2({ loanCoin }), REQUEST_TIMEOUT_MS);
     res.json(data);
   } catch (err) {
-    handleError(res, err);
+    const msg = String(err?.message || '');
+    if (/timeout/i.test(msg)) return res.status(504).json({ error: 'binance_timeout', message: msg });
+    return res.status(err?.status || 502).json({ error: 'binance_sync_failed', message: msg });
   }
 });
 
-// Collateral directo
+// Collateral directo (opcional)
 app.get('/api/binance/collateral', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
   try {
     const { collateralCoin } = req.query;
-    const data = await getCollateralDataV2({ collateralCoin });
-    res.set('Cache-Control', 'no-store');
+    const data = await withTimeout(getCollateralDataV2({ collateralCoin }), REQUEST_TIMEOUT_MS);
     res.json(data);
   } catch (err) {
-    handleError(res, err);
+    const msg = String(err?.message || '');
+    if (/timeout/i.test(msg)) return res.status(504).json({ error: 'binance_timeout', message: msg });
+    return res.status(err?.status || 502).json({ error: 'binance_sync_failed', message: msg });
   }
 });
 
-// Alias explícito del snapshot
-app.get('/api/binance/snapshot', async (req, res) => {
-  return app._router.handle({ ...req, url: '/api/binance/loans' }, res, () => {});
+// Alias explícito del snapshot (mismo handler que /loans)
+app.get('/api/binance/snapshot', (req, res, next) => {
+  req.url = '/api/binance/loans';
+  app._router.handle(req, res, next);
 });
 
 /* ============== A R R A N Q U E  S E R V I D O R ============== */
