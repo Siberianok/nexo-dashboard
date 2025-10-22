@@ -1,16 +1,19 @@
-// Binance client — Flexible Loans v2 con timeout, firma HMAC y logging de weights
-// Requiere: BINANCE_API_KEY y BINANCE_API_SECRET en variables de entorno
-
+// server/binanceClient.js
 import crypto from 'crypto';
-import fetch from 'node-fetch'; // Con Node >=18 podés usar fetch nativo y quitar esta dependencia
+import fetch from 'node-fetch';
 
 const DEFAULT_API_BASE = process.env.BINANCE_API_BASE || 'https://api.binance.com';
 const DEFAULT_RECV_WINDOW = Number(process.env.BINANCE_RECV_WINDOW || 5000) || 5000;
 const API_KEY = process.env.BINANCE_API_KEY || '';
 const API_SECRET = process.env.BINANCE_API_SECRET || '';
-const DEFAULT_TIMEOUT_MS = Number(process.env.BINANCE_HTTP_TIMEOUT_MS || 10000) || 10000; // timeout por request
 
-// ==== Helpers ====
+const DEFAULT_HTTP_TIMEOUT_MS = Number(process.env.BINANCE_HTTP_TIMEOUT_MS || 12000) || 12000; // timeout por request
+const FALLBACK_LOAN_COINS = (process.env.BINANCE_FALLBACK_LOAN_COINS || 'USDT,USDC,FDUSD')
+  .split(',')
+  .map(s => s.trim().toUpperCase())
+  .filter(Boolean);
+
+// ============== Helpers ==============
 const parseNumber = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 const parseRatio = (v) => {
   const num = Number(v);
@@ -18,6 +21,8 @@ const parseRatio = (v) => {
   return Math.abs(num) > 1 ? num / 100 : num;
 };
 const hourlyFromAnnual = (a) => (a == null ? null : a / (365 * 24));
+const annualFromHourly = (h) => (h == null ? null : h * 24 * 365);
+
 const normalizeArray = (payload) => {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.rows)) return payload.rows;
@@ -38,7 +43,7 @@ const ensureCredentials = () => {
 };
 
 // fetch con timeout duro (AbortController)
-function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
+function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_HTTP_TIMEOUT_MS) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(new Error(`timeout after ${timeoutMs}ms`)), timeoutMs);
   const opts = { ...options, signal: controller.signal };
@@ -46,13 +51,14 @@ function fetchWithTimeout(url, options = {}, timeoutMs = DEFAULT_TIMEOUT_MS) {
 }
 
 const fetchJson = async (url, options = {}) => {
-  const res = await fetchWithTimeout(url, options, DEFAULT_TIMEOUT_MS);
+  const res = await fetchWithTimeout(url, options, DEFAULT_HTTP_TIMEOUT_MS);
   const used = res.headers.get('x-mbx-used-weight');
   const used1m = res.headers.get('x-mbx-used-weight-1m');
   console.log(`[binance] ${options?.method || 'GET'} ${url} -> ${res.status} used=${used} used1m=${used1m}`);
 
   let data = null;
   try { data = await res.clone().json(); } catch {}
+
   if (!res.ok) {
     const details = data?.msg || data?.message || (await res.text());
     const err = new Error(details || `HTTP ${res.status}`);
@@ -99,22 +105,19 @@ const signedRequest = async (
   return fetchJson(url, init);
 };
 
-// ==== Endpoints v2 (Flexible Rate) ====
-// Tasas / límites por asset a pedir
+// ============== Endpoints v2 ==============
 export async function getLoanableDataV2({ apiBase = DEFAULT_API_BASE, loanCoin } = {}) {
   const params = {};
   if (loanCoin) params.loanCoin = loanCoin;
   return signedRequest(apiBase, '/sapi/v2/loan/flexible/loanable/data', params);
 }
 
-// LTVs / límites por colateral
 export async function getCollateralDataV2({ apiBase = DEFAULT_API_BASE, collateralCoin } = {}) {
   const params = {};
   if (collateralCoin) params.collateralCoin = collateralCoin;
   return signedRequest(apiBase, '/sapi/v2/loan/flexible/collateral/data', params);
 }
 
-// Préstamos activos (ongoing orders)
 export async function getOngoingLoans({ apiBase = DEFAULT_API_BASE, loanCoin, collateralCoin } = {}) {
   const params = {};
   if (loanCoin) params.loanCoin = loanCoin;
@@ -122,7 +125,31 @@ export async function getOngoingLoans({ apiBase = DEFAULT_API_BASE, loanCoin, co
   return signedRequest(apiBase, '/sapi/v2/loan/flexible/ongoing/orders', params);
 }
 
-// ==== Transform combinado (loanable + collateral) para la UI ====
+// ============== Fallback por lotes para loanable ==============
+// Consulta loanable por loanCoin (USDT/USDC/FDUSD…) y combina resultados.
+// Secuencial, con pausa breve, para evitar picos de weight.
+async function getLoanableDataV2Batch({
+  apiBase = DEFAULT_API_BASE,
+  loanCoins = FALLBACK_LOAN_COINS,
+  perRequestDelayMs = 150,
+} = {}) {
+  const all = [];
+  for (const coin of loanCoins) {
+    try {
+      const payload = await getLoanableDataV2({ apiBase, loanCoin: coin });
+      const rows = normalizeArray(payload);
+      all.push(...rows);
+    } catch (e) {
+      console.warn(`[binance] fallback loanable(${coin}) falló: ${e?.message || e}`);
+    }
+    if (perRequestDelayMs > 0) {
+      await new Promise(r => setTimeout(r, perRequestDelayMs));
+    }
+  }
+  return all;
+}
+
+// ============== Transform (v2) ==============
 const transformV2 = (loanableRows = [], collateralRows = []) => {
   const ltvByTicker = {};
   const collateralLedger = {};
@@ -148,8 +175,9 @@ const transformV2 = (loanableRows = [], collateralRows = []) => {
   normalizeArray(loanableRows).forEach((row) => {
     const loanCoin = String(row?.loanCoin).toUpperCase();
     if (!loanCoin) return;
-    const hourly = parseNumber(row?.flexibleInterestRate); // por HORA
-    const annual = hourly != null ? hourly * 24 * 365 : null;
+
+    const hourly = parseNumber(row?.flexibleInterestRate); // por hora
+    const annual = annualFromHourly(hourly);
 
     borrowRates[loanCoin] = {
       label: loanCoin,
@@ -180,7 +208,7 @@ const transformV2 = (loanableRows = [], collateralRows = []) => {
   return { ltvByTicker, borrowRates, loanLedger, collateralLedger };
 };
 
-// ==== Snapshot combinado para la UI (loanable + collateral) ====
+// ============== Snapshot combinado con tolerancia a fallos ==============
 export const fetchBinanceLoanSnapshot = async ({
   apiBase = DEFAULT_API_BASE,
   loanCoin,
@@ -188,32 +216,68 @@ export const fetchBinanceLoanSnapshot = async ({
 } = {}) => {
   ensureCredentials();
 
+  // Sincronizar reloj
   const serverTime = await fetchServerTime(apiBase);
   const clockSkew = serverTime - Date.now();
   const requestOptions = { recvWindow: DEFAULT_RECV_WINDOW, timestamp: Date.now() + clockSkew };
 
-  const [loanablePayload, collateralPayload] = await Promise.all([
+  // 1) Intento normal en paralelo
+  const [loanableP, collateralP] = [
     signedRequest(apiBase, '/sapi/v2/loan/flexible/loanable/data', loanCoin ? { loanCoin } : {}, requestOptions),
     signedRequest(apiBase, '/sapi/v2/loan/flexible/collateral/data', collateralCoin ? { collateralCoin } : {}, requestOptions),
-  ]);
+  ];
+  const [loanableSet, collateralSet] = await Promise.allSettled([loanableP, collateralP]);
 
-  const loanableRows = normalizeArray(loanablePayload);
-  const collateralRows = normalizeArray(collateralPayload);
-  const transformed = transformV2(loanableRows, collateralRows);
+  let loanableRows = loanableSet.status === 'fulfilled' ? normalizeArray(loanableSet.value) : null;
+  let collateralRows = collateralSet.status === 'fulfilled' ? normalizeArray(collateralSet.value) : [];
+
+  const metadata = {
+    endpointsTried: {
+      loanable: '/sapi/v2/loan/flexible/loanable/data',
+      collateral: '/sapi/v2/loan/flexible/collateral/data',
+    },
+    fallback: {
+      usedBatchForLoanable: false,
+      batchCoins: [],
+      loanableFailed: loanableSet.status !== 'fulfilled',
+      collateralFailed: collateralSet.status !== 'fulfilled',
+    },
+    requestParams: { loanCoin: loanCoin || null, collateralCoin: collateralCoin || null },
+  };
+
+  // 2) Si loanable falló o vino vacío → fallback por lotes (USDT/USDC/FDUSD)
+  if (!loanableRows || loanableRows.length === 0) {
+    try {
+      const batchRows = await getLoanableDataV2Batch({ apiBase, loanCoins: FALLBACK_LOAN_COINS });
+      if (batchRows.length > 0) {
+        loanableRows = batchRows;
+        metadata.fallback.usedBatchForLoanable = true;
+        metadata.fallback.batchCoins = FALLBACK_LOAN_COINS;
+      }
+    } catch (e) {
+      console.warn('[binance] fallback batch total falló:', e?.message || e);
+    }
+  }
+
+  // 3) Transform y salida
+  const transformed = transformV2(loanableRows || [], collateralRows || []);
+  const usedFallback = metadata.fallback.usedBatchForLoanable || metadata.fallback.loanableFailed;
 
   return {
     source: 'binance_flexible_v2',
     fetchedAt: new Date().toISOString(),
     serverTime,
     clockSkew,
-    rowCount: { loanable: loanableRows.length, collateral: collateralRows.length },
+    rowCount: {
+      loanable: (loanableRows || []).length,
+      collateral: (collateralRows || []).length,
+    },
     config: transformed,
     metadata: {
-      endpoints: {
-        loanable: '/sapi/v2/loan/flexible/loanable/data',
-        collateral: '/sapi/v2/loan/flexible/collateral/data',
-      },
-      requestParams: { loanCoin, collateralCoin },
+      ...metadata,
+      notes: usedFallback
+        ? 'Snapshot construido con fallback parcial para loanable.'
+        : 'Snapshot construido con loanable+collateral normales.',
     },
   };
 };
