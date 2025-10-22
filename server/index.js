@@ -2,16 +2,15 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import {
-  syncServerTime,
   getOngoingLoans,
-  getBorrowHistory,
-  getLoanableData,
-  getCollateralData,
+  getLoanableDataV2,
+  getCollateralDataV2,
+  fetchBinanceLoanSnapshot,
 } from './binanceClient.js';
 
 const app = express();
 
-// Allowlist CORS desde env (separa por comas si agregás más)
+// CORS: define origins permitidos (separa por comas si sumás otros)
 const allow = (process.env.ALLOWED_ORIGINS || 'https://siberianok.github.io')
   .split(',')
   .map((s) => s.trim())
@@ -27,6 +26,7 @@ app.use(
   })
 );
 
+// Healthcheck
 app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
@@ -35,6 +35,7 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+// Helper de errores con mensajes claros para tu UI
 function handleError(res, err) {
   const msg = String(err?.message || 'Unknown error');
 
@@ -45,7 +46,6 @@ function handleError(res, err) {
       hint: 'Despliega el backend en EU (Frankfurt) o Singapore.',
     });
   }
-
   if (/deprecated/i.test(msg)) {
     return res.status(410).json({
       error: 'binance_sync_failed',
@@ -53,7 +53,6 @@ function handleError(res, err) {
       hint: 'Actualiza a /sapi/v2/loan/flexible/... en el cliente/servidor.',
     });
   }
-
   return res.status(err?.status || 502).json({
     error: 'binance_sync_failed',
     message: msg,
@@ -61,44 +60,52 @@ function handleError(res, err) {
   });
 }
 
-app.get('/api/binance/loans', async (_req, res) => {
+// Loans activos (v2)
+app.get('/api/binance/loans', async (req, res) => {
   try {
-    const data = await getOngoingLoans();
+    const { loanCoin, collateralCoin } = req.query;
+    const data = await getOngoingLoans({ loanCoin, collateralCoin });
     res.json(data);
   } catch (err) {
     handleError(res, err);
   }
 });
 
-app.get('/api/binance/loans/history', async (_req, res) => {
+// Loanable (tasas y límites) v2
+app.get('/api/binance/loanable', async (req, res) => {
   try {
-    const data = await getBorrowHistory();
+    const { loanCoin } = req.query;
+    const data = await getLoanableDataV2({ loanCoin });
     res.json(data);
   } catch (err) {
     handleError(res, err);
   }
 });
 
-app.get('/api/binance/loanable', async (_req, res) => {
+// Collateral (LTVs y límites) v2
+app.get('/api/binance/collateral', async (req, res) => {
   try {
-    const data = await getLoanableData();
+    const { collateralCoin } = req.query;
+    const data = await getCollateralDataV2({ collateralCoin });
     res.json(data);
   } catch (err) {
     handleError(res, err);
   }
 });
 
-app.get('/api/binance/collateral', async (_req, res) => {
+// Snapshot combinado para tu UI (loanable + collateral + transform)
+app.get('/api/binance/snapshot', async (req, res) => {
   try {
-    const data = await getCollateralData();
+    const { loanCoin, collateralCoin } = req.query;
+    const data = await fetchBinanceLoanSnapshot({ loanCoin, collateralCoin });
     res.json(data);
   } catch (err) {
     handleError(res, err);
   }
 });
 
+// Arranque
 const port = process.env.PORT || 10000;
-syncServerTime().catch(() => {});
 app.listen(port, () => {
   console.log(`Servidor iniciado en http://localhost:${port}`);
 });
