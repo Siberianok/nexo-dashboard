@@ -59,8 +59,9 @@ app.get('/', (_req, res) => {
 });
 
 /* =================== Config interna (sin env) =================== */
-const REQUEST_TIMEOUT_MS  = 12000;   // corte duro si Binance cuelga (12s)
-const CACHE_TTL_MS        = 60000;   // consideramos fresco por 60s
+// AUMENTAMOS el timeout total para permitir que loanable/collateral completen
+const REQUEST_TIMEOUT_MS  = 35000;   // 35s total (antes 12s)
+const CACHE_TTL_MS        = 60000;   // fresco por 60s
 const COOLDOWN_DEFAULT_MS = 120000;  // 2 min de freno si 429/418/-1003
 
 // Estado en memoria
@@ -117,7 +118,6 @@ async function ensureWarmCache() {
   return !!CACHE.data;
 }
 
-// decide si conviene refrescar ya mismo (en background)
 function shouldRefresh(now) {
   if (now < BAN_UNTIL_MS) return false;              // en cooldown, no pegar
   if (INFLIGHT) return false;                         // ya hay fetch en curso
