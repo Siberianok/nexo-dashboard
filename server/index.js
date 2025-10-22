@@ -3,18 +3,18 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import {
-  fetchBinanceLoanSnapshot, // snapshot combinado (loanable + collateral) para la UI
-  getOngoingLoans,          // posiciones activas (ongoing orders v2)
-  getLoanableDataV2,        // tasas/límites por asset a pedir
-  getCollateralDataV2       // LTVs/límites por colateral
+  fetchBinanceLoanSnapshot, // snapshot de parámetros (APR/LTV/limits)
+  getOngoingLoans,          // posiciones activas
+  getLoanableDataV2,
+  getCollateralDataV2
 } from './binanceClient.js';
 
 const app = express();
 
-// ===== CORS (lee ALLOWED_ORIGINS, separado por comas) =====
+// ===== CORS =====
 const allow = (process.env.ALLOWED_ORIGINS || 'https://siberianok.github.io,https://nexo-dashboard.onrender.com')
   .split(',')
-  .map(s => s.trim().replace(/\/$/, '')) // normaliza (sin barra final)
+  .map(s => s.trim().replace(/\/$/, ''))
   .filter(Boolean);
 
 app.use(cors({
@@ -26,28 +26,29 @@ app.use(cors({
   },
 }));
 
-// ===== Logging simple de latencias =====
+// ===== Logging simple =====
 app.use((req, res, next) => {
   const t0 = Date.now();
-  res.on('finish', () => {
-    console.log(`${req.method} ${req.originalUrl} -> ${res.statusCode} in ${Date.now() - t0}ms`);
-  });
+  res.on('finish', () => console.log(`${req.method} ${req.originalUrl} -> ${res.statusCode} in ${Date.now() - t0}ms`));
   next();
 });
 
-// ===== Healthcheck =====
+// ===== Health =====
 app.get('/api/health', (_req, res) => {
-  res.json({
-    ok: true,
-    ts: Date.now(),
-    region: process.env.RENDER_REGION || null,
-  });
+  res.json({ ok: true, ts: Date.now(), region: process.env.RENDER_REGION || null });
 });
 
-// ===== Manejo estándar de errores de Binance =====
+// ===== Errores “lindos” =====
 function handleError(res, err) {
   const msg = String(err?.message || 'Unknown error');
 
+  // Rate limit / ban
+  if (err?.code === -1003 || /IP banned|too much request weight|429/i.test(msg)) {
+    return res.status(429).json({
+      error: 'binance_rate_limited',
+      message: msg,
+    });
+  }
   if (/restricted location/i.test(msg)) {
     return res.status(503).json({
       error: 'binance_sync_failed',
@@ -59,35 +60,47 @@ function handleError(res, err) {
     return res.status(410).json({
       error: 'binance_sync_failed',
       message: 'Endpoint retirado por Binance. Usa SAPI v2.',
-      hint: 'Actualiza a /sapi/v2/loan/flexible/... en el cliente/servidor.',
     });
   }
-  return res.status(err?.status || 502).json({
-    error: 'binance_sync_failed',
-    message: msg,
-    binance: err?.binance ?? undefined,
-  });
+  return res.status(err?.status || 502).json({ error: 'binance_sync_failed', message: msg, binance: err?.binance ?? undefined });
 }
 
-// ===== helper timeout total p/ snapshot =====
+// ===== Cache & dedupe para snapshot =====
 const SNAPSHOT_TIMEOUT_MS = Number(process.env.SNAPSHOT_TIMEOUT_MS || 12000) || 12000;
+const SNAPSHOT_CACHE_TTL_MS = Number(process.env.SNAPSHOT_CACHE_TTL_MS || 60000) || 60000;
+
+let SNAPSHOT_CACHE = { ts: 0, data: null, inflight: null };
+
 const withTimeout = (promise, ms) =>
-  Promise.race([
-    promise,
-    new Promise((_, rej) => setTimeout(() => rej(new Error(`upstream timeout after ${ms}ms`)), ms)),
-  ]);
+  Promise.race([ promise, new Promise((_, rej) => setTimeout(() => rej(new Error(`upstream timeout after ${ms}ms`)), ms)) ]);
 
-// ===== Rutas de negocio =====
+async function getSnapshotCached(params) {
+  const now = Date.now();
+  if (SNAPSHOT_CACHE.data && now - SNAPSHOT_CACHE.ts < SNAPSHOT_CACHE_TTL_MS) {
+    return { ...SNAPSHOT_CACHE.data, cached: true };
+  }
+  if (SNAPSHOT_CACHE.inflight) {
+    return SNAPSHOT_CACHE.inflight; // dedupe: reusar la misma promesa
+  }
+  SNAPSHOT_CACHE.inflight = (async () => {
+    try {
+      const data = await withTimeout(fetchBinanceLoanSnapshot(params), SNAPSHOT_TIMEOUT_MS);
+      SNAPSHOT_CACHE = { ts: Date.now(), data, inflight: null };
+      return data;
+    } finally {
+      SNAPSHOT_CACHE.inflight = null;
+    }
+  })();
+  return SNAPSHOT_CACHE.inflight;
+}
 
-// IMPORTANTE: ahora /api/binance/loans devuelve el SNAPSHOT v2 (parámetros de mercado)
-// para que el simulador cuadre APR/LTV/limits como la web de Binance.
+// ===== Rutas =====
+
+// IMPORTANTE: ahora /api/binance/loans devuelve snapshot v2 (parámetros de mercado)
 app.get('/api/binance/loans', async (req, res) => {
   try {
     const { loanCoin, collateralCoin } = req.query;
-    const data = await withTimeout(
-      fetchBinanceLoanSnapshot({ loanCoin, collateralCoin }),
-      SNAPSHOT_TIMEOUT_MS
-    );
+    const data = await getSnapshotCached({ loanCoin, collateralCoin });
     res.json(data);
   } catch (err) {
     const msg = String(err?.message || '');
@@ -98,7 +111,7 @@ app.get('/api/binance/loans', async (req, res) => {
   }
 });
 
-// Posiciones activas (ongoing orders v2) — deuda/LTV actual
+// Posiciones activas (ongoing orders v2)
 app.get('/api/binance/positions', async (req, res) => {
   try {
     const { loanCoin, collateralCoin } = req.query;
@@ -109,7 +122,7 @@ app.get('/api/binance/positions', async (req, res) => {
   }
 });
 
-// Loanable (tasas/límites por asset a pedir)
+// Loanable
 app.get('/api/binance/loanable', async (req, res) => {
   try {
     const { loanCoin } = req.query;
@@ -120,7 +133,7 @@ app.get('/api/binance/loanable', async (req, res) => {
   }
 });
 
-// Collateral (LTVs/límites por colateral)
+// Collateral
 app.get('/api/binance/collateral', async (req, res) => {
   try {
     const { collateralCoin } = req.query;
@@ -131,14 +144,11 @@ app.get('/api/binance/collateral', async (req, res) => {
   }
 });
 
-// Snapshot explícito (idéntico a /api/binance/loans; queda por claridad)
+// Snapshot explícito (igual que /loans)
 app.get('/api/binance/snapshot', async (req, res) => {
   try {
     const { loanCoin, collateralCoin } = req.query;
-    const data = await withTimeout(
-      fetchBinanceLoanSnapshot({ loanCoin, collateralCoin }),
-      SNAPSHOT_TIMEOUT_MS
-    );
+    const data = await getSnapshotCached({ loanCoin, collateralCoin });
     res.json(data);
   } catch (err) {
     const msg = String(err?.message || '');
@@ -149,8 +159,5 @@ app.get('/api/binance/snapshot', async (req, res) => {
   }
 });
 
-// ===== Arranque del servidor =====
-const port = process.env.PORT || 10000; // Render inyecta PORT
-app.listen(port, () => {
-  console.log(`Servidor iniciado en http://localhost:${port}`);
-});
+const port = process.env.PORT || 10000;
+app.listen(port, () => console.log(`Servidor iniciado en http://localhost:${port}`));
