@@ -1,0 +1,21 @@
+{
+  "source": "seed_snapshot",
+  "fetchedAt": "2025-10-22T00:00:00.000Z",
+  "serverTime": 0,
+  "clockSkew": 0,
+  "rowCount": { "loanable": 0, "collateral": 0 },
+  "config": {
+    "ltvByTicker": {},
+    "borrowRates": {},
+    "loanLedger": {},
+    "collateralLedger": {}
+  },
+  "metadata": {
+    "endpoints": {
+      "loanable": "/sapi/v2/loan/flexible/loanable/data",
+      "collateral": "/sapi/v2/loan/flexible/collateral/data"
+    },
+    "requestParams": {}
+  },
+  "__source": "seed"
+}
