@@ -1,15 +1,7 @@
 {
   "name": "nexo-dashboard",
   "version": "1.0.0",
-  "description": "Simulador de préstamos con sincronización de parámetros Binance",
+  "description": "Simulador de préstamos con presets CeFi y calculadora de Earn",
   "type": "module",
-  "scripts": {
-    "dev": "node server/index.js",
-    "start": "node server/index.js"
-  },
-  "dependencies": {
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "node-fetch": "^3.3.2"
-  }
+  "private": true
 }
