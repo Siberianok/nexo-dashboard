@@ -5195,6 +5195,9 @@
               ? ledgerEntry.collateralAmount
               : null;
             const collateralQtyForCalc = ledgerCollateralAmount != null ? ledgerCollateralAmount : qty;
+            const initialLtv = Number.isFinite(ledgerEntry?.initialLtv) && ledgerEntry.initialLtv > 0
+              ? ledgerEntry.initialLtv
+              : policyLTV;
             const ledgerBorrowIndexPrice = Number.isFinite(ledgerEntry?.borrowIndexPrice) && ledgerEntry.borrowIndexPrice > 0
               ? ledgerEntry.borrowIndexPrice
               : 1;
