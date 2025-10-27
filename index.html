@@ -1169,6 +1169,29 @@
     };
     const BINANCE_BASELINE_ENDPOINT = resolveBinanceBaselineEndpoint();
     const BINANCE_BASELINE_REFRESH_MS = 15 * 60 * 1000;
+    let didWarnPairApr = false;
+    const computeNetAprForPair = (loanCoin, collateralCoin, ltvCurrent) => {
+      const loanKey = typeof loanCoin === 'string' ? loanCoin.trim().toUpperCase() : '';
+      const collateralKey = typeof collateralCoin === 'string' ? collateralCoin.trim().toUpperCase() : '';
+      const ltvValue = Number(ltvCurrent);
+      if (!loanKey || !collateralKey || !Number.isFinite(ltvValue) || ltvValue <= 0) {
+        return null;
+      }
+      const globalSim = (typeof window !== 'undefined' ? window.__nexoSim : (typeof globalThis !== 'undefined' ? globalThis.__nexoSim : null)) || null;
+      const computeFn = globalSim && typeof globalSim.computePairNetAPR === 'function' ? globalSim.computePairNetAPR : null;
+      if (!computeFn) return null;
+      try {
+        const result = computeFn({ loanCoin: loanKey, collateralCoin: collateralKey, ltvCurrent: ltvValue });
+        const value = Number(result);
+        return Number.isFinite(value) ? value : null;
+      } catch (error) {
+        if (!didWarnPairApr) {
+          console.warn('No se pudo calcular computePairNetAPR:', error);
+          didWarnPairApr = true;
+        }
+        return null;
+      }
+    };
     const shallowEqual = (a, b) => {
       if (a === b) return true;
       if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
@@ -2779,6 +2802,8 @@
           const safeHourly = Number.isFinite(hourly) ? hourly : annualToHourly(safeAnnual);
           const netAnnualRaw = Number(info.netAnnual);
           const adjustmentRaw = Number(info.adjustmentAnnual);
+          const vipAnnualRaw = Number(info.vipAnnual);
+          const safeVipAnnual = Number.isFinite(vipAnnualRaw) && vipAnnualRaw >= 0 ? vipAnnualRaw : null;
           const safeAdjustment = Number.isFinite(adjustmentRaw)
             ? adjustmentRaw
             : (Number.isFinite(netAnnualRaw) ? safeAnnual - netAnnualRaw : 0);
@@ -2793,6 +2818,7 @@
             netAnnual: safeNetAnnual,
             netHourly: safeNetHourly,
             adjustmentAnnual: safeAdjustment,
+            vipAnnual: safeVipAnnual,
           };
           return acc;
         }, {});
@@ -3466,13 +3492,19 @@
             const rowNetAnnual = parseNullable(row?.netAnnualInterestRate ?? row?.netAnnualRate ?? row?.netApr ?? row?.netInterestRate);
             const rowNetHourly = parseNullable(row?.netHourlyInterestRate ?? row?.netHourlyRate ?? row?.netRate);
             const rowCollateralApr = parseNullable(row?.collateralApr ?? row?.collateralAPR ?? row?.collateralAnnualRate ?? row?.collateralApy ?? row?.simpleEarnAPR ?? row?.earnApr);
-            const borrowEntry = borrowAprByLoan[loanCoin] || {};
-            const borrowApr = Number.isFinite(rowAnnual)
-              ? rowAnnual
-              : (Number.isFinite(borrowEntry.annual) ? borrowEntry.annual : 0);
+            const liveBorrowEntry = borrowAprByLoan[loanCoin] || {};
+            const borrowRateSnapshot = borrowRatesByTicker[loanCoin] || {};
+            const borrowApr = Number.isFinite(borrowRateSnapshot.annual) && borrowRateSnapshot.annual >= 0
+              ? borrowRateSnapshot.annual
+              : (Number.isFinite(rowAnnual)
+                ? rowAnnual
+                : (Number.isFinite(liveBorrowEntry.annual) ? liveBorrowEntry.annual : null));
             const borrowHourly = Number.isFinite(rowHourly)
               ? rowHourly
-              : (Number.isFinite(borrowEntry.hourly) ? borrowEntry.hourly : annualToHourly(borrowApr));
+              : (Number.isFinite(liveBorrowEntry.hourly)
+                ? liveBorrowEntry.hourly
+                : (Number.isFinite(borrowApr) ? annualToHourly(borrowApr) : null));
+            const vipAnnual = Number.isFinite(borrowRateSnapshot.vipAnnual) ? borrowRateSnapshot.vipAnnual : null;
             const collateralAprEntry = collateralAprMap[collateralCoin] || {};
             const collateralApr = Number.isFinite(rowCollateralApr)
               ? rowCollateralApr
@@ -3506,31 +3538,52 @@
             const ltvComputed = Number.isFinite(currentLtvApi) && currentLtvApi > 0
               ? currentLtvApi
               : (collateralUsd && collateralUsd > 0 ? borrowUsd / collateralUsd : null);
-            const ltvForNet = Number.isFinite(ltvComputed) && ltvComputed > 0
+            const ltvCurrent = Number.isFinite(ltvComputed) && ltvComputed > 0
               ? ltvComputed
               : (Number.isFinite(initialLtv) && initialLtv > 0 ? initialLtv : null);
-            const netApr = Number.isFinite(rowNetAnnual)
+            const netAprSim = computeNetAprForPair(loanCoin, collateralCoin, ltvCurrent);
+            const fallbackNetApr = Number.isFinite(borrowApr)
+              ? (borrowApr - (Number.isFinite(collateralApr) && Number.isFinite(ltvCurrent) && ltvCurrent > 0 ? (collateralApr / ltvCurrent) : 0))
+              : null;
+            const netAprRaw = Number.isFinite(rowNetAnnual)
               ? rowNetAnnual
-              : (Number.isFinite(borrowApr)
-                ? (borrowApr - (Number.isFinite(collateralApr) && Number.isFinite(ltvForNet) && ltvForNet > 0 ? (collateralApr / ltvForNet) : 0))
-                : null);
+              : (Number.isFinite(borrowRateSnapshot.netAnnual)
+                ? borrowRateSnapshot.netAnnual
+                : fallbackNetApr);
+            const netApr = Number.isFinite(netAprSim) ? netAprSim : (Number.isFinite(netAprRaw) ? netAprRaw : null);
             const aprOffset = Number.isFinite(borrowApr) && Number.isFinite(netApr) ? borrowApr - netApr : null;
             const netHourly = Number.isFinite(rowNetHourly)
               ? rowNetHourly
               : (Number.isFinite(netApr) ? annualToHourly(netApr) : null);
             const collateralQty = collateralAmount > 0 ? collateralAmount : parseNumber(row?.collateralQty);
             const rowLiquidationPrice = parseNullable(row?.liquidationPrice ?? row?.liquidationPriceUsd);
-            const liquidationPrice = Number.isFinite(rowLiquidationPrice) && rowLiquidationPrice > 0
-              ? rowLiquidationPrice
-              : (Number.isFinite(liquidation) && liquidation > 0 && collateralQty > 0
-                ? (borrowIndexPrice * totalDebt) / (liquidation * collateralQty)
-                : null);
+            const liquidationPriceFormula = Number.isFinite(liquidation) && liquidation > 0 && collateralQty > 0 && Number.isFinite(borrowUsd) && borrowUsd > 0
+              ? borrowUsd / (collateralQty * liquidation)
+              : null;
+            const liquidationPrice = Number.isFinite(liquidationPriceFormula)
+              ? liquidationPriceFormula
+              : (Number.isFinite(rowLiquidationPrice) && rowLiquidationPrice > 0 ? rowLiquidationPrice : null);
             const rowMarginCallPrice = parseNullable(row?.marginCallPrice ?? row?.marginCallPriceUsd);
-            const marginCallPrice = Number.isFinite(rowMarginCallPrice) && rowMarginCallPrice > 0
-              ? rowMarginCallPrice
-              : (Number.isFinite(marginCall) && marginCall > 0 && collateralQty > 0
-                ? (borrowIndexPrice * totalDebt) / (marginCall * collateralQty)
-                : null);
+            const marginCallPriceFormula = Number.isFinite(marginCall) && marginCall > 0 && collateralQty > 0 && Number.isFinite(borrowUsd) && borrowUsd > 0
+              ? borrowUsd / (collateralQty * marginCall)
+              : null;
+            const marginCallPrice = Number.isFinite(marginCallPriceFormula)
+              ? marginCallPriceFormula
+              : (Number.isFinite(rowMarginCallPrice) && rowMarginCallPrice > 0 ? rowMarginCallPrice : null);
+            const collateralPriceForEtb = collateralIndexPrice != null
+              ? collateralIndexPrice
+              : (collateralAmount > 0 && Number.isFinite(collateralUsd) ? collateralUsd / collateralAmount : null);
+            const etb = Number.isFinite(initialLtv) && initialLtv > 0 && collateralQty > 0 && collateralPriceForEtb != null && Number.isFinite(borrowUsd)
+              ? Math.max(0, collateralQty * collateralPriceForEtb * initialLtv - borrowUsd)
+              : null;
+            const borrowAprValue = Number.isFinite(borrowApr) ? borrowApr : null;
+            const borrowHourlyValue = Number.isFinite(borrowHourly)
+              ? borrowHourly
+              : (Number.isFinite(borrowAprValue) ? annualToHourly(borrowAprValue) : null);
+            const netAprValue = Number.isFinite(netApr) ? netApr : null;
+            const netHourlyValue = Number.isFinite(netHourly)
+              ? netHourly
+              : (Number.isFinite(netAprValue) ? annualToHourly(netAprValue) : null);
             const createdTime = parseNumber(row?.createdTime ?? row?.createTime ?? row?.loanDate);
             return {
               loanCoin,
@@ -3539,8 +3592,8 @@
               borrowPrincipal,
               collateralAmount,
               interestAccrued,
-              borrowApr,
-              borrowHourly,
+              borrowApr: borrowAprValue,
+              borrowHourly: Number.isFinite(borrowHourlyValue) ? borrowHourlyValue : null,
               collateralApr,
               initialLtv,
               marginCallLtv: marginCall,
@@ -3550,11 +3603,14 @@
               borrowUsd,
               ltvComputed,
               currentLtvApi,
-              netApr,
+              ltvCurrent,
+              vipAnnual,
+              netApr: netAprValue,
               aprOffset,
-              netHourly,
+              netHourly: Number.isFinite(netHourlyValue) ? netHourlyValue : null,
               liquidationPrice,
               marginCallPrice,
+              etb,
               updatedAt: serverTime,
               createdTime,
             };
@@ -3584,6 +3640,7 @@
               interestAccrued: pos.interestAccrued,
               annualRate: pos.borrowApr,
               netAnnualRate: pos.netApr,
+              vipAnnualRate: Number.isFinite(pos.vipAnnual) ? pos.vipAnnual : null,
               liquidationLtv: pos.liquidationLtv,
               marginCallLtv: pos.marginCallLtv,
               liquidationPriceHint: pos.liquidationPrice,
@@ -3593,6 +3650,8 @@
               borrowIndexPrice: pos.indexPrices.borrow,
               collateralIndexPrice: pos.indexPrices.collateral,
               currentLtv: pos.ltvComputed ?? pos.currentLtvApi ?? null,
+              ltvCurrent: Number.isFinite(pos.ltvCurrent) ? pos.ltvCurrent : (pos.ltvComputed ?? pos.currentLtvApi ?? null),
+              etb: Number.isFinite(pos.etb) ? pos.etb : null,
               loanCoin: pos.loanCoin,
               lastUpdated: new Date(serverTime).toISOString().slice(0, 10),
               lastUpdatedTs: serverTime,
@@ -3659,7 +3718,7 @@
           }, BINANCE_INTEREST_REFRESH_MS);
           return null;
         }
-      }, [isBinance, params.binanceApiKey, params.binanceApiSecret, params.binanceBorrowTicker, assets, loanRequests, liveBorrowPositions, sanitizeTicker, resetBinanceTimer]);
+      }, [isBinance, params.binanceApiKey, params.binanceApiSecret, params.binanceBorrowTicker, assets, loanRequests, liveBorrowPositions, sanitizeTicker, resetBinanceTimer, borrowRatesByTicker]);
 
       useEffect(() => {
         if (!isBinance) {
@@ -4718,26 +4777,47 @@
               : (asset.value > 0 ? loanNetOutstanding / asset.value : 0);
             const earnApr = earnAprTop[ticker] ?? 0;
             const baseOffset = actualLtv > 0 ? earnApr / actualLtv : 0;
-            const borrowInfo = isBinance ? borrowRatesByTicker[ticker] || {} : {};
-            const annualApr = isBinance
-              ? (Number.isFinite(ledgerEntry?.annualRate) && ledgerEntry.annualRate > 0
-                ? ledgerEntry.annualRate
-                : (borrowInfo.annual ?? binanceBorrowAnnualRate))
+            const ledgerLoanCoin = isBinance ? sanitizeTicker(ledgerEntry?.loanCoin || '') : '';
+            const defaultLoanCoin = isBinance ? sanitizeTicker(params.binanceBorrowTicker || '') : '';
+            const loanCoinForRates = isBinance ? (ledgerLoanCoin || defaultLoanCoin || ticker) : '';
+            const borrowInfo = isBinance && loanCoinForRates ? borrowRatesByTicker[loanCoinForRates] || {} : {};
+            const annualAprRaw = isBinance
+              ? (Number.isFinite(borrowInfo.annual) && borrowInfo.annual >= 0
+                ? borrowInfo.annual
+                : (Number.isFinite(ledgerEntry?.annualRate) && ledgerEntry.annualRate > 0
+                  ? ledgerEntry.annualRate
+                  : binanceBorrowAnnualRate))
               : chosenAPR;
+            const annualApr = Number.isFinite(annualAprRaw) ? annualAprRaw : null;
+            const vipAnnual = isBinance
+              ? (Number.isFinite(borrowInfo.vipAnnual)
+                ? borrowInfo.vipAnnual
+                : (Number.isFinite(ledgerEntry?.vipAnnualRate) ? ledgerEntry.vipAnnualRate : null))
+              : null;
             const fallbackNetApr = Number.isFinite(annualApr) && Number.isFinite(policyLTV) && policyLTV > 0
               ? annualApr - (earnApr / policyLTV)
               : annualApr;
+            const netAprSim = isBinance ? computeNetAprForPair(loanCoinForRates, ticker, actualLtv) : null;
             const netAprRaw = isBinance
-              ? (Number.isFinite(ledgerEntry?.netAnnualRate)
-                ? ledgerEntry.netAnnualRate
-                : (Number.isFinite(borrowInfo.netAnnual)
-                  ? borrowInfo.netAnnual
-                  : (Number.isFinite(borrowInfo.annual) ? borrowInfo.annual : fallbackNetApr)))
-              : Math.max(0, chosenAPR - baseOffset);
+              ? (Number.isFinite(netAprSim)
+                ? netAprSim
+                : (Number.isFinite(ledgerEntry?.netAnnualRate)
+                  ? ledgerEntry.netAnnualRate
+                  : (Number.isFinite(borrowInfo.netAnnual)
+                    ? borrowInfo.netAnnual
+                    : fallbackNetApr)))
+              : Math.max(0, (Number.isFinite(chosenAPR) ? chosenAPR : 0) - baseOffset);
             const netApr = Number.isFinite(netAprRaw) ? netAprRaw : 0;
             const aprOffset = isBinance
               ? (Number.isFinite(annualApr) && Number.isFinite(netApr) ? annualApr - netApr : 0)
               : baseOffset;
+            const borrowUsdValue = borrowValueIndex;
+            const computedEtb = Number.isFinite(initialLtv) && initialLtv > 0 && collateralQtyForCalc > 0 && Number.isFinite(ledgerCollateralIndexPrice)
+              ? Math.max(0, collateralQtyForCalc * ledgerCollateralIndexPrice * initialLtv - borrowUsdValue)
+              : null;
+            const etb = Number.isFinite(computedEtb)
+              ? computedEtb
+              : (Number.isFinite(ledgerEntry?.etb) ? ledgerEntry.etb : null);
             let tone = "ok";
             if (isBinance) {
               const warnCut = ltvHealthyThreshold || 0;
@@ -4807,6 +4887,7 @@
               netApr,
               tone,
               annualApr,
+              vipAnnual,
               ledger: ledgerEntry ? { ...ledgerEntry, payments: Array.isArray(ledgerEntry.payments) ? ledgerEntry.payments.map((p) => ({ ...p })) : [] } : null,
               paidTotal,
               interestAccrued,
@@ -4829,6 +4910,8 @@
               collateralIndexPrice: ledgerCollateralIndexPrice,
               indexCollateralValue: collateralIndexValue,
               ltvFromApi: Number.isFinite(ledgerEntry?.currentLtv) ? ledgerEntry.currentLtv : null,
+              loanCoin: loanCoinForRates || null,
+              etb,
             };
           })
           .sort((a, b) => b.value - a.value);
@@ -4869,7 +4952,7 @@
           weightedAprOffset,
           weightedNetApr,
         };
-      }, [autoRepayLtv, binanceBorrowAdjustment, binanceBorrowNetAnnualRate, binanceOutstandingRatio, binanceLoanLedger, binanceLedgerOutstandingTotal, borrowRatesByTicker, cashflowDerived?.outstandingByTicker, defaultLtv, earnAprTop, isBinance, loanAmount, loanRequestsTotals, manualLoanAllocationEnabled, marginCallLtv, plannedOverallLTV, plannedOutstanding, plannedOutstandingPrincipal, totals.totalCollateralValue, totals.withValue, ltvByTicker, ltvHealthyThreshold, ltvWarnThreshold]);
+      }, [autoRepayLtv, binanceBorrowAdjustment, binanceBorrowNetAnnualRate, binanceOutstandingRatio, binanceLoanLedger, binanceLedgerOutstandingTotal, borrowRatesByTicker, cashflowDerived?.outstandingByTicker, defaultLtv, earnAprTop, isBinance, loanAmount, loanRequestsTotals, manualLoanAllocationEnabled, marginCallLtv, plannedOverallLTV, plannedOutstanding, plannedOutstandingPrincipal, totals.totalCollateralValue, totals.withValue, ltvByTicker, ltvHealthyThreshold, ltvWarnThreshold, params.binanceBorrowTicker]);
 
       const binanceNetAprOffset = isBinance ? Math.max(0, collateralBreakdown.weightedAprOffset || 0) : 0;
       const binanceBaseAnnualRate = isBinance ? binanceBorrowAnnualRate : chosenAPR;
@@ -7057,8 +7140,16 @@
       const tickerUpper = (item.ticker || '').toUpperCase();
       const highlightEtbDetails = tickerUpper === 'ADA' || tickerUpper === 'ALGO';
       const usagePct = item.policyLTV > 0 ? Math.min(100, (item.actualLtv / item.policyLTV) * 100) : Math.min(100, item.actualLtv * 100);
-      const annualApr = Number.isFinite(item.annualApr) ? item.annualApr : chosenAPR;
-      const netTone = item.netApr < 0 ? 'text-emerald-600' : item.netApr <= annualApr ? 'text-neutral-900' : 'text-amber-600';
+      const annualAprValue = Number.isFinite(item.annualApr) ? item.annualApr : (Number.isFinite(chosenAPR) ? chosenAPR : null);
+      const vipApr = Number.isFinite(item.vipAnnual) ? item.vipAnnual : (Number.isFinite(item.vipAnnualRate) ? item.vipAnnualRate : null);
+      const netAprValue = Number.isFinite(item.netApr) ? item.netApr : null;
+      const netTone = netAprValue != null && netAprValue < 0
+        ? 'text-emerald-600'
+        : netAprValue != null && annualAprValue != null && netAprValue <= annualAprValue
+          ? 'text-neutral-900'
+          : netAprValue != null
+            ? 'text-amber-600'
+            : 'text-neutral-400';
       const ledger = item.ledger || {};
       const interestAccrued = Number.isFinite(item.interestAccrued) ? Math.max(0, item.interestAccrued) : 0;
       const interestLabel = interestAccrued > 0 ? formatLoan(interestAccrued) : '—';
@@ -7081,12 +7172,16 @@
       const showLtvDrift = ltvDrift != null && Math.abs(ltvDrift) >= 0.0005;
       const borrowDate = ledger.borrowDate;
       const lastUpdated = ledger.lastUpdated;
+      const loanCoin = item.loanCoin || ledger.loanCoin || null;
+      const etbValue = Number.isFinite(item.etb) ? item.etb : (Number.isFinite(ledger.etb) ? ledger.etb : null);
+      const allocatedLoanLabel = formatLoan(item.allocatedLoan);
+      const etbLabel = etbValue != null ? formatLoan(etbValue) : '—';
       return (
         <div className="nx-card-secondary p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-neutral-900">{item.name}</div>
-              <div className="text-xs text-neutral-500">{item.ticker || '—'}</div>
+              <div className="text-xs text-neutral-500">{item.ticker || '—'}{loanCoin ? ` · préstamo ${loanCoin}` : ''}</div>
             </div>
             <span className={`rounded-full px-2 py-1 text-xs font-semibold ${toneBadge[item.tone] || toneBadge.ok}`}>
               {item.tone === 'ok' ? 'Sano' : item.tone === 'warn' ? 'Vigilar' : 'Riesgo'}
@@ -7100,7 +7195,10 @@
               </div>
               <div>
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">{highlightEtbDetails ? 'ETB neto asignado' : 'Préstamo & flujos'}</div>
-                <div className="text-sm font-semibold text-neutral-800">{formatLoan(item.allocatedLoan)}</div>
+                <div className="text-sm font-semibold text-neutral-800">{highlightEtbDetails ? etbLabel : allocatedLoanLabel}</div>
+                {highlightEtbDetails && (
+                  <div className="text-[10px] text-neutral-500">Préstamo vigente {allocatedLoanLabel}</div>
+                )}
                 <div className="text-[10px] text-neutral-500">Interés devengado {interestLabel}</div>
               </div>
             </div>
@@ -7120,7 +7218,13 @@
               <div className="space-y-2">
                 <div>
                   <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Tasa anual (APR)</div>
-                  <div className="text-sm font-semibold text-neutral-800">{formatPercent(annualApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  <div className="text-sm font-semibold text-neutral-800">{annualAprValue != null ? formatPercent(annualAprValue, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</div>
+                  {vipApr != null && (
+                    <div className="mt-1">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">APR VIP</div>
+                      <div className="text-sm font-semibold text-neutral-800">{formatPercent(vipApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Parámetros de liquidación</div>
@@ -7152,7 +7256,7 @@
           </div>
           <div className="mt-3">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Tasa anual neta</div>
-            <div className={`text-base font-semibold ${netTone}`}>{formatPercent(item.netApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div className={`text-base font-semibold ${netTone}`}>{netAprValue != null ? formatPercent(netAprValue, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</div>
             {(borrowDate || lastUpdated) && (
               <div className="mt-1 text-[10px] text-neutral-500">
                 {borrowDate && <div>Inicio préstamo: {borrowDate}</div>}
