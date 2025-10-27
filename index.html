@@ -14,52 +14,115 @@
   (function () {
     const DEFAULT_BACKEND = 'https://nexo-dashboard.onrender.com'; // <— TU servicio
     const API_PREFIX = '/api/binance/';
+    const STATIC_PREFIX = './api/binance/';
+    const MODE_KEY = 'spm_binanceShimMode';
+    const ENDPOINT_KEY = 'spm_binanceBaselineEndpoint';
 
-    // Permite override por query param (útil para debug) o por localStorage
-    const url = new URL(location.href);
-    const q = url.searchParams.get('binanceApiEndpoint');
-    const saved = localStorage.getItem('spm_binanceBaselineEndpoint');
+    const safeGetItem = (key) => {
+      try { return localStorage.getItem(key); }
+      catch (_) { return null; }
+    };
+    const safeSetItem = (key, value) => {
+      try { localStorage.setItem(key, value); }
+      catch (_) {}
+    };
 
-    // Si viene por query param, lo persistimos
-    if (q) localStorage.setItem('spm_binanceBaselineEndpoint', q);
+    const resolveShimMode = () => {
+      const href = new URL(location.href);
+      const queryMode = (href.searchParams.get('binanceShimMode') || '').trim().toLowerCase();
+      if (queryMode === 'static' || queryMode === 'remote') {
+        safeSetItem(MODE_KEY, queryMode);
+        return queryMode;
+      }
+      const stored = (safeGetItem(MODE_KEY) || '').trim().toLowerCase();
+      if (stored === 'static' || stored === 'remote') return stored;
+      if (location.protocol === 'file:') return 'static';
+      if (/github\.io$/i.test(location.hostname)) return 'static';
+      return 'remote';
+    };
 
-    // Endpoint base final (si no hay saved/param, usamos backend + /api/binance/loans)
-    // Nota: /api/binance/loans ahora entrega el snapshot v2 (APR/LTV/etc.)
-    const defaultEndpoint = DEFAULT_BACKEND + '/api/binance/loans';
-    const BASELINE_ENDPOINT = (q || saved || defaultEndpoint).replace(/\/$/, '');
+    const mode = resolveShimMode();
+    const isStaticMode = mode === 'static';
 
-    // Guardamos global para quien lo necesite
+    const resolveBaselineEndpoint = () => {
+      const href = new URL(location.href);
+      const queryOverride = (href.searchParams.get('binanceApiEndpoint') || '').trim();
+      if (queryOverride) {
+        safeSetItem(ENDPOINT_KEY, queryOverride);
+        return queryOverride;
+      }
+      const stored = (safeGetItem(ENDPOINT_KEY) || '').trim();
+      if (stored) return stored;
+      if (isStaticMode) {
+        return new URL(`${STATIC_PREFIX}loans`, window.location.href).toString().replace(/\/$/, '');
+      }
+      return `${DEFAULT_BACKEND}/api/binance/loans`;
+    };
+
+    const BASELINE_ENDPOINT = resolveBaselineEndpoint();
     window.__BINANCE_BASELINE_ENDPOINT__ = BASELINE_ENDPOINT;
 
-    // Monkey-patch de fetch: si el front pide '/api/binance/loans' (u otra /api/binance/*),
-    // lo traducimos a `${DEFAULT_BACKEND}/api/binance/...`
+    const modeLabel = isStaticMode ? 'modo estático (GitHub Pages)' : 'proxy remoto (Render)';
+    console.info(`[shim] Binance baseline shim activo → ${modeLabel}. Endpoint base: ${BASELINE_ENDPOINT}`);
+
     const _fetch = window.fetch.bind(window);
+
+    const toRequestUrl = (input) => {
+      if (typeof input === 'string') {
+        try { return new URL(input, window.location.href); }
+        catch (_) { return null; }
+      }
+      if (input && typeof input === 'object' && typeof input.url === 'string') {
+        try { return new URL(input.url, window.location.href); }
+        catch (_) { return null; }
+      }
+      return null;
+    };
+
+    const mapToStatic = (pathname, search) => {
+      const suffix = pathname.slice(API_PREFIX.length).replace(/^\//, '');
+      const base = new URL(STATIC_PREFIX, window.location.href);
+      const target = new URL(suffix || '.', base);
+      if (!/\.json$/i.test(target.pathname)) {
+        target.pathname = target.pathname.replace(/\/$/, '') + '.json';
+      }
+      if (search) target.search = search;
+      return target.toString();
+    };
+
+    const cloneInit = (input, init) => {
+      if (!input || typeof input !== 'object') return init;
+      return {
+        method: input.method,
+        headers: input.headers,
+        body: input.body,
+        mode: input.mode,
+        credentials: input.credentials,
+        cache: input.cache,
+        redirect: input.redirect,
+        referrer: input.referrer,
+        referrerPolicy: input.referrerPolicy,
+        integrity: input.integrity,
+        keepalive: input.keepalive,
+        signal: input.signal,
+        ...init,
+      };
+    };
+
     window.fetch = (input, init) => {
       try {
-        // input puede ser string o Request
-        let url = typeof input === 'string' ? input : (input && input.url) || '';
-        if (url.startsWith(API_PREFIX)) {
-          url = DEFAULT_BACKEND + url; // redirección transparente
-          if (typeof input === 'string') {
-            return _fetch(url, init);
-          } else {
-            // Si es un Request, creamos uno nuevo con la URL reescrita
-            const reqInit = {
-              method: input.method,
-              headers: input.headers,
-              body: input.body,
-              mode: 'cors',
-              credentials: input.credentials,
-              cache: input.cache,
-              redirect: input.redirect,
-              referrer: input.referrer,
-              referrerPolicy: input.referrerPolicy,
-              integrity: input.integrity,
-              keepalive: input.keepalive,
-              signal: input.signal
-            };
-            return _fetch(url, reqInit);
+        const requestUrl = toRequestUrl(input);
+        if (requestUrl && requestUrl.pathname.startsWith(API_PREFIX)) {
+          if (isStaticMode) {
+            const staticUrl = mapToStatic(requestUrl.pathname, requestUrl.search);
+            return typeof input === 'string'
+              ? _fetch(staticUrl, init)
+              : _fetch(staticUrl, cloneInit(input, init));
           }
+          const remoteUrl = `${DEFAULT_BACKEND}${requestUrl.pathname}${requestUrl.search}`;
+          return typeof input === 'string'
+            ? _fetch(remoteUrl, init)
+            : _fetch(remoteUrl, cloneInit(input, init));
         }
       } catch (_) {}
       return _fetch(input, init);
