@@ -69,6 +69,38 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <script type="application/json" id="sim-model-config">
+  {
+    "forceOn": true,
+    "refreshMs": 60000,
+    "timeoutMs": 8000,
+
+    "loanCoins": ["USDT","USDC","FDUSD","DAI","BUSD","TUSD","USDP"],
+
+    "collateralUniverseMode": "auto",
+    "universeMaxAssets": 180,
+    "skipAssets": ["USD","USDT","USDC","FDUSD","BUSD","DAI","TUSD","USDP","USDD"],
+
+    "baseAPR": { "USDT":0.08, "USDC":0.075, "FDUSD":0.09, "DAI":0.07, "BUSD":0.08, "TUSD":0.08, "USDP":0.075 },
+    "aprClamp": { "min": 0.02, "max": 0.30 },
+    "aprFundingAlpha": 0.55,
+    "fundingSymbols": ["BTCUSDT","ETHUSDT","BNBUSDT"],
+
+    "vip": { "level": 0, "discountBpsByLevel": { "0":0, "1":20, "2":40, "3":60, "4":80, "5":100, "6":110, "7":115, "8":120, "9":125 } },
+
+    "ltv": { "initClamp": { "min": 0.50, "max": 0.80 }, "mcStep": 0.07, "liqStep": 0.06, "liqCap": 0.93, "sigmaWindowH": 24, "sigmaK": 2.0 },
+
+    "netApr": { "ltvDivisor": "current", "nonNegative": true, "useVip": false },
+
+    "collateralYield": {
+      "ADA":  { "apr": 0.00, "source": "manual" },
+      "ALGO": { "apr": 0.00, "source": "manual" },
+      "WBETH":{ "apr": 0.032, "source": "manual" }
+    },
+
+    "assetOverrides": { }
+  }
+  </script>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     html,body{height:100%}
