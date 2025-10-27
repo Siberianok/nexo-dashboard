@@ -3,12 +3,39 @@
   "fetchedAt": "2025-10-22T00:00:00.000Z",
   "serverTime": 0,
   "clockSkew": 0,
-  "rowCount": { "loanable": 0, "collateral": 0 },
+  "rowCount": {
+    "loanable": 0,
+    "collateral": 0
+  },
   "config": {
     "ltvByTicker": {},
     "borrowRates": {},
     "loanLedger": {},
-    "collateralLedger": {}
+    "collateralLedger": {},
+    "knobs": {
+      "aprFundingAlpha": 0.7,
+      "aprClamp": {
+        "max": 0.35
+      },
+      "ltv": {
+        "sigmaK": 1.35,
+        "initClamp": {
+          "max": 0.78
+        }
+      },
+      "assetOverrides": {
+        "ADA": {
+          "liqBias": -0.015
+        },
+        "ALGO": {
+          "liqBias": 0.02
+        }
+      },
+      "netApr": {
+        "useVip": true,
+        "ltvDivisor": "current"
+      }
+    }
   },
   "metadata": {
     "endpoints": {
