@@ -2876,6 +2876,31 @@
         return "";
       }, []);
 
+      const collateralYieldAprMap = useMemo(() => {
+        if (!collateralYieldConfig || typeof collateralYieldConfig !== 'object') {
+          return {};
+        }
+        const parseApr = (value) => {
+          const n = Number(value);
+          return Number.isFinite(n) ? n : null;
+        };
+        return Object.entries(collateralYieldConfig).reduce((acc, [key, rawValue]) => {
+          const ticker = sanitizeTicker(key);
+          if (!ticker) return acc;
+          const baseEntry = rawValue && typeof rawValue === 'object' ? { ...rawValue } : {};
+          const aprCandidate =
+            (rawValue && typeof rawValue === 'object'
+              ? parseApr(rawValue.apr) ?? parseApr(rawValue.apy) ?? parseApr(rawValue.rate) ?? parseApr(rawValue.annual) ?? parseApr(rawValue.annualRate)
+              : parseApr(rawValue));
+          const apr = Number.isFinite(aprCandidate) ? aprCandidate : 0;
+          acc[ticker] = {
+            ...baseEntry,
+            apr,
+          };
+          return acc;
+        }, {});
+      }, [collateralYieldConfig, sanitizeTicker]);
+
       const liqBiasByTicker = useMemo(() => {
         if (!simModelConfig || typeof simModelConfig !== 'object') return {};
         const source = simModelConfig.liquidationBias || {};
