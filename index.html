@@ -961,6 +961,13 @@
       MXN: 17.2,
     };
 
+    const DEFAULT_SIMULATION_CONTROLS = Object.freeze({
+      aprFundingAlpha: 1,
+      aprClamp: null,
+      sigmaK: 1,
+      ltv: { initClamp: null },
+    });
+
     const THEME_TOKENS = Object.freeze({
       nexo: {
         '--theme-surface-soft': 'linear-gradient(180deg,#eef3ff 0%, #f6f9ff 100%)',
@@ -1250,15 +1257,22 @@
     const BINANCE_FAPI_BASE = 'https://fapi.binance.com';
     const BINANCE_SIGNED_RECV_WINDOW = 5000;
     const BINANCE_SYNC_TIMEOUT_MS = 15000;
-    const DEFAULT_BINANCE_BASELINE_ENDPOINT = './api/binance/loans';
+    const DEFAULT_BINANCE_BASELINE_ENDPOINT = null;
     const resolveBinanceBaselineEndpoint = () => {
       if (typeof window === 'undefined') return DEFAULT_BINANCE_BASELINE_ENDPOINT;
+
+      const assignGlobal = (value) => {
+        const resolved = typeof value === 'string' ? value.trim() : '';
+        if (!resolved) return null;
+        window.__BINANCE_BASELINE_ENDPOINT__ = resolved;
+        return resolved;
+      };
 
       const globalOverride =
         (typeof window.__BINANCE_BASELINE_ENDPOINT__ === 'string' && window.__BINANCE_BASELINE_ENDPOINT__.trim()) ||
         (typeof window.__BINANCE_BASELINE_URL__ === 'string' && window.__BINANCE_BASELINE_URL__.trim());
       if (globalOverride) {
-        return globalOverride;
+        return assignGlobal(globalOverride);
       }
 
       const searchParams = new URLSearchParams(window.location.search || '');
@@ -1269,30 +1283,33 @@
         } catch (error) {
           console.warn('No se pudo persistir binanceApiEndpoint en localStorage:', error);
         }
-        return queryOverride;
+        return assignGlobal(queryOverride);
       }
 
       try {
         const storedOverride = (localStorage.getItem('spm_binanceBaselineEndpoint') || '').trim();
         if (storedOverride) {
-          return storedOverride;
+          return assignGlobal(storedOverride);
         }
       } catch (error) {
         console.warn('No se pudo leer binanceApiEndpoint desde localStorage:', error);
       }
 
-      if (window.location.protocol === 'file:') {
-        return 'http://localhost:3000/api/binance/loans';
+      if (typeof DEFAULT_BINANCE_BASELINE_ENDPOINT === 'string' && DEFAULT_BINANCE_BASELINE_ENDPOINT.trim()) {
+        try {
+          return assignGlobal(new URL(DEFAULT_BINANCE_BASELINE_ENDPOINT, window.location.href).toString());
+        } catch (error) {
+          console.warn('No se pudo resolver el endpoint base de Binance, usando valor por defecto.', error);
+          return assignGlobal(DEFAULT_BINANCE_BASELINE_ENDPOINT.replace(/^\./, ''));
+        }
       }
 
-      try {
-        return new URL(DEFAULT_BINANCE_BASELINE_ENDPOINT, window.location.href).toString();
-      } catch (error) {
-        console.warn('No se pudo resolver el endpoint base de Binance, usando valor por defecto.', error);
-        return DEFAULT_BINANCE_BASELINE_ENDPOINT.replace(/^\./, '');
-      }
+      return null;
     };
-    const BINANCE_BASELINE_ENDPOINT = resolveBinanceBaselineEndpoint();
+    const BINANCE_BASELINE_ENDPOINT_RAW = resolveBinanceBaselineEndpoint();
+    const BINANCE_BASELINE_ENDPOINT = typeof BINANCE_BASELINE_ENDPOINT_RAW === 'string'
+      ? BINANCE_BASELINE_ENDPOINT_RAW.replace(/\/$/, '')
+      : null;
     const BINANCE_BASELINE_REFRESH_MS = 15 * 60 * 1000;
     let didWarnPairApr = false;
     const computeNetAprForPair = (loanCoin, collateralCoin, ltvCurrent) => {
@@ -1368,7 +1385,9 @@
       };
       mergeSimple('ltvByTicker');
       mergeSimple('earnAprTop');
+      mergeSimple('collateralYield');
       mergeSimple('policies');
+      mergeSimple('controls');
       mergeSimple('apr');
       mergeSimple('ltvHealth');
       mergeSimple('diagnosticSources');
@@ -1465,6 +1484,9 @@
 
       const loanAmount = Math.max(0, Number(ctx?.loanAmount) || 0);
       const baseCollateral = Math.max(0, Number(ctx?.totalCollateralValue) || 0);
+      const controls = ctx && typeof ctx === 'object' && ctx.controls && typeof ctx.controls === 'object'
+        ? ctx.controls
+        : DEFAULT_SIMULATION_CONTROLS;
 
       const loanByTickerRaw = ctx?.loanByTicker || {};
       const loanByTicker = Object.entries(loanByTickerRaw).reduce((acc, [ticker, amount]) => {
@@ -1529,7 +1551,7 @@
         return acc + (Number.isFinite(raw) && raw > 0 ? raw : 0);
       }, 0);
 
-      const detailed = computeCashflowProjectionsDetailed(plan, ctx);
+      const detailed = computeCashflowProjectionsDetailed(plan, { ...ctx, controls });
 
       const scheduledPayments = payments.reduce((acc, payment) => acc + getPaymentAmount(payment), 0);
       const scheduledPrincipalTarget = Math.max(0, Number(detailed?.scheduledPrincipal) || scheduledPayments);
@@ -2055,6 +2077,18 @@
           ALGO: 0.02,
           XRP: 0.02,
           SOL: 0.03,
+        },
+        collateralYield: {
+          BTC: { apr: 0.03, source: 'manual preset' },
+          ETH: { apr: 0.03, source: 'manual preset' },
+          BNB: { apr: 0.05, source: 'manual preset' },
+          USDT: { apr: 0.06, source: 'manual preset' },
+          USDC: { apr: 0.06, source: 'manual preset' },
+          BUSD: { apr: 0.06, source: 'manual preset' },
+          ADA: { apr: 0.02, source: 'manual preset' },
+          ALGO: { apr: 0.02, source: 'manual preset' },
+          XRP: { apr: 0.02, source: 'manual preset' },
+          SOL: { apr: 0.03, source: 'manual preset' },
         },
         borrowRates: {
           ADA: {
@@ -2643,6 +2677,7 @@
         coingeckoIds = {},
         ltvByTicker: ltvByTickerConfig = {},
         earnAprTop: earnAprTopConfig = {},
+        collateralYield: collateralYieldConfig = {},
         policies = {},
         apr: aprConfig = {},
         borrowRates: borrowRatesConfig = {},
@@ -2675,6 +2710,30 @@
         const implementedIds = new Set(["benchmarking", "cashflow-planning"]);
         return [...base, ...extras].filter((idea) => !implementedIds.has(idea.id));
       }, [platformId]);
+      const runtimeFlags = useMemo(() => {
+        if (typeof window === 'undefined') {
+          return { forceOn: false, simMode: false };
+        }
+        try {
+          const params = new URLSearchParams(window.location.search || '');
+          const simParam = (params.get('sim') || params.get('simulation') || '').toLowerCase();
+          const simMode = simParam === '1' || simParam === 'true' || simParam === 'yes';
+          const forceParamRaw = params.get('forceOn');
+          const forceParam = typeof forceParamRaw === 'string' ? forceParamRaw.toLowerCase() : '';
+          const forceFromParam = ['1', 'true', 'yes', 'on'].includes(forceParam);
+          const globalForce = typeof window.__SIMULATOR_FORCE_ON__ === 'boolean'
+            ? window.__SIMULATOR_FORCE_ON__
+            : (typeof window.__SIM_FORCE_ON__ === 'boolean'
+              ? window.__SIM_FORCE_ON__
+              : (forceFromParam || simMode));
+          return { forceOn: !!globalForce, simMode };
+        } catch (error) {
+          console.warn('No se pudo leer los flags de simulación de la URL:', error);
+          return { forceOn: false, simMode: false };
+        }
+      }, []);
+      const forceOn = runtimeFlags.forceOn;
+      const simMode = runtimeFlags.simMode;
       const loyaltyModels = loyalty?.models ?? [];
       const loyaltyModelFallback = platformDefaultParams?.loyaltyModel ?? loyaltyModels[0]?.id ?? "vsRest";
       const isBinance = id === "binance";
@@ -2703,6 +2762,7 @@
             const incomingConfig = payload?.config;
             const extraMetadata = {
               ...(payload?.metadata || {}),
+              endpoint: BINANCE_BASELINE_ENDPOINT,
               fetchedAt: payload?.fetchedAt,
               source: payload?.source,
             };
@@ -2727,6 +2787,9 @@
                 status: 'ready',
                 error: null,
                 lastUpdated: payload?.lastUpdated || payload?.fetchedAt || prev.lastUpdated,
+                metadata: extraMetadata,
+                rowCount: payload?.rowCount || null,
+                source: payload?.source || prev.source || null,
               }));
             }
           } catch (error) {
@@ -2734,17 +2797,18 @@
               const rawMessage = error?.message ? String(error.message) : '';
               const friendlyMessage = (() => {
                 if (/HTTP\s*404/.test(rawMessage)) {
-                  return 'HTTP 404 — el backend no expone /api/binance/loans. Asegúrate de ejecutar `npm run dev` en este proyecto (o ajusta BINANCE_API_BASE si usas un proxy).';
+                  return 'HTTP 404 — el endpoint remoto no existe o no devuelve JSON. Revisa la URL configurada en `binanceApiEndpoint`.';
                 }
                 if (/Failed to fetch/i.test(rawMessage) || /NetworkError/i.test(rawMessage)) {
-                  return 'No se pudo contactar al backend. ¿Está activo el servidor (`npm run dev`) y accesible desde este navegador?';
+                  return 'No se pudo contactar al endpoint remoto. Comprueba la conexión o habilita CORS en tu origen.';
                 }
-                return rawMessage || 'No se pudo sincronizar con Binance.';
+                return rawMessage || 'No se pudo sincronizar el preset remoto de Binance.';
               })();
               setBinanceBaselineMeta((prev) => ({
                 ...prev,
                 status: prev.status === 'ready' ? 'ready' : 'error',
                 error: friendlyMessage,
+                metadata: { ...(prev.metadata || {}), endpoint: BINANCE_BASELINE_ENDPOINT },
               }));
             }
           }
@@ -2755,7 +2819,7 @@
           cancelled = true;
           clearInterval(interval);
         };
-      }, []);
+      }, [isBinance]);
       const clamp01 = (v) => Math.max(0, Math.min(1, Number(v) || 0));
       const toPct = (value, digits = 0) => formatPercent(Number(value), {
         minimumFractionDigits: digits,
@@ -2864,11 +2928,17 @@
       }, [isBinance, ltvByTickerConfig, liveCollateralParams]);
 
       const earnAprTop = useMemo(() => {
-        if (!isBinance) return earnAprTopConfig;
+        const merged = { ...(earnAprTopConfig || {}) };
+        Object.entries(collateralYieldAprMap).forEach(([ticker, entry]) => {
+          const apr = Number(entry?.apr);
+          if (Number.isFinite(apr) && apr >= 0) {
+            merged[ticker] = apr;
+          }
+        });
+        if (!isBinance) return merged;
         if (!liveCollateralApr || Object.keys(liveCollateralApr).length === 0) {
-          return earnAprTopConfig;
+          return merged;
         }
-        const merged = { ...earnAprTopConfig };
         Object.entries(liveCollateralApr).forEach(([ticker, payload]) => {
           const key = typeof ticker === 'string' ? ticker.toUpperCase() : '';
           if (!key) return;
@@ -2880,7 +2950,7 @@
           }
         });
         return merged;
-      }, [isBinance, earnAprTopConfig, liveCollateralApr]);
+      }, [isBinance, earnAprTopConfig, liveCollateralApr, collateralYieldAprMap]);
 
       const liveBorrowRatesByCollateral = useMemo(() => {
         if (!isBinance || !Array.isArray(liveBorrowPositions) || liveBorrowPositions.length === 0) {
@@ -3237,6 +3307,29 @@
         }, {});
       }, [isBinance, sanitizeTicker]);
 
+      const sanitizeControls = useCallback((rawControls) => {
+        const base = DEFAULT_SIMULATION_CONTROLS;
+        const source = rawControls && typeof rawControls === 'object' ? rawControls : {};
+        const alphaCandidate = Number(source.aprFundingAlpha);
+        const sigmaCandidate = Number(source.sigmaK);
+        const clampCandidate = Number(source.aprClamp);
+        const next = {
+          aprFundingAlpha: clamp01(Number.isFinite(alphaCandidate) ? alphaCandidate : base.aprFundingAlpha ?? 1),
+          aprClamp: Number.isFinite(clampCandidate) ? clampCandidate : (Number.isFinite(base.aprClamp) ? base.aprClamp : null),
+          sigmaK: Number.isFinite(sigmaCandidate) ? sigmaCandidate : (Number.isFinite(base.sigmaK) ? base.sigmaK : 1),
+          ltv: {},
+        };
+        const baseInitClamp = Number(base?.ltv?.initClamp);
+        const rawInitClamp = Number(source?.ltv?.initClamp);
+        const resolvedInitClamp = Number.isFinite(rawInitClamp) && rawInitClamp > 0
+          ? rawInitClamp
+          : (Number.isFinite(baseInitClamp) && baseInitClamp > 0 ? baseInitClamp : null);
+        if (resolvedInitClamp != null) {
+          next.ltv.initClamp = resolvedInitClamp;
+        }
+        return next;
+      }, []);
+
       const baseParams = useMemo(() => {
         const fallback = {
           exchangeRates: { ...baseExchangeRates },
@@ -3247,6 +3340,12 @@
           earnOnCollateral: true,
           manualLoanAllocation: false,
           loanRequests: [],
+          controls: {
+            aprFundingAlpha: DEFAULT_SIMULATION_CONTROLS.aprFundingAlpha,
+            aprClamp: DEFAULT_SIMULATION_CONTROLS.aprClamp,
+            sigmaK: DEFAULT_SIMULATION_CONTROLS.sigmaK,
+            ltv: { ...(DEFAULT_SIMULATION_CONTROLS.ltv || {}) },
+          },
         };
         const merged = { ...fallback, ...platformDefaultParams };
         if (loyaltyModels.length && !loyaltyModels.some((m) => m.id === merged.loyaltyModel)) {
@@ -3258,8 +3357,9 @@
           const candidate = sanitizeTicker(merged.binanceBorrowTicker);
           merged.binanceBorrowTicker = borrowRatesByTicker[candidate] ? candidate : defaultTicker;
         }
+        merged.controls = sanitizeControls(merged.controls);
         return merged;
-      }, [platformDefaultParams, loyaltyModelFallback, loyaltyModels, baseExchangeRates, isBinance, borrowTickerList, borrowRatesByTicker]);
+      }, [platformDefaultParams, loyaltyModelFallback, loyaltyModels, baseExchangeRates, isBinance, borrowTickerList, borrowRatesByTicker, sanitizeControls]);
       const baseCashflowPlan = useMemo(
         () => sanitizeCashflowPlan(previewSnapshot?.cashflow, (previewSnapshot?.repayDate || previewSnapshot?.cashflow?.payments?.[0]?.date || todayISO())),
         [previewSnapshot]
@@ -3307,6 +3407,7 @@
         }
         merged.manualLoanAllocation = !!merged.manualLoanAllocation;
         merged.loanRequests = sanitizeLoanRequests(merged.loanRequests);
+        merged.controls = sanitizeControls(merged.controls);
         if (isBinance) {
           const defaultTicker = borrowTickerList[0] || '';
           const candidate = sanitizeTicker(merged.binanceBorrowTicker);
@@ -3374,6 +3475,11 @@
         }
       };
 
+      useEffect(() => {
+        if (!simMode) return;
+        applyPreviewSnapshot();
+      }, [simMode]);
+
       const [assets, setAssets] = useState(() => {
         if (typeof window === 'undefined') return baseAssets;
         try {
@@ -3401,6 +3507,19 @@
         () => sanitizeLoanRequests(params.loanRequests),
         [params.loanRequests, sanitizeLoanRequests]
       );
+
+      const controls = params?.controls && typeof params.controls === 'object'
+        ? params.controls
+        : DEFAULT_SIMULATION_CONTROLS;
+      const aprFundingAlpha = clamp01(Number(controls?.aprFundingAlpha ?? DEFAULT_SIMULATION_CONTROLS.aprFundingAlpha));
+      const aprClampValueRaw = Number(controls?.aprClamp);
+      const aprClampValue = Number.isFinite(aprClampValueRaw) ? aprClampValueRaw : null;
+      const ltvInitClampRaw = Number(controls?.ltv?.initClamp);
+      const ltvInitClampValue = Number.isFinite(ltvInitClampRaw) && ltvInitClampRaw > 0
+        ? ltvInitClampRaw
+        : (Number.isFinite(DEFAULT_SIMULATION_CONTROLS?.ltv?.initClamp) && DEFAULT_SIMULATION_CONTROLS.ltv.initClamp > 0
+          ? DEFAULT_SIMULATION_CONTROLS.ltv.initClamp
+          : null);
 
       const resetBinanceTimer = useCallback(() => {
         if (binanceTimerRef.current) {
@@ -3573,7 +3692,11 @@
               };
             });
           }
-          const collateralAprMap = {};
+          const collateralAprMap = Object.entries(collateralYieldAprMap).reduce((acc, [key, entry]) => {
+            if (!entry) return acc;
+            acc[key] = { ...entry, source: entry.source || 'manual' };
+            return acc;
+          }, {});
           if (collateralCoinsArray.length > 0) {
             const earnResults = await Promise.allSettled(collateralCoinsArray.map((coin) => signedFetch('/sapi/v1/simple-earn/flexible/list', { asset: coin })));
             earnResults.forEach((result, idx) => {
@@ -4756,13 +4879,13 @@
 
       const loyaltyTier = useMemo(() => {
         if (!loyalty) return aprConfig.baseTier ?? loyalty?.baseLabel ?? "—";
-        if (totals.total < minBalancePerks) return loyalty.belowMinimumLabel ?? loyalty.baseLabel ?? "Sin perks";
+        if (!forceOn && totals.total < minBalancePerks) return loyalty.belowMinimumLabel ?? loyalty.baseLabel ?? "Sin perks";
         const ratioUsed = loyaltyModelActive === "vsTotal" ? totals.ratioVsTotal : totals.ratioVsRest;
         for (const tier of loyalty.tierThresholds ?? []) {
           if (ratioUsed >= tier.minRatio) return tier.label;
         }
         return loyalty.baseLabel ?? (aprConfig.baseTier ?? "Base");
-      }, [loyalty, totals.total, minBalancePerks, loyaltyModelActive, totals.ratioVsTotal, totals.ratioVsRest, aprConfig.baseTier]);
+      }, [loyalty, totals.total, minBalancePerks, loyaltyModelActive, totals.ratioVsTotal, totals.ratioVsRest, aprConfig.baseTier, forceOn]);
 
       const aprStandardTable = aprConfig.standard ?? {};
       const aprDiscountTable = aprConfig.discounted ?? aprStandardTable;
@@ -4802,7 +4925,7 @@
       }, [loanAmount, daysUntilRepay, chosenAPR, earlyRuleDays, earlyAPR]);
 
 
-      const earnEligible = totals.total >= minBalancePerks && params.earnOptIn;
+      const earnEligible = (forceOn || totals.total >= minBalancePerks) && (forceOn || params.earnOptIn);
       const earnMonthly = useMemo(() => {
         if (!earnEligible) return 0;
         const days = 30;
@@ -4834,8 +4957,12 @@
         return arr;
       }, [chosenAPR, daysUntilRepay, earnEligible, loanAmount, params.earnOnCollateral, totals.withValue, earnAprTop]);
       const totalEarnDuringPeriod = timeline.length ? timeline[timeline.length - 1].earn : 0;
-      const netInterestPeriod = interestCalc.total - totalEarnDuringPeriod;
-      const standardNetAnnualRate = loanAmount > 0 && daysUntilRepay > 0 ? (Math.pow(1 + netInterestPeriod / loanAmount, 365 / daysUntilRepay) - 1) : 0;
+      const adjustedEarnDuringPeriod = totalEarnDuringPeriod * aprFundingAlpha;
+      const netInterestPeriod = interestCalc.total - adjustedEarnDuringPeriod;
+      let standardNetAnnualRate = loanAmount > 0 && daysUntilRepay > 0 ? (Math.pow(1 + netInterestPeriod / loanAmount, 365 / daysUntilRepay) - 1) : 0;
+      if (aprClampValue != null && Number.isFinite(aprClampValue)) {
+        standardNetAnnualRate = Math.max(standardNetAnnualRate, aprClampValue);
+      }
 
       const cashflowDerived = useMemo(() =>
         computeCashflowProjections(cashflowPlan, {
@@ -4848,8 +4975,9 @@
           autoRepayLtv,
           scenarioShocks: cashflowPlan?.scenarioShocks,
           loanByTicker: loanRequestsTotals,
+          controls,
         }),
-      [cashflowPlan, loanAmount, chosenAPR, repayDate, totals.totalCollateralValue, targetLtv, marginCallLtv, autoRepayLtv, loanRequestsTotals]);
+      [cashflowPlan, loanAmount, chosenAPR, repayDate, totals.totalCollateralValue, targetLtv, marginCallLtv, autoRepayLtv, loanRequestsTotals, controls]);
 
       const scheduledPrincipal = Math.max(0, cashflowDerived?.scheduledPrincipal || 0);
       const scheduledInterest = Math.max(0, cashflowDerived?.scheduledInterest || 0);
@@ -5404,7 +5532,7 @@
                 { key: 'loan-target', title: 'Préstamo recomendado (≤20%)', value: formatUsd(recommendedLoanAtTarget) },
                 { key: 'interest-total', title: 'Interés hasta repago', value: formatLoan(interestCalc.total), subtle: `${daysUntilRepay} días` },
                 { key: 'repay-total', title: 'Total a devolver', value: formatLoan(totalProjectedOutflows), subtle: projectedFinalPayoff > 0 ? `Pago final proyectado ${formatLoan(projectedFinalPayoff)}` : undefined },
-                { key: 'earn-monthly', title: 'Earn mensual (hasta)', value: formatUsd(earnMonthly), subtle: earnEligible ? (minBalancePerks > 0 ? `Savings ≥ US$${formatDecimal(minBalancePerks, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : undefined) : 'no elegible' },
+                { key: 'earn-monthly', title: 'Earn mensual (hasta)', value: formatUsd(earnMonthly), subtle: earnEligible ? (minBalancePerks > 0 ? `Savings ≥ US$${formatDecimal(minBalancePerks, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : undefined) : (forceOn ? 'forzado (sim)' : 'no elegible') },
               ]).map((item) => (
                 <KPI key={item.key} title={item.title} value={item.value} subtle={item.subtle} tone={item.tone} variant={item.variant || 'button'} />
               ))}
@@ -5670,7 +5798,7 @@
                       APR estimado: <b>{toPct(chosenAPR, 2)}</b>{isBinance && binanceBorrowLabel ? ` (${binanceBorrowLabel})` : ''}. Interés hasta repago ({daysUntilRepay} días): {formatLoan(interestCalc.total)}.{interestCalc.early > 0 && <span> Incluye interés por "early rule".</span>}
                     </li>
                     <li>
-                      Earn (flex) mensual estimado {earnEligible ? (minBalancePerks > 0 ? "(tope)" : "") : (minBalancePerks > 0 ? "(requiere balance mínimo)" : "(no elegible)")}: <b>{formatUsd(earnMonthly)}</b>.
+                  Earn (flex) mensual estimado {earnEligible ? (minBalancePerks > 0 ? "(tope)" : "") : (forceOn ? "(forzado sim)" : (minBalancePerks > 0 ? "(requiere balance mínimo)" : "(no elegible)"))}: <b>{formatUsd(earnMonthly)}</b>.
                     </li>
                   </ul>
                   </Card>
@@ -5985,7 +6113,7 @@
         { label: 'Capital pendiente (plan)', value: formatMoney(outstandingPlan), tone: 'text-neutral-700', hint: outstandingPlan > 0 ? `Principal ${formatMoney(outstandingPrincipalPlan)} · Interés ${formatMoney(outstandingInterestPlan)}` : '—' },
         { label: 'Pagos programados', value: formatMoney(totalScheduledOutflows), tone: totalScheduledOutflows > 0 ? 'text-neutral-700' : 'text-neutral-500', hint: totalScheduledOutflows > 0 ? `Capital ${formatMoney(scheduledPrincipalPlan)} · Interés cancelado ${formatMoney(scheduledInterestPlan)}` : 'Sin pagos programados' },
         { label: 'Pago final proyectado', value: formatMoney(projectedPayoffPlan), tone: projectedPayoffPlan >= 0 ? 'text-neutral-700' : 'text-rose-600', hint: outstandingPlan > 0 ? 'Restante tras plan' : 'Cubierto por plan' },
-        { label: 'Earn mensual', value: fmt(earnMonthly * rate, currency), tone: 'text-neutral-700', hint: earnEligible ? 'Earn activo' : 'Earn inactivo' },
+        { label: 'Earn mensual', value: fmt(earnMonthly * rate, currency), tone: 'text-neutral-700', hint: earnEligible ? 'Earn activo' : (forceOn ? 'Earn forzado (sim)' : 'Earn inactivo') },
       ];
 
       return (
@@ -6253,10 +6381,18 @@
         marginCallLtv = 0.7,
         autoRepayLtv = 0.85,
         scenarioShocks = {},
+        controls = {},
       } = context;
       const safePlan = plan || {};
       const baseScenarios = { base: 0, bear: -0.25, bull: 0.15, ...(safePlan.scenarioShocks || {}), ...(scenarioShocks || {}) };
-      const scenarioKeys = Object.keys(baseScenarios);
+      const sigmaCandidate = Number(controls?.sigmaK);
+      const sigmaScale = Number.isFinite(sigmaCandidate) ? sigmaCandidate : 1;
+      const scenarioShockMap = Object.keys(baseScenarios).reduce((acc, key) => {
+        const raw = Number(baseScenarios[key]) || 0;
+        acc[key] = raw * sigmaScale;
+        return acc;
+      }, {});
+      const scenarioKeys = Object.keys(scenarioShockMap);
       const activeScenario = scenarioKeys.includes(safePlan.activeScenario) ? safePlan.activeScenario : scenarioKeys[0];
       const msInDay = 24 * 60 * 60 * 1000;
       const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -6346,7 +6482,7 @@
         const day = Math.max(0, Math.round((event.date.getTime() - today.getTime()) / msInDay));
         const scenarioStats = {};
         scenarioKeys.forEach((key) => {
-          const shock = Number(baseScenarios[key]) || 0;
+          const shock = Number(scenarioShockMap[key]) || 0;
           const adjustedCollateral = collateral * (1 + shock);
           const ltv = adjustedCollateral > 0 ? outstanding / adjustedCollateral : (outstanding > 0 ? Number.POSITIVE_INFINITY : 0);
           scenarioStats[key] = ltv;
@@ -7216,9 +7352,11 @@
       if (status === 'loading' || status === 'refreshing') {
         tone = 'info';
         title = status === 'refreshing'
-          ? 'Actualizando preset de Binance…'
-          : 'Sincronizando preset de Binance…';
-        detailLines.push('El backend está consultando /api/binance/loans.');
+          ? 'Actualizando preset remoto de Binance…'
+          : 'Descargando preset remoto de Binance…';
+        if (endpointLabel) {
+          detailLines.push(`Fuente configurada: ${endpointLabel}.`);
+        }
         if (lastUpdatedLabel) {
           detailLines.push(`Última actualización exitosa hace ${lastUpdatedLabel}.`);
         }
@@ -7244,24 +7382,22 @@
         detailLines.push('Compará LTV, APR y precio de liquidación con el panel oficial para validar la sincronización.');
       } else if (status === 'error') {
         tone = 'danger';
-        title = 'No se pudo sincronizar Binance Loans';
+        title = 'No se pudo sincronizar el preset remoto';
         if (error) {
           detailLines.push(error);
         }
         if (lastAttemptLabel) {
           detailLines.push(`Último intento hace ${lastAttemptLabel}.`);
         }
-        detailLines.push('Verifica que el servidor Node (`npm run dev`) esté activo y que BINANCE_API_KEY / BINANCE_API_SECRET estén definidos en .env.');
-        if (runningFromFile) {
-          detailLines.push('Abrí http://localhost:3000 (no file://) para permitir que el front-end contacte al backend.');
-        }
+        detailLines.push('Comprueba que el endpoint exponga JSON público (con cabeceras CORS) y que la URL sea correcta.');
       } else {
-        tone = 'warn';
-        title = 'Preset estático en uso';
-        detailLines.push('Todavía no se descargó el preset dinámico desde el backend.');
-        detailLines.push('Ejecuta `npm run dev` tras definir BINANCE_API_KEY y BINANCE_API_SECRET en `.env` para cargar los datos reales.');
+        const isDisabled = status === 'disabled';
+        tone = isDisabled ? 'info' : 'warn';
+        title = isDisabled ? 'Preset estático de Binance' : 'Preset estático (sin endpoint remoto)';
+        detailLines.push('Se usan los parámetros embebidos en `index.html`.');
+        detailLines.push('Si querés sobreescribirlos, alojá un JSON compatible y abrí el simulador con `?binanceApiEndpoint=https://tusitio/preset.json`.');
         if (runningFromFile) {
-          detailLines.push('Actualmente estás viendo el archivo directamente (file://). Usa el servidor para habilitar la API.');
+          detailLines.push('Tip: desde `file://` también podés definir `window.__BINANCE_BASELINE_ENDPOINT__ = "https://..."` antes de cargar el simulador.');
         }
       }
       if (status === 'ready' && lastUpdatedTs != null && Number.isFinite(nowTs)) {
