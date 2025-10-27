@@ -1027,6 +1027,68 @@
 
     const DEFAULT_THEME = 'nexo';
 
+    const SIM_MODEL_CONFIG_DOM_ID = 'sim-model-config';
+    const createDefaultSimModelConfig = () => ({
+      version: 1,
+      updatedAt: null,
+      liquidationBias: {},
+    });
+
+    const clampValue = (value, min, max) => {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return 0;
+      if (num < min) return min;
+      if (num > max) return max;
+      return num;
+    };
+
+    const readSimModelConfigFromDom = () => {
+      const base = createDefaultSimModelConfig();
+      if (typeof document === 'undefined') return base;
+      const el = document.getElementById(SIM_MODEL_CONFIG_DOM_ID);
+      if (!el) return base;
+      const text = (el.textContent || el.innerText || '').trim();
+      if (!text) return base;
+      try {
+        const parsed = JSON.parse(text);
+        const bias = parsed && typeof parsed === 'object' && parsed.liquidationBias && typeof parsed.liquidationBias === 'object'
+          ? parsed.liquidationBias
+          : {};
+        return {
+          ...base,
+          ...parsed,
+          liquidationBias: { ...bias },
+        };
+      } catch (err) {
+        console.warn('[sim-model-config] JSON inválido, usando default', err);
+        return base;
+      }
+    };
+
+    const ensureSimModelConfigElement = () => {
+      if (typeof document === 'undefined') return null;
+      let el = document.getElementById(SIM_MODEL_CONFIG_DOM_ID);
+      if (!el) {
+        el = document.createElement('script');
+        el.type = 'application/json';
+        el.id = SIM_MODEL_CONFIG_DOM_ID;
+        el.textContent = JSON.stringify(createDefaultSimModelConfig(), null, 2);
+        (document.body || document.head || document.documentElement).appendChild(el);
+      }
+      return el;
+    };
+
+    const writeSimModelConfigToDom = (config) => {
+      if (typeof document === 'undefined') return;
+      const el = ensureSimModelConfigElement();
+      if (!el) return;
+      try {
+        el.textContent = JSON.stringify(config, null, 2);
+      } catch (err) {
+        console.warn('[sim-model-config] no se pudo escribir en el DOM', err);
+      }
+    };
+
     const ACCENT_SURFACES = Object.freeze({
       vivid: 'radial-gradient(130% 130% at 14% 0%, rgba(79,70,229,0.24) 0%, rgba(59,130,246,0.18) 42%, rgba(14,165,233,0.14) 100%)',
       soft: 'linear-gradient(140deg, rgba(226,232,255,0.94) 0%, rgba(191,219,254,0.9) 52%, rgba(219,234,254,0.86) 100%)',
@@ -2532,6 +2594,8 @@
         diagnosticSources = {},
       } = platform;
 
+      const [simModelConfig, setSimModelConfig] = useState(() => readSimModelConfigFromDom());
+
       const themeName = THEME_TOKENS[platformTheme] ? platformTheme : DEFAULT_THEME;
       const focusRingClass = classes.focusRing || "focus:ring-blue-700";
       const headerClass = classes.header || "nx-gradient";
@@ -2553,6 +2617,9 @@
       const isBinance = id === "binance";
       const [nowTs, setNowTs] = useState(() => Date.now());
       const [binanceBaselineMeta, setBinanceBaselineMeta] = useState({ status: 'idle', lastUpdated: null, error: null });
+      useEffect(() => {
+        writeSimModelConfigToDom(simModelConfig);
+      }, [simModelConfig]);
       useEffect(() => {
         let cancelled = false;
         const updateBaseline = async (reason = 'initial') => {
@@ -2671,6 +2738,19 @@
         }
         return "";
       }, []);
+
+      const liqBiasByTicker = useMemo(() => {
+        if (!simModelConfig || typeof simModelConfig !== 'object') return {};
+        const source = simModelConfig.liquidationBias || {};
+        return Object.entries(source).reduce((acc, [key, value]) => {
+          const ticker = sanitizeTicker(key);
+          if (!ticker) return acc;
+          const raw = Number(value);
+          if (!Number.isFinite(raw)) return acc;
+          acc[ticker] = clampValue(raw, -0.1, 0.1);
+          return acc;
+        }, {});
+      }, [simModelConfig, sanitizeTicker]);
 
       const binanceTimerRef = useRef(null);
       const binanceHmacKeyRef = useRef({ secret: null, key: null });
@@ -3129,6 +3209,34 @@
         () => sanitizeLoanLedger(platformLoanLedger),
         [sanitizeLoanLedger, platformLoanLedger]
       );
+      const calibrationSnapshot = useMemo(() => {
+        if (!isBinance) return {};
+        const fallbackLiq = autoRepayLtv > 0 ? autoRepayLtv : marginCallLtv;
+        const map = {};
+        Object.entries(baseLoanLedger).forEach(([ticker, entry = {}]) => {
+          const key = sanitizeTicker(ticker);
+          if (!key) return;
+          const ledgerLiq = Number(entry?.liquidationLtv);
+          const baseModel = Number.isFinite(ledgerLiq) && ledgerLiq > 0
+            ? ledgerLiq
+            : (Number.isFinite(ltvByTicker[key]) && ltvByTicker[key] > 0 ? ltvByTicker[key] : fallbackLiq);
+          const loanAsset = sanitizeTicker(entry?.loanCoin || entry?.loanAsset || '');
+          map[key] = {
+            modelLiq: baseModel > 0 ? baseModel : fallbackLiq,
+            loanAsset: loanAsset || 'USDT',
+          };
+        });
+        Object.keys(ltvByTicker).forEach((ticker) => {
+          const key = sanitizeTicker(ticker);
+          if (!key || map[key]) return;
+          const model = Number(ltvByTicker[key]);
+          map[key] = {
+            modelLiq: Number.isFinite(model) && model > 0 ? model : fallbackLiq,
+            loanAsset: 'USDT',
+          };
+        });
+        return map;
+      }, [isBinance, baseLoanLedger, autoRepayLtv, marginCallLtv, sanitizeTicker, ltvByTicker]);
       const sanitizeParams = (raw) => {
         const merged = { ...baseParams, ...(raw || {}) };
         if (loyaltyModels.length && !loyaltyModels.some((m) => m.id === merged.loyaltyModel)) {
@@ -3971,6 +4079,105 @@
       const loanRate = usdRate * usdPerUsdt;
       const formatUsd = useCallback((value, showCurrency = true) => fmt(value * usdRate, currency, showCurrency), [usdRate, currency]);
       const formatLoan = useCallback((value, showCurrency = true) => fmt(value * loanRate, currency, showCurrency), [loanRate, currency]);
+      const simCalibrate = useCallback((points = []) => {
+        if (!isBinance) {
+          console.warn('[sim-calibrate] Disponible solo para Binance Loans');
+          return [];
+        }
+        const list = Array.isArray(points) ? points : [points];
+        if (!list.length) {
+          console.warn('[sim-calibrate] No se recibieron puntos para calibrar');
+          return [];
+        }
+        const biasUpdates = {};
+        const results = [];
+        list.forEach((point, idx) => {
+          const ticker = sanitizeTicker(point?.asset);
+          if (!ticker) {
+            results.push({ index: idx, error: 'asset inválido' });
+            return;
+          }
+          const snapshot = calibrationSnapshot[ticker];
+          const modelLiq = snapshot?.modelLiq;
+          if (!(Number.isFinite(modelLiq) && modelLiq > 0)) {
+            results.push({ ticker, error: 'modelLiq ausente' });
+            return;
+          }
+          const qty = Number(point?.qtyCol);
+          const observedPrice = Number(point?.observedPLiq);
+          const debtLoan = Number(point?.debtLoan);
+          if (!(Number.isFinite(qty) && qty > 0 && Number.isFinite(observedPrice) && observedPrice > 0 && Number.isFinite(debtLoan) && debtLoan > 0)) {
+            results.push({ ticker, error: 'datos inválidos' });
+            return;
+          }
+          const loanTicker = sanitizeTicker(point?.loan || snapshot?.loanAsset || 'USDT');
+          const exchangeRates = params.exchangeRates || {};
+          let usdPerUnit = 1;
+          const rate = exchangeRates[loanTicker];
+          if (Number.isFinite(rate) && rate > 0) {
+            usdPerUnit = 1 / rate;
+          } else if (loanTicker === 'USDT') {
+            usdPerUnit = usdPerUsdt || 1;
+          }
+          const debtUsd = debtLoan * usdPerUnit;
+          const denom = qty * observedPrice;
+          if (!(denom > 0 && debtUsd > 0)) {
+            results.push({ ticker, error: 'denominador inválido' });
+            return;
+          }
+          const observedLiqLtv = debtUsd / denom;
+          const rawBias = (observedLiqLtv / modelLiq) - 1;
+          const bias = clampValue(rawBias, -0.1, 0.1);
+          biasUpdates[ticker] = bias;
+          results.push({ ticker, bias, observedLiqLtv, modelLiq, debtUsd, qty, observedPrice, loanTicker });
+        });
+        if (Object.keys(biasUpdates).length === 0) {
+          console.warn('[sim-calibrate] Ningún punto válido para calibrar', results);
+          return results;
+        }
+        const updatedAt = new Date().toISOString();
+        setSimModelConfig((prev) => {
+          const base = prev && typeof prev === 'object' ? { ...prev } : createDefaultSimModelConfig();
+          const prevBias = base.liquidationBias && typeof base.liquidationBias === 'object' ? base.liquidationBias : {};
+          base.liquidationBias = { ...prevBias, ...biasUpdates };
+          base.updatedAt = updatedAt;
+          if (!base.version) base.version = 1;
+          return base;
+        });
+        if (typeof console !== 'undefined') {
+          const hasGroupCollapsed = typeof console.groupCollapsed === 'function';
+          const hasGroup = typeof console.group === 'function';
+          if (hasGroupCollapsed) {
+            console.groupCollapsed('[sim-calibrate] ajustes aplicados');
+          } else if (hasGroup) {
+            console.group('[sim-calibrate] ajustes aplicados');
+          }
+          results.forEach((row) => {
+            if (row.error) {
+              console.warn(`[${row.ticker || '??'}] ${row.error}`);
+            } else {
+              console.log(
+                `[${row.ticker}] bias=${(row.bias * 100).toFixed(2)}% model=${row.modelLiq.toFixed(4)} observed=${row.observedLiqLtv.toFixed(4)} debtUSD=${row.debtUsd.toFixed(2)}`
+              );
+            }
+          });
+          console.log('Actualizado', { updatedAt, biasUpdates });
+          if ((hasGroupCollapsed || hasGroup) && typeof console.groupEnd === 'function') {
+            console.groupEnd();
+          }
+        }
+        return results;
+      }, [isBinance, calibrationSnapshot, params.exchangeRates, usdPerUsdt, sanitizeTicker, setSimModelConfig]);
+      useEffect(() => {
+        if (typeof window === 'undefined') return undefined;
+        window.simCalibrate = simCalibrate;
+        console.info('[sim-calibrate] listo: window.simCalibrate(points)');
+        return () => {
+          if (window.simCalibrate === simCalibrate) {
+            delete window.simCalibrate;
+          }
+        };
+      }, [simCalibrate]);
       const loanRequestsTotals = useMemo(() => {
         const totals = {};
         loanRequests.forEach((item) => {
@@ -4834,10 +5041,16 @@
                 tone = "warn";
               }
             }
-            const ledgerLiquidationLtv = Number.isFinite(ledgerEntry?.liquidationLtv) && ledgerEntry.liquidationLtv > 0
+            const ledgerLiquidationLtvRaw = Number.isFinite(ledgerEntry?.liquidationLtv) && ledgerEntry.liquidationLtv > 0
               ? ledgerEntry.liquidationLtv
               : null;
-            const liquidationThreshold = ledgerLiquidationLtv || (autoRepayLtv > 0 ? autoRepayLtv : marginCallLtv);
+            const biasApplied = liqBiasByTicker[ticker] ?? 0;
+            const adjustedLiquidationLtv = ledgerLiquidationLtvRaw != null
+              ? Math.max(0, ledgerLiquidationLtvRaw * (1 + biasApplied))
+              : null;
+            const liquidationThreshold = adjustedLiquidationLtv != null
+              ? adjustedLiquidationLtv
+              : (autoRepayLtv > 0 ? autoRepayLtv : marginCallLtv);
             const marginCallThreshold = Number.isFinite(ledgerEntry?.marginCallLtv) && ledgerEntry.marginCallLtv > 0
               ? ledgerEntry.marginCallLtv
               : marginCallLtv;
