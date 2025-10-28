@@ -7,12 +7,10 @@
   <script>
   /**
    * Shim CORS-aware para GitHub Pages:
-   * - Redirige cualquier fetch a rutas relativas /api/binance/* hacia tu backend
-   *   nexo-dashboard en Render (Singapore).
-   * - Si en el futuro querés cambiar el backend, solo cambiás DEFAULT_BACKEND.
+   * - Redirige cualquier fetch a rutas relativas /api/binance/* hacia el preset estático.
+   * - El preset remoto quedó deshabilitado por completo (sin fallback automático).
    */
   (function () {
-    const DEFAULT_BACKEND = 'https://nexo-dashboard.onrender.com'; // <— TU servicio
     const STATIC_PREFIX = './api/binance/';
     const REMOTE_PREFIX = '/api/binance/';
     const API_PREFIX = (() => {
@@ -26,6 +24,8 @@
     const MODE_KEY = 'spm_binanceShimMode';
     const ENDPOINT_KEY = 'spm_binanceBaselineEndpoint';
 
+    window.__REMOTE_PRESET_DISABLED__ = true;
+
     const safeGetItem = (key) => {
       try { return localStorage.getItem(key); }
       catch (_) { return null; }
@@ -34,44 +34,39 @@
       try { localStorage.setItem(key, value); }
       catch (_) {}
     };
-
-    const resolveShimMode = () => {
-      const href = new URL(location.href);
-      const queryMode = (href.searchParams.get('binanceShimMode') || '').trim().toLowerCase();
-      if (queryMode === 'static' || queryMode === 'remote') {
-        safeSetItem(MODE_KEY, queryMode);
-        return queryMode;
-      }
-      const stored = (safeGetItem(MODE_KEY) || '').trim().toLowerCase();
-      if (stored === 'static' || stored === 'remote') return stored;
-      if (location.protocol === 'file:') return 'static';
-      if (/github\.io$/i.test(location.hostname)) return 'static';
-      return 'remote';
+    const safeRemoveItem = (key) => {
+      try { localStorage.removeItem(key); }
+      catch (_) {}
     };
 
-    const mode = resolveShimMode();
-    const isStaticMode = mode === 'static';
+    const resolveShimMode = () => {
+      safeSetItem(MODE_KEY, 'static');
+      return 'static';
+    };
+
+    resolveShimMode();
+
+    const stripRemoteEndpointParam = () => {
+      try {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('binanceApiEndpoint')) {
+          url.searchParams.delete('binanceApiEndpoint');
+          const clean = `${url.pathname}${url.search}${url.hash}`;
+          window.history.replaceState(null, document.title, clean);
+        }
+      } catch (_) {}
+    };
+    stripRemoteEndpointParam();
 
     const resolveBaselineEndpoint = () => {
-      const href = new URL(location.href);
-      const queryOverride = (href.searchParams.get('binanceApiEndpoint') || '').trim();
-      if (queryOverride) {
-        safeSetItem(ENDPOINT_KEY, queryOverride);
-        return queryOverride;
-      }
-      const stored = (safeGetItem(ENDPOINT_KEY) || '').trim();
-      if (stored) return stored;
-      if (isStaticMode) {
-        return new URL(`${STATIC_PREFIX}loans`, window.location.href).toString().replace(/\/$/, '');
-      }
-      return `${DEFAULT_BACKEND}/api/binance/loans`;
+      safeRemoveItem(ENDPOINT_KEY);
+      return new URL(`${STATIC_PREFIX}loans`, window.location.href).toString().replace(/\/$/, '');
     };
 
     const BASELINE_ENDPOINT = resolveBaselineEndpoint();
     window.__BINANCE_BASELINE_ENDPOINT__ = BASELINE_ENDPOINT;
 
-    const modeLabel = isStaticMode ? 'modo estático (GitHub Pages)' : 'proxy remoto (Render)';
-    console.info(`[shim] Binance baseline shim activo → ${modeLabel}. Endpoint base: ${BASELINE_ENDPOINT}`);
+    console.info('[shim] Binance baseline shim activo → modo estático forzado. Endpoint base:', BASELINE_ENDPOINT);
 
     const _fetch = window.fetch.bind(window);
 
@@ -121,18 +116,10 @@
       try {
         const requestUrl = toRequestUrl(input);
         if (requestUrl && requestUrl.pathname.startsWith(API_PREFIX)) {
-          const suffix = requestUrl.pathname.slice(API_PREFIX.length).replace(/^\/+/, '');
-          if (isStaticMode) {
-            const staticUrl = mapToStatic(requestUrl.pathname, requestUrl.search);
-            return typeof input === 'string'
-              ? _fetch(staticUrl, init)
-              : _fetch(staticUrl, cloneInit(input, init));
-          }
-          const remotePath = `${REMOTE_PREFIX}${suffix}`.replace(/\/+/g, '/');
-          const remoteUrl = `${DEFAULT_BACKEND}${remotePath}${requestUrl.search}`;
+          const staticUrl = mapToStatic(requestUrl.pathname, requestUrl.search);
           return typeof input === 'string'
-            ? _fetch(remoteUrl, init)
-            : _fetch(remoteUrl, cloneInit(input, init));
+            ? _fetch(staticUrl, init)
+            : _fetch(staticUrl, cloneInit(input, init));
         }
       } catch (_) {}
       return _fetch(input, init);
@@ -703,9 +690,25 @@
       return applyClamp(net);
     };
 
+    const getDynamicStatus = () => {
+      const snapshot = state.snapshot || null;
+      const cacheTs = state.lastTs || null;
+      const ageMs = cacheTs ? Math.max(0, Date.now() - cacheTs) : null;
+      return {
+        hasCache: !!snapshot,
+        cacheTs,
+        ageMs,
+        snapshot,
+        source: snapshot?.source || 'dynamic_model',
+        metadata: snapshot?.metadata || null,
+      };
+    };
+
     window[NAMESPACE] = window[NAMESPACE] && typeof window[NAMESPACE] === 'object' ? window[NAMESPACE] : {};
     window[NAMESPACE].config = runtimeConfig;
     window[NAMESPACE].computePairNetAPR = computePairNetAPR;
+    window[NAMESPACE].getStatus = getDynamicStatus;
+    window[NAMESPACE].remotePresetDisabled = true;
 
     ensureSnapshot().catch((error) => {
       console.warn(LOG_PREFIX, 'Error inicial al preparar snapshot dinámico:', error);
@@ -1267,60 +1270,39 @@
     const BINANCE_FAPI_BASE = 'https://fapi.binance.com';
     const BINANCE_SIGNED_RECV_WINDOW = 5000;
     const BINANCE_SYNC_TIMEOUT_MS = 15000;
-    const DEFAULT_BINANCE_BASELINE_ENDPOINT = null;
-    const resolveBinanceBaselineEndpoint = () => {
-      if (typeof window === 'undefined') return DEFAULT_BINANCE_BASELINE_ENDPOINT;
-
-      const assignGlobal = (value) => {
-        const resolved = typeof value === 'string' ? value.trim() : '';
-        if (!resolved) return null;
-        window.__BINANCE_BASELINE_ENDPOINT__ = resolved;
-        return resolved;
-      };
-
-      const globalOverride =
-        (typeof window.__BINANCE_BASELINE_ENDPOINT__ === 'string' && window.__BINANCE_BASELINE_ENDPOINT__.trim()) ||
-        (typeof window.__BINANCE_BASELINE_URL__ === 'string' && window.__BINANCE_BASELINE_URL__.trim());
-      if (globalOverride) {
-        return assignGlobal(globalOverride);
+    const readDynamicModelStatus = () => {
+      if (typeof window === 'undefined') {
+        return { hasCache: false, ageMs: null, cacheTs: null, source: 'dynamic_model', snapshot: null };
       }
-
-      const searchParams = new URLSearchParams(window.location.search || '');
-      const queryOverride = (searchParams.get('binanceApiEndpoint') || searchParams.get('binance_api_endpoint') || '').trim();
-      if (queryOverride) {
-        try {
-          localStorage.setItem('spm_binanceBaselineEndpoint', queryOverride);
-        } catch (error) {
-          console.warn('No se pudo persistir binanceApiEndpoint en localStorage:', error);
-        }
-        return assignGlobal(queryOverride);
-      }
-
       try {
-        const storedOverride = (localStorage.getItem('spm_binanceBaselineEndpoint') || '').trim();
-        if (storedOverride) {
-          return assignGlobal(storedOverride);
+        const namespace = window.__nexoSim || {};
+        if (typeof namespace.getStatus === 'function') {
+          return namespace.getStatus() || { hasCache: false, ageMs: null, cacheTs: null, source: 'dynamic_model', snapshot: null };
         }
+        const snapshot = namespace.snapshot || null;
+        const cacheTs = snapshot?.serverTime || null;
+        const ageMs = cacheTs ? Math.max(0, Date.now() - cacheTs) : null;
+        return {
+          hasCache: !!snapshot,
+          ageMs,
+          cacheTs,
+          snapshot,
+          source: snapshot?.source || 'dynamic_model',
+          metadata: snapshot?.metadata || null,
+        };
       } catch (error) {
-        console.warn('No se pudo leer binanceApiEndpoint desde localStorage:', error);
+        console.warn('No se pudo leer el estado del modelo dinámico:', error);
+        return { hasCache: false, ageMs: null, cacheTs: null, source: 'dynamic_model', snapshot: null };
       }
-
-      if (typeof DEFAULT_BINANCE_BASELINE_ENDPOINT === 'string' && DEFAULT_BINANCE_BASELINE_ENDPOINT.trim()) {
-        try {
-          return assignGlobal(new URL(DEFAULT_BINANCE_BASELINE_ENDPOINT, window.location.href).toString());
-        } catch (error) {
-          console.warn('No se pudo resolver el endpoint base de Binance, usando valor por defecto.', error);
-          return assignGlobal(DEFAULT_BINANCE_BASELINE_ENDPOINT.replace(/^\./, ''));
-        }
-      }
-
-      return null;
     };
-    const BINANCE_BASELINE_ENDPOINT_RAW = resolveBinanceBaselineEndpoint();
-    const BINANCE_BASELINE_ENDPOINT = typeof BINANCE_BASELINE_ENDPOINT_RAW === 'string'
-      ? BINANCE_BASELINE_ENDPOINT_RAW.replace(/\/$/, '')
-      : null;
-    const BINANCE_BASELINE_REFRESH_MS = 15 * 60 * 1000;
+    const adaptDynamicStatusToMeta = (status) => ({
+      status: 'dynamic',
+      dynamicStatus: status,
+      lastUpdated: status?.snapshot?.fetchedAt || status?.cacheTs || null,
+      metadata: status?.metadata || null,
+      source: status?.source || 'dynamic_model',
+      error: null,
+    });
     let didWarnPairApr = false;
     const computeNetAprForPair = (loanCoin, collateralCoin, ltvCurrent) => {
       const loanKey = typeof loanCoin === 'string' ? loanCoin.trim().toUpperCase() : '';
@@ -1344,93 +1326,6 @@
         return null;
       }
     };
-    const shallowEqual = (a, b) => {
-      if (a === b) return true;
-      if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return false;
-      const keysA = Object.keys(a);
-      const keysB = Object.keys(b);
-      if (keysA.length !== keysB.length) return false;
-      for (const key of keysA) {
-        if (a[key] !== b[key]) return false;
-      }
-      return true;
-    };
-    const mergeBinanceBaselineConfig = (current = {}, incoming = {}) => {
-      if (!incoming || typeof incoming !== 'object') return current;
-      let changed = false;
-      const next = { ...current };
-      const mergeSimple = (key) => {
-        const incomingValue = incoming[key];
-        if (!incomingValue || typeof incomingValue !== 'object') return;
-        const prevValue = current[key] || {};
-        const nextValue = { ...prevValue, ...incomingValue };
-        if (!shallowEqual(prevValue, nextValue)) {
-          next[key] = nextValue;
-          changed = true;
-        }
-      };
-      const mergeNestedEntries = (key) => {
-        const incomingSection = incoming[key];
-        if (!incomingSection || typeof incomingSection !== 'object') return;
-        const prevSection = current[key] || {};
-        const nextSection = { ...prevSection };
-        let sectionChanged = false;
-        Object.entries(incomingSection).forEach(([entryKey, entryValue]) => {
-          if (entryValue && typeof entryValue === 'object' && !Array.isArray(entryValue)) {
-            const prevEntry = prevSection[entryKey] || {};
-            const nextEntry = { ...prevEntry, ...entryValue };
-            if (!shallowEqual(prevEntry, nextEntry)) {
-              nextSection[entryKey] = nextEntry;
-              sectionChanged = true;
-            }
-          } else if (prevSection[entryKey] !== entryValue) {
-            nextSection[entryKey] = entryValue;
-            sectionChanged = true;
-          }
-        });
-        if (sectionChanged) {
-          next[key] = nextSection;
-          changed = true;
-        }
-      };
-      mergeSimple('ltvByTicker');
-      mergeSimple('earnAprTop');
-      mergeSimple('collateralYield');
-      mergeSimple('policies');
-      mergeSimple('controls');
-      mergeSimple('apr');
-      mergeSimple('ltvHealth');
-      mergeSimple('diagnosticSources');
-      mergeSimple('defaultParams');
-      mergeNestedEntries('borrowRates');
-      mergeNestedEntries('loanLedger');
-      if (incoming.name && incoming.name !== current.name) {
-        next.name = incoming.name;
-        changed = true;
-      }
-      if (incoming.tagline && incoming.tagline !== current.tagline) {
-        next.tagline = incoming.tagline;
-        changed = true;
-      }
-      if (incoming.metadata && typeof incoming.metadata === 'object') {
-        const prevMeta = current.metadata || {};
-        const nextMeta = { ...prevMeta, ...incoming.metadata };
-        if (!shallowEqual(prevMeta, nextMeta)) {
-          next.metadata = nextMeta;
-          changed = true;
-        }
-      }
-      if (incoming.lastUpdated && incoming.lastUpdated !== current.lastUpdated) {
-        next.lastUpdated = incoming.lastUpdated;
-        changed = true;
-      }
-      if (incoming.source && incoming.source !== current.source) {
-        next.source = incoming.source;
-        changed = true;
-      }
-      return changed ? next : current;
-    };
-
     const fetchWithTimeout = async (url, options = {}, timeoutMs = BINANCE_SYNC_TIMEOUT_MS) => {
       const { signal, ...rest } = options || {};
       const controller = new AbortController();
@@ -2748,83 +2643,25 @@
       const loyaltyModelFallback = platformDefaultParams?.loyaltyModel ?? loyaltyModels[0]?.id ?? "vsRest";
       const isBinance = id === "binance";
       const [nowTs, setNowTs] = useState(() => Date.now());
-      const [binanceBaselineMeta, setBinanceBaselineMeta] = useState({ status: 'idle', lastUpdated: null, error: null });
+      const [binanceBaselineMeta, setBinanceBaselineMeta] = useState(() => adaptDynamicStatusToMeta(readDynamicModelStatus()));
       useEffect(() => {
         writeSimModelConfigToDom(simModelConfig);
       }, [simModelConfig]);
       useEffect(() => {
         let cancelled = false;
-        const updateBaseline = async (reason = 'initial') => {
-          try {
-            setBinanceBaselineMeta((prev) => ({
-              ...prev,
-              status: reason === 'refresh' ? 'refreshing' : 'loading',
-              error: null,
-              lastAttempt: Date.now(),
-            }));
-            const response = await fetch(BINANCE_BASELINE_ENDPOINT, {
-              headers: { Accept: 'application/json' },
-            });
-            if (!response.ok) {
-              throw new Error(`HTTP ${response.status}`);
-            }
-            const payload = await response.json();
-            const incomingConfig = payload?.config;
-            const extraMetadata = {
-              ...(payload?.metadata || {}),
-              endpoint: BINANCE_BASELINE_ENDPOINT,
-              fetchedAt: payload?.fetchedAt,
-              source: payload?.source,
-            };
-            if (incomingConfig && typeof incomingConfig === 'object') {
-              setPlatformConfigs((prev) => {
-                const prevBinance = prev.binance || PLATFORM_BASE_CONFIGS.binance || {};
-                const mergedBinance = mergeBinanceBaselineConfig(prevBinance, {
-                  ...incomingConfig,
-                  metadata: extraMetadata,
-                  lastUpdated: payload?.lastUpdated || payload?.fetchedAt,
-                  source: payload?.source,
-                });
-                if (mergedBinance === prevBinance) {
-                  return prev;
-                }
-                return { ...prev, binance: mergedBinance };
-              });
-            }
-            if (!cancelled) {
-              setBinanceBaselineMeta((prev) => ({
-                ...prev,
-                status: 'ready',
-                error: null,
-                lastUpdated: payload?.lastUpdated || payload?.fetchedAt || prev.lastUpdated,
-                metadata: extraMetadata,
-                rowCount: payload?.rowCount || null,
-                source: payload?.source || prev.source || null,
-              }));
-            }
-          } catch (error) {
-            if (!cancelled) {
-              const rawMessage = error?.message ? String(error.message) : '';
-              const friendlyMessage = (() => {
-                if (/HTTP\s*404/.test(rawMessage)) {
-                  return 'HTTP 404 — el endpoint remoto no existe o no devuelve JSON. Revisa la URL configurada en `binanceApiEndpoint`.';
-                }
-                if (/Failed to fetch/i.test(rawMessage) || /NetworkError/i.test(rawMessage)) {
-                  return 'No se pudo contactar al endpoint remoto. Comprueba la conexión o habilita CORS en tu origen.';
-                }
-                return rawMessage || 'No se pudo sincronizar el preset remoto de Binance.';
-              })();
-              setBinanceBaselineMeta((prev) => ({
-                ...prev,
-                status: prev.status === 'ready' ? 'ready' : 'error',
-                error: friendlyMessage,
-                metadata: { ...(prev.metadata || {}), endpoint: BINANCE_BASELINE_ENDPOINT },
-              }));
-            }
+        const syncStatus = () => {
+          const status = adaptDynamicStatusToMeta(readDynamicModelStatus());
+          if (!cancelled) {
+            setBinanceBaselineMeta(status);
           }
         };
-        updateBaseline('initial');
-        const interval = setInterval(() => updateBaseline('refresh'), BINANCE_BASELINE_REFRESH_MS);
+        syncStatus();
+        if (!isBinance) {
+          return () => {
+            cancelled = true;
+          };
+        }
+        const interval = setInterval(syncStatus, 1000);
         return () => {
           cancelled = true;
           clearInterval(interval);
@@ -7360,107 +7197,43 @@
     }
 
     function BinanceBaselineStatus({ meta, nowTs }) {
-      if (!meta) return null;
-      const status = meta.status || 'idle';
-      const error = meta.error ? String(meta.error) : null;
-      const lastUpdatedInput = meta.lastUpdated ?? meta.fetchedAt ?? null;
-      const lastUpdatedTs = parseTimestamp(lastUpdatedInput);
-      const lastUpdatedLabel = formatRelativeTime(lastUpdatedInput, { now: nowTs });
-      const lastAttemptLabel = formatRelativeTime(meta.lastAttempt, { now: nowTs });
-      const formatAbsolute = (value) => {
-        const ts = parseTimestamp(value);
-        if (ts == null) return null;
-        try {
-          return new Intl.DateTimeFormat(DEFAULT_LOCALE, {
-            dateStyle: 'short',
-            timeStyle: 'medium',
-          }).format(new Date(ts));
-        } catch (error) {
-          return new Date(ts).toISOString();
-        }
-      };
-      const absoluteLabel = formatAbsolute(lastUpdatedInput);
-      const rowCount = Number.isFinite(meta.rowCount) ? Number(meta.rowCount) : null;
-      const endpointLabel = meta?.metadata?.endpoint || null;
-      const sourceLabel = meta?.source || null;
-      const runningFromFile = typeof window !== 'undefined' && window.location.protocol === 'file:';
-      let tone = 'info';
-      let title = '';
-      const detailLines = [];
-      if (status === 'loading' || status === 'refreshing') {
-        tone = 'info';
-        title = status === 'refreshing'
-          ? 'Actualizando preset remoto de Binance…'
-          : 'Descargando preset remoto de Binance…';
-        if (endpointLabel) {
-          detailLines.push(`Fuente configurada: ${endpointLabel}.`);
-        }
-        if (lastUpdatedLabel) {
-          detailLines.push(`Última actualización exitosa hace ${lastUpdatedLabel}.`);
-        }
-      } else if (status === 'ready') {
-        tone = 'info';
-        title = 'Preset de Binance actualizado';
-        if (lastUpdatedLabel) {
-          detailLines.push(`Actualizado hace ${lastUpdatedLabel}.`);
-        }
-        if (!lastUpdatedLabel && absoluteLabel) {
-          detailLines.push(`Última sincronización: ${absoluteLabel}.`);
-        }
-        if (absoluteLabel && lastUpdatedLabel) {
-          detailLines.push(`Hora local: ${absoluteLabel}.`);
-        }
-        if (rowCount != null) {
-          detailLines.push(`Activos sincronizados: ${rowCount}.`);
-        }
-        if (sourceLabel || endpointLabel) {
-          const descriptor = [sourceLabel, endpointLabel].filter(Boolean).join(' · ');
-          detailLines.push(`Fuente: ${descriptor}.`);
-        }
-        detailLines.push('Compará LTV, APR y precio de liquidación con el panel oficial para validar la sincronización.');
-      } else if (status === 'error') {
-        tone = 'danger';
-        title = 'No se pudo sincronizar el preset remoto';
-        if (error) {
-          detailLines.push(error);
-        }
-        if (lastAttemptLabel) {
-          detailLines.push(`Último intento hace ${lastAttemptLabel}.`);
-        }
-        detailLines.push('Comprueba que el endpoint exponga JSON público (con cabeceras CORS) y que la URL sea correcta.');
-      } else {
-        const isDisabled = status === 'disabled';
-        tone = isDisabled ? 'info' : 'warn';
-        title = isDisabled ? 'Preset estático de Binance' : 'Preset estático (sin endpoint remoto)';
-        detailLines.push('Se usan los parámetros embebidos en `index.html`.');
-        detailLines.push('Si querés sobreescribirlos, alojá un JSON compatible y abrí el simulador con `?binanceApiEndpoint=https://tusitio/preset.json`.');
-        if (runningFromFile) {
-          detailLines.push('Tip: desde `file://` también podés definir `window.__BINANCE_BASELINE_ENDPOINT__ = "https://..."` antes de cargar el simulador.');
-        }
-      }
-      if (status === 'ready' && lastUpdatedTs != null && Number.isFinite(nowTs)) {
-        const stale = nowTs - lastUpdatedTs > 30 * 60 * 1000;
-        if (stale) {
-          tone = 'warn';
-          detailLines.push('Los datos tienen más de 30 minutos. Forzá una recarga si necesitás valores más recientes.');
-        }
-      }
-      const toneStyles = ALERT_TONE_STYLES[tone] || ALERT_TONE_STYLES.info;
-      const detailClass = tone === 'danger'
-        ? 'text-rose-700'
-        : tone === 'warn'
-          ? 'text-amber-700'
-          : 'text-neutral-600';
+      const status = meta?.dynamicStatus || readDynamicModelStatus();
+      const hasCache = !!status?.hasCache;
+      const cacheTs = status?.cacheTs ?? status?.snapshot?.serverTime ?? null;
+      const ageMsRaw = Number.isFinite(status?.ageMs) ? status.ageMs : null;
+      const ageMs = ageMsRaw != null ? ageMsRaw : (cacheTs != null && Number.isFinite(nowTs) ? Math.max(0, nowTs - cacheTs) : null);
+      const ageSeconds = Number.isFinite(ageMs) ? Math.floor(ageMs / 1000) : null;
+      const origin = status?.source || 'dynamic_model';
+      const snapshot = status?.snapshot || null;
+      const fetchedAt = snapshot?.fetchedAt || cacheTs || null;
+      const fetchedAgo = formatRelativeTime(fetchedAt, { now: nowTs, fallback: null });
+      const detailItems = [
+        { label: 'Cache', value: hasCache ? 'Disponible' : 'Sin datos', tone: hasCache ? 'ok' : 'warn' },
+        {
+          label: 'Edad del snapshot',
+          value: ageSeconds != null ? `${ageSeconds}s` : '—',
+          tone: ageSeconds != null && ageSeconds > 300 ? 'warn' : 'neutral',
+        },
+        { label: 'Origen', value: origin, tone: 'neutral' },
+      ];
+      const cacheLabel = fetchedAgo ? `Último cálculo hace ${fetchedAgo}.` : null;
+      const metadataSource = snapshot?.metadata?.model || origin;
       return (
-        <div className={`rounded-2xl border ${toneStyles.border} ${toneStyles.bg} px-4 py-3`}>
-          <div className={`text-sm font-semibold ${toneStyles.text}`}>{title}</div>
-          {detailLines.length > 0 && (
-            <ul className={`mt-1 space-y-1 text-xs ${detailClass}`}>
-              {detailLines.map((line, idx) => (
-                <li key={idx}>{line}</li>
-              ))}
-            </ul>
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <div className="text-sm font-semibold text-emerald-700">Modelo dinámico activo (sin backend)</div>
+          <div className="mt-1 text-xs font-medium text-emerald-700/80">Fórmulas + datos públicos (spot/funding)</div>
+          <div className="mt-3 space-y-2">
+            {detailItems.map((item) => (
+              <Line key={item.label} label={item.label} value={item.value} tone={item.tone} />
+            ))}
+            <Line label="Modelo" value={metadataSource} muted />
+          </div>
+          {cacheLabel && (
+            <div className="mt-2 text-[11px] font-medium text-emerald-700/80">{cacheLabel}</div>
           )}
+          <div className="mt-3 rounded-xl border border-emerald-200/70 bg-white/80 p-3 text-[11px] text-emerald-800/80">
+            LTV y precio de liquidación se autoajustan con volatilidad y pueden calibrarse por activo.
+          </div>
         </div>
       );
     }

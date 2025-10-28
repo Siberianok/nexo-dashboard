@@ -10,14 +10,11 @@ Simulador multiplataforma (Nexo, Binance, etc.) con **precios en vivo**, **LTV**
 3. Ajustá parámetros (frecuencia de refresco, Earn on/off, preset de plataforma).
 4. Simulá un préstamo (monto + fecha de repago) y seguí la proyección de cashflow.
 
-> El micro-servicio Node que vivía en Render fue retirado. Ahora la app es 100 % estática: los presets se cargan desde el HTML o desde un JSON remoto opcional.
+> El micro-servicio Node que vivía en Render fue retirado. Ahora la app es 100 % estática y el preset remoto quedó deshabilitado: el modelo dinámico corre en el navegador con datos públicos.
 
 ## 🔄 Binance en tiempo real (opcional)
 - **API keys personales**: ingresá tu `API Key` y `Secret` (permiso READ) en el panel "Binance Live" para sincronizar préstamos, APR y parámetros de colateral directamente con los endpoints SAPI oficiales.
-- **Snapshot remoto**: hospedá un JSON compatible y abrí el simulador con `?binanceApiEndpoint=https://tu-dominio/preset.json`. El front no proxea nada: debe ser un endpoint público con CORS habilitado. El estado del preset se muestra en la tarjeta “Preset de Binance”.
-- **Overrides manuales**: desde la consola podés definir `window.__BINANCE_BASELINE_ENDPOINT__ = 'https://.../preset.json'` antes de cargar el HTML. También se persiste la última URL en `localStorage` (`spm_binanceBaselineEndpoint`).
-
-Si no configurás un endpoint, el tablero usa el preset embebido y avisa con el estado “Preset estático”.
+- **Modelo dinámico**: sin backend. El panel “Modelo dinámico activo” resume la cache local, la edad del snapshot y el origen `dynamic_model` generado con fórmulas + APIs públicas de spot/funding.
 
 ## 📐 Fórmula de APR Neto
 La métrica de costo real se documenta y calcula así (decimales):
@@ -70,4 +67,4 @@ Ambos flags se pueden combinar. El estado se muestra en los indicadores (“forz
 - `docs/`: notas internas (checklists Binance, roadmap, etc.).
 - `README.md`: este documento.
 
-¡Listo! Con sólo `index.html` podés seguir iterando los presets, exportar/importar configuraciones (`Exportar JSON`) y documentar tus propios snapshots sin depender de Render.
+¡Listo! Con sólo `index.html` podés seguir iterando los presets, exportar/importar configuraciones (`Exportar JSON`) y documentar tus propios snapshots sin depender de servicios externos.
