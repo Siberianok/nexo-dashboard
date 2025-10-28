@@ -2138,10 +2138,10 @@
         loanLedger: {
           ADA: {
             originalPrincipal: 10300,
-            outstanding: 10471.01,
-            interestAccrued: 171.01,
-            annualRate: 0.0482,
-            netAnnualRate: 0.0474,
+            outstanding: 10425.73,
+            interestAccrued: 125.73,
+            annualRate: 0.0499,
+            netAnnualRate: 0.0488,
             liquidationLtv: 0.85,
             liquidationPriceHint: 0.35021,
             initialLtv: 0.4756,
@@ -2154,10 +2154,10 @@
           },
           ALGO: {
             originalPrincipal: 7026,
-            outstanding: 1201.78,
-            interestAccrued: 69.58,
-            annualRate: 0.0482,
-            netAnnualRate: 0.0436,
+            outstanding: 1203.8,
+            interestAccrued: 68.77,
+            annualRate: 0.0499,
+            netAnnualRate: 0.0456,
             liquidationLtv: 0.85,
             liquidationPriceHint: 0.02152,
             initialLtv: 0.1024,
@@ -2192,12 +2192,12 @@
           earnOnCollateral: true,
           binanceBorrowTicker: "ADA",
           loanRequests: [
-            { id: "loan-bin-ada", ticker: "ADA", amount: 10471.01 },
-            { id: "loan-bin-algo", ticker: "ALGO", amount: 1201.78 },
+            { id: "loan-bin-ada", ticker: "ADA", amount: 10425.73 },
+            { id: "loan-bin-algo", ticker: "ALGO", amount: 1203.8 },
           ],
         },
         previewSnapshot: {
-          loanAmount: 11672.79,
+          loanAmount: 11629.53,
           repayInDays: 90,
           currency: "USDT",
           params: {
@@ -2208,8 +2208,8 @@
             refreshSec: LIVE_REFRESH_SECONDS,
             binanceBorrowTicker: "ADA",
             loanRequests: [
-              { id: "loan-preview-ada", ticker: "ADA", amount: 10471.01 },
-              { id: "loan-preview-algo", ticker: "ALGO", amount: 1201.78 },
+              { id: "loan-preview-ada", ticker: "ADA", amount: 10425.73 },
+              { id: "loan-preview-algo", ticker: "ALGO", amount: 1203.8 },
             ],
           },
           assets: [
@@ -4477,16 +4477,33 @@
           acc.interest += interest;
           acc.paid += paid;
           acc.initialCollateral += Number.isFinite(collateralBase) && collateralBase > 0 ? collateralBase : 0;
+          if (Number.isFinite(initialLtv) && initialLtv > 0 && original > 0) {
+            acc.initialLtvWeightedSum += original * initialLtv;
+            acc.initialLtvWeight += original;
+          }
           return acc;
-        }, { original: 0, outstanding: 0, interest: 0, paid: 0, initialCollateral: 0 });
+        }, {
+          original: 0,
+          outstanding: 0,
+          interest: 0,
+          paid: 0,
+          initialCollateral: 0,
+          initialLtvWeightedSum: 0,
+          initialLtvWeight: 0,
+        });
       }, [isBinance, binanceLoanLedger, loanAmount, ltvByTicker, defaultLtv]);
       const binanceOriginalPrincipalTotal = binanceLedgerTotals.original;
       const binanceInterestAccruedTotal = binanceLedgerTotals.interest;
       const binanceInitialCollateralTotal = binanceLedgerTotals.initialCollateral;
+      const binanceInitialLtvWeighted = binanceLedgerTotals.initialLtvWeight > 0
+        ? binanceLedgerTotals.initialLtvWeightedSum / binanceLedgerTotals.initialLtvWeight
+        : null;
       const binanceTotalToRepay = Math.max(0, binanceOriginalPrincipalTotal + binanceInterestAccruedTotal);
-      const binanceInitialLtv = binanceInitialCollateralTotal > 0
-        ? binanceOriginalPrincipalTotal / binanceInitialCollateralTotal
-        : 0;
+      const binanceInitialLtv = Number.isFinite(binanceInitialLtvWeighted)
+        ? binanceInitialLtvWeighted
+        : (binanceInitialCollateralTotal > 0
+          ? binanceOriginalPrincipalTotal / binanceInitialCollateralTotal
+          : 0);
       const pct = (value, digits = 1) => formatPercent(Number(value), {
         minimumFractionDigits: digits,
         maximumFractionDigits: digits,
