@@ -4,34 +4,34 @@
     "lastUpdated": "2025-01-15T00:00:00.000Z",
     "config": {
         "name": "Binance",
-        "tagline": "Snapshot demo para smoke test est\u00e1tico.",
+        "tagline": "Snapshot demo para smoke test estático.",
         "earnAprTop": {
             "ADA": 0.03,
             "BNB": 0.012,
             "USDT": 0.045
         },
         "ltvByTicker": {
-            "ADA": 0.75,
+            "ADA": 0.48,
             "BNB": 0.7,
             "USDT": 0.9
         },
         "borrowRates": {
             "ADA": {
-                "label": "Pr\u00e9stamo flexible ADA",
+                "label": "Préstamo flexible ADA",
                 "loanAsset": "ADA",
                 "annual": 0.08,
                 "hourly": 9.132420091324201e-06,
                 "adjustmentAnnual": 0
             },
             "BNB": {
-                "label": "Pr\u00e9stamo flexible BNB",
+                "label": "Préstamo flexible BNB",
                 "loanAsset": "BNB",
                 "annual": 0.061,
                 "hourly": 6.963470319634703e-06,
                 "adjustmentAnnual": 0
             },
             "USDT": {
-                "label": "Pr\u00e9stamo flexible USDT",
+                "label": "Préstamo flexible USDT",
                 "loanAsset": "USDT",
                 "annual": 0.057,
                 "hourly": 6.506849315068493e-06,
@@ -41,20 +41,28 @@
         "loanLedger": {
             "ADA": {
                 "originalPrincipal": 12000,
-                "outstanding": 12000,
-                "interestAccrued": 0,
+                "outstanding": 10362.8,
+                "interestAccrued": 62.8,
                 "annualRate": 0.08,
-                "marginCallLtv": 0.85,
-                "liquidationLtv": 0.9,
-                "initialLtv": 0.55,
-                "currentLtv": 0.6,
+                "marginCallLtv": 0.8,
+                "liquidationLtv": 0.84124,
+                "initialLtv": 0.48,
+                "currentLtv": 0.48,
                 "collateralAmount": 20000,
                 "collateralIndexPrice": 1,
                 "borrowIndexPrice": 1,
                 "loanCoin": "USDT",
                 "lastUpdated": "2025-01-15",
                 "lastUpdatedTs": 1736899200000,
-                "notes": "Demo est\u00e1tico para QA"
+                "notes": "Demo estático para QA",
+                "payments": [
+                    {
+                        "id": "ada-payment-20250115",
+                        "amount": 62.93,
+                        "date": "2025-01-15",
+                        "note": "Pago capital USDT"
+                    }
+                ]
             },
             "BNB": {
                 "originalPrincipal": 4500,
@@ -75,9 +83,9 @@
         },
         "collateralParams": {
             "ADA": {
-                "initialLTV": 0.55,
-                "marginCall": 0.85,
-                "liquidationLTV": 0.9
+                "initialLTV": 0.48,
+                "marginCall": 0.8,
+                "liquidationLTV": 0.84124
             },
             "BNB": {
                 "initialLTV": 0.5,
@@ -99,7 +107,7 @@
         },
         "metadata": {
             "snapshot": "github-pages-demo",
-            "notes": "Valores ficticios para pruebas r\u00e1pidas sin llamar al backend remoto."
+            "notes": "Valores ficticios para pruebas rápidas sin llamar al backend remoto."
         }
     },
     "metadata": {

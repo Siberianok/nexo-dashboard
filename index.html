@@ -172,8 +172,8 @@
         BNB: { liqBias: -0.05 },
         SOL: { liqBias: 0.05 },
         DOGE: { liqBias: 0.08 },
-        ADA: { initialLtv: 0.4756, marginCallLtv: 0.8, liquidationLtv: 0.85 },
-        ALGO: { initialLtv: 0.1024, marginCallLtv: 0.8, liquidationLtv: 0.85 },
+        ADA: { initialLtv: 0.48, marginCallLtv: 0.8, liquidationLtv: 0.84124 },
+        ALGO: { initialLtv: 0.1, marginCallLtv: 0.8, liquidationLtv: 0.85143 },
       },
       skipAssets: ['USDT', 'USDC', 'BUSD', 'TUSD', 'FDUSD'],
       universe: {
@@ -789,8 +789,8 @@
     },
 
     "assetOverrides": {
-      "ADA":  { "initialLtv": 0.4756, "marginCallLtv": 0.8, "liquidationLtv": 0.85 },
-      "ALGO": { "initialLtv": 0.1024, "marginCallLtv": 0.8, "liquidationLtv": 0.85 }
+      "ADA":  { "initialLtv": 0.48, "marginCallLtv": 0.8, "liquidationLtv": 0.84124 },
+      "ALGO": { "initialLtv": 0.1, "marginCallLtv": 0.8, "liquidationLtv": 0.85143 }
     }
   }
   </script>
@@ -1974,8 +1974,8 @@
           USDT: 0.80,
           USDC: 0.80,
           BUSD: 0.85,
-          ADA: 0.4756,
-          ALGO: 0.1024,
+          ADA: 0.48,
+          ALGO: 0.1,
           XRP: 0.50,
           SOL: 0.50,
         },
@@ -2153,6 +2153,9 @@
             collateralPriceAtOrigination: 0.421,
             originationAt: '2025-07-20T20:03:00Z',
             borrowIndexPrice: 1,
+            payments: [
+              { id: "ada-payment-20250115", amount: 62.93, date: "2025-01-15", note: "Pago capital USDT" }
+            ],
           },
           ALGO: {
             originalPrincipal: 7026,
@@ -2201,7 +2204,7 @@
           ],
         },
         previewSnapshot: {
-          loanAmount: 11629.53,
+          loanAmount: 11566.6,
           repayInDays: 90,
           currency: "USDT",
           params: {
@@ -2222,9 +2225,9 @@
             { id: 3, name: "BNB", ticker: "BNB", qty: 120, price: 230, priceAuto: false, useAsCollateral: true },
             { id: 4, name: "USD Coin", ticker: "USDC", qty: 1500, price: 1, priceAuto: false, useAsCollateral: true },
             { id: 5, name: "BUSD", ticker: "BUSD", qty: 800, price: 1, priceAuto: false, useAsCollateral: true },
-            { id: 6, name: "Cardano", ticker: "ADA", qty: 35175.57, price: 0.625901, priceAuto: false, useAsCollateral: true },
+            { id: 6, name: "Cardano", ticker: "ADA", qty: 35175.57, price: 0.613755, priceAuto: false, useAsCollateral: true },
             { id: 7, name: "XRP", ticker: "XRP", qty: 3000, price: 0.52, priceAuto: false, useAsCollateral: false },
-            { id: 8, name: "Algorand", ticker: "ALGO", qty: 65699.76, price: 0.178633, priceAuto: false, useAsCollateral: true },
+            { id: 8, name: "Algorand", ticker: "ALGO", qty: 65699.76, price: 0.183227, priceAuto: false, useAsCollateral: true },
           ],
         },
         exportPrefix: "binance_dashboard",
