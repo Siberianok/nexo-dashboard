@@ -4958,6 +4958,15 @@
         : Math.max(0, binanceOriginalPrincipalTotal + binanceInterestAccruedTotal - binancePaidDisplayTotal);
       const projectedFinalPayoff = Math.max(0, cashflowDerived?.projectedFinalPayoff || 0);
       const totalProjectedOutflows = Math.max(0, cashflowDerived?.totalCost || 0);
+      const totalRepayPrincipal = Math.max(0, scheduledPrincipal + plannedOutstandingPrincipal);
+      const totalRepayInterest = Math.max(0, scheduledInterest + plannedAccruedInterest);
+      const repayTotalSubtle = totalProjectedOutflows > 0
+        ? [
+            `Capital ${formatLoan(totalRepayPrincipal)}`,
+            `Interés ${formatLoan(totalRepayInterest)}`,
+            projectedFinalPayoff > 0 ? `Pago final proyectado ${formatLoan(projectedFinalPayoff)}` : null,
+          ].filter(Boolean).join(' · ')
+        : undefined;
       const plannedCollateralDelta = cashflowDerived?.collateralDeltaPlanned ?? 0;
       const collateralAfterPlan = Math.max(0, cashflowDerived?.collateralAfterPlan ?? (totals.totalCollateralValue + plannedCollateralDelta));
       const monthlyLoanCost = useMemo(
@@ -5017,6 +5026,29 @@
       const binanceNetLtvSubtle = totals.totalCollateralValue > 0
         ? `Colateral actual ${formatUsd(totals.totalCollateralValue)}`
         : 'Sin colateral';
+      const collateralCompositionSubtle = useMemo(() => {
+        const collaterals = (totals.withValue || [])
+          .filter((asset) => asset.useAsCollateral && asset.value > 0);
+        if (!(collaterals.length > 0)) {
+          return totals.totalCollateralValue > 0 ? '—' : 'Sin colateral';
+        }
+        const sorted = [...collaterals].sort((a, b) => b.value - a.value);
+        const formatQty = (qty) => {
+          if (!Number.isFinite(qty) || qty <= 0) return null;
+          const digits = qty >= 100 ? 0 : qty >= 10 ? 1 : qty >= 1 ? 2 : 4;
+          return formatDecimal(qty, { minimumFractionDigits: 0, maximumFractionDigits: digits });
+        };
+        return sorted.map((asset) => {
+          const tickerLabel = (asset.ticker || '').toUpperCase() || '—';
+          const qtyLabel = formatQty(asset.qty);
+          const parts = [`${tickerLabel} ${formatUsd(asset.value)}`];
+          if (qtyLabel) parts.push(`(${qtyLabel})`);
+          return parts.join(' ');
+        }).join(' · ');
+      }, [totals.withValue, totals.totalCollateralValue, formatUsd]);
+      const binanceRepaySubtle = binanceTotalToRepay > 0
+        ? `Capital ${formatLoan(binanceOriginalPrincipalTotal)} · Interés ${formatLoan(binanceInterestAccruedTotal)}`
+        : '—';
       const binanceExtraCollateralNeeded = ltvHealthyThreshold > 0 ? Math.max(0, binanceLoanAfterPlan / ltvHealthyThreshold - binanceCollateralAfterPlan) : 0;
       const binanceRepayNeeded = Math.max(0, binanceLoanAfterPlan - binanceCollateralAfterPlan * ltvHealthyThreshold);
       const binanceBufferToCaution = Math.max(0, binanceCollateralAfterPlan * ltvWarnThreshold - binanceLoanAfterPlan);
@@ -5449,10 +5481,10 @@
             <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
               {(isBinance ? [
                 { key: 'loan-current', title: 'Préstamo original', value: formatLoan(binanceOriginalPrincipalTotal), subtle: binanceOriginalPrincipalTotal > 0 ? 'Capital original' : '—' },
-                { key: 'repay-total', title: 'Total a devolver', value: formatLoan(binanceTotalToRepay) },
+                { key: 'repay-total', title: 'Total a devolver', value: formatLoan(binanceTotalToRepay), subtle: binanceRepaySubtle },
                 { key: 'loan-paid', title: 'Pagos hechos', value: formatLoan(binancePaidDisplayTotal), subtle: binancePaidSubtle },
                 { key: 'loan-plan', title: 'Préstamo neto', value: formatLoan(binanceNetLoanValue), subtle: binanceLoanNetSubtle },
-                { key: 'collateral-current', title: 'Colateral actual', value: formatUsd(totals.totalCollateralValue) },
+                { key: 'collateral-current', title: 'Colateral actual', value: formatUsd(totals.totalCollateralValue), subtle: collateralCompositionSubtle },
                 { key: 'ltv-current', title: 'LTV inicial', value: toPct(binanceInitialLtv, 2), tone: binanceInitialLtvTone, subtle: binanceInitialCollateralSubtle },
                 { key: 'ltv-plan', title: 'LTV neto', value: toPct(currentOverallLTV, 2), tone: binanceCurrentLtvTone, subtle: binanceNetLtvSubtle },
                 { key: 'apr', title: 'Tasa anual (APR)', value: toPct(isBinance ? binanceBaseAnnualRate : chosenAPR, 2), subtle: binanceBorrowLabel || undefined },
@@ -5479,7 +5511,7 @@
                 { key: 'ltv-top', title: 'Tope por LTVs', value: formatUsd(totals.maxBorrow) },
                 { key: 'loan-target', title: 'Préstamo recomendado (≤20%)', value: formatUsd(recommendedLoanAtTarget) },
                 { key: 'interest-total', title: 'Interés hasta repago', value: formatLoan(interestCalc.total), subtle: `${daysUntilRepay} días` },
-                { key: 'repay-total', title: 'Total a devolver', value: formatLoan(totalProjectedOutflows), subtle: projectedFinalPayoff > 0 ? `Pago final proyectado ${formatLoan(projectedFinalPayoff)}` : undefined },
+                { key: 'repay-total', title: 'Total a devolver', value: formatLoan(totalProjectedOutflows), subtle: repayTotalSubtle },
                 { key: 'earn-monthly', title: 'Earn mensual (hasta)', value: formatUsd(earnMonthly), subtle: earnEligible ? (minBalancePerks > 0 ? `Savings ≥ US$${formatDecimal(minBalancePerks, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : undefined) : (forceOn ? 'forzado (sim)' : 'no elegible') },
               ]).map((item) => (
                 <KPI key={item.key} title={item.title} value={item.value} subtle={item.subtle} tone={item.tone} variant={item.variant || 'button'} />
