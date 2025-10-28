@@ -40,16 +40,16 @@
         },
         "loanLedger": {
             "ADA": {
-                "originalPrincipal": 12000,
-                "outstanding": 10362.8,
-                "interestAccrued": 62.8,
-                "annualRate": 0.08,
+                "originalPrincipal": 10421.06,
+                "outstanding": 10425.78,
+                "interestAccrued": 67.65,
+                "annualRate": 0.0499,
                 "marginCallLtv": 0.8,
                 "liquidationLtv": 0.84124,
-                "initialLtv": 0.48,
-                "currentLtv": 0.48,
-                "collateralAmount": 20000,
-                "collateralIndexPrice": 1,
+                "initialLtv": 0.6955,
+                "currentLtv": 0.4756,
+                "collateralAmount": 35175.5669,
+                "collateralIndexPrice": 0.625901,
                 "borrowIndexPrice": 1,
                 "loanCoin": "USDT",
                 "lastUpdated": "2025-01-15",
@@ -64,21 +64,36 @@
                     }
                 ]
             },
-            "BNB": {
-                "originalPrincipal": 4500,
-                "outstanding": 4515.75,
-                "interestAccrued": 15.75,
-                "annualRate": 0.061,
+            "ALGO": {
+                "originalPrincipal": 7035.18,
+                "outstanding": 1203.81,
+                "interestAccrued": 62.37,
+                "annualRate": 0.0499,
                 "marginCallLtv": 0.8,
-                "liquidationLtv": 0.88,
-                "initialLtv": 0.5,
-                "currentLtv": 0.48,
-                "collateralAmount": 25,
-                "collateralIndexPrice": 400,
+                "liquidationLtv": 0.85143,
+                "initialLtv": 0.5987,
+                "currentLtv": 0.1024,
+                "collateralAmount": 65699.7595,
+                "collateralIndexPrice": 0.1786328,
                 "borrowIndexPrice": 1,
                 "loanCoin": "USDT",
                 "lastUpdated": "2025-01-15",
-                "lastUpdatedTs": 1736899200000
+                "lastUpdatedTs": 1736899200000,
+                "notes": "Demo estático para QA",
+                "payments": [
+                    {
+                        "id": "algo-payment-1",
+                        "amount": 5890.97,
+                        "date": "2024-03-12",
+                        "note": "Pago capital"
+                    },
+                    {
+                        "id": "algo-payment-2",
+                        "amount": 2.77,
+                        "date": "2024-03-12",
+                        "note": "Pago interés"
+                    }
+                ]
             }
         },
         "collateralParams": {
