@@ -88,7 +88,22 @@
                 "borrowIndexPrice": 1,
                 "loanCoin": "USDT",
                 "lastUpdated": "2025-01-15",
-                "lastUpdatedTs": 1736899200000
+                "lastUpdatedTs": 1736899200000,
+                "notes": "Demo estático para QA",
+                "payments": [
+                    {
+                        "id": "algo-payment-1",
+                        "amount": 5890.97,
+                        "date": "2024-03-12",
+                        "note": "Pago capital"
+                    },
+                    {
+                        "id": "algo-payment-2",
+                        "amount": 2.77,
+                        "date": "2024-03-12",
+                        "note": "Pago interés"
+                    }
+                ]
             }
         },
         "collateralParams": {
