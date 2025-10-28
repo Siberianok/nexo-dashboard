@@ -1693,7 +1693,7 @@
       }).format(value);
     };
 
-    const formatCurrency = (value, currency = 'USD') => {
+    const formatCurrency = (value, currency = 'USDT') => {
       if (!Number.isFinite(value)) return '—';
       try {
         return new Intl.NumberFormat(DEFAULT_LOCALE, {
@@ -1913,7 +1913,7 @@
         previewSnapshot: {
           loanAmount: 15000,
           repayInDays: 120,
-          currency: "USD",
+          currency: "USDT",
           params: {
             exchangeRates: { ...DEFAULT_EXCHANGE_RATES, ARS: 1050 },
             loyaltyModel: "vsRest",
@@ -2179,7 +2179,7 @@
         previewSnapshot: {
           loanAmount: 11672.79,
           repayInDays: 90,
-          currency: "USD",
+          currency: "USDT",
           params: {
             exchangeRates: { ...DEFAULT_EXCHANGE_RATES, ARS: 1050 },
             liveQuotes: true,
@@ -2315,7 +2315,7 @@
         previewSnapshot: {
           loanAmount: 18000,
           repayInDays: 75,
-          currency: "USD",
+          currency: "USDT",
           params: {
             exchangeRates: { ...DEFAULT_EXCHANGE_RATES, EUR: 0.94 },
             loyaltyModel: "vsTotal",
@@ -2443,7 +2443,7 @@
         previewSnapshot: {
           loanAmount: 9000,
           repayInDays: 150,
-          currency: "USD",
+          currency: "USDT",
           params: {
             exchangeRates: { ...DEFAULT_EXCHANGE_RATES, CAD: 1.34 },
             loyaltyModel: "vsRest",
@@ -2546,7 +2546,7 @@
     const PLATFORM_IDS = Object.keys(PLATFORM_BASE_CONFIGS);
     const BASE_GLOBAL_COINGECKO_IDS = Object.values(PLATFORM_BASE_CONFIGS).reduce((acc, cfg) => ({ ...acc, ...(cfg.coingeckoIds || {}) }), {});
 
-    const fmt = (value, currency = "USD", showCurrency = true) => {
+    const fmt = (value, currency = "USDT", showCurrency = true) => {
       if (!Number.isFinite(value)) return showCurrency ? '—' : '0';
       return showCurrency ? formatCurrency(value, currency) : formatDecimal(value);
     };
@@ -2643,30 +2643,9 @@
       const loyaltyModelFallback = platformDefaultParams?.loyaltyModel ?? loyaltyModels[0]?.id ?? "vsRest";
       const isBinance = id === "binance";
       const [nowTs, setNowTs] = useState(() => Date.now());
-      const [binanceBaselineMeta, setBinanceBaselineMeta] = useState(() => adaptDynamicStatusToMeta(readDynamicModelStatus()));
       useEffect(() => {
         writeSimModelConfigToDom(simModelConfig);
       }, [simModelConfig]);
-      useEffect(() => {
-        let cancelled = false;
-        const syncStatus = () => {
-          const status = adaptDynamicStatusToMeta(readDynamicModelStatus());
-          if (!cancelled) {
-            setBinanceBaselineMeta(status);
-          }
-        };
-        syncStatus();
-        if (!isBinance) {
-          return () => {
-            cancelled = true;
-          };
-        }
-        const interval = setInterval(syncStatus, 1000);
-        return () => {
-          cancelled = true;
-          clearInterval(interval);
-        };
-      }, [isBinance]);
       const clamp01 = (v) => Math.max(0, Math.min(1, Number(v) || 0));
       const toPct = (value, digits = 0) => formatPercent(Number(value), {
         minimumFractionDigits: digits,
@@ -4034,9 +4013,9 @@
       const [selectedCurrency, setSelectedCurrency] = useState(() => {
         if (previewSnapshot?.currency) return previewSnapshot.currency;
         if (typeof previewSnapshot?.showArs === 'boolean') {
-          return previewSnapshot.showArs ? 'ARS' : 'USD';
+          return previewSnapshot.showArs ? 'ARS' : 'USDT';
         }
-        return 'USD';
+        return 'USDT';
       });
       const [lastPriceTs, setLastPriceTs] = useState(null);
       const [liveError, setLiveError] = useState(null);
@@ -5368,11 +5347,6 @@
           </div>
 
           <div className="mx-auto max-w-7xl px-4 py-6">
-            {isBinance && (
-              <div className="mb-6">
-                <BinanceBaselineStatus meta={binanceBaselineMeta} nowTs={nowTs} />
-              </div>
-            )}
             <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
               {(isBinance ? [
                 { key: 'loan-current', title: 'Préstamo original', value: formatLoan(binanceOriginalPrincipalTotal), subtle: binanceOriginalPrincipalTotal > 0 ? 'Capital original' : '—' },
