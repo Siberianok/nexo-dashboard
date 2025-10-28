@@ -4459,16 +4459,33 @@
           acc.interest += interest;
           acc.paid += paid;
           acc.initialCollateral += Number.isFinite(collateralBase) && collateralBase > 0 ? collateralBase : 0;
+          if (Number.isFinite(initialLtv) && initialLtv > 0 && original > 0) {
+            acc.initialLtvWeightedSum += original * initialLtv;
+            acc.initialLtvWeight += original;
+          }
           return acc;
-        }, { original: 0, outstanding: 0, interest: 0, paid: 0, initialCollateral: 0 });
+        }, {
+          original: 0,
+          outstanding: 0,
+          interest: 0,
+          paid: 0,
+          initialCollateral: 0,
+          initialLtvWeightedSum: 0,
+          initialLtvWeight: 0,
+        });
       }, [isBinance, binanceLoanLedger, loanAmount, ltvByTicker, defaultLtv]);
       const binanceOriginalPrincipalTotal = binanceLedgerTotals.original;
       const binanceInterestAccruedTotal = binanceLedgerTotals.interest;
       const binanceInitialCollateralTotal = binanceLedgerTotals.initialCollateral;
+      const binanceInitialLtvWeighted = binanceLedgerTotals.initialLtvWeight > 0
+        ? binanceLedgerTotals.initialLtvWeightedSum / binanceLedgerTotals.initialLtvWeight
+        : null;
       const binanceTotalToRepay = Math.max(0, binanceOriginalPrincipalTotal + binanceInterestAccruedTotal);
-      const binanceInitialLtv = binanceInitialCollateralTotal > 0
-        ? binanceOriginalPrincipalTotal / binanceInitialCollateralTotal
-        : 0;
+      const binanceInitialLtv = Number.isFinite(binanceInitialLtvWeighted)
+        ? binanceInitialLtvWeighted
+        : (binanceInitialCollateralTotal > 0
+          ? binanceOriginalPrincipalTotal / binanceInitialCollateralTotal
+          : 0);
       const pct = (value, digits = 1) => formatPercent(Number(value), {
         minimumFractionDigits: digits,
         maximumFractionDigits: digits,
