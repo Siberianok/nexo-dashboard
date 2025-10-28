@@ -4923,6 +4923,13 @@
         standardNetAnnualRate = Math.max(standardNetAnnualRate, aprClampValue);
       }
 
+      const effectiveNetAnnualRate = isBinance ? binanceBorrowNetAnnualRate : standardNetAnnualRate;
+      const monthlyInterestRateBasis = Number.isFinite(effectiveNetAnnualRate) && effectiveNetAnnualRate >= 0
+        ? { value: effectiveNetAnnualRate, label: 'APR neta' }
+        : { value: Math.max(0, Number.isFinite(chosenAPR) ? chosenAPR : 0), label: 'APR base' };
+      const monthlyInterestRateValue = monthlyInterestRateBasis.value;
+      const monthlyInterestRateLabel = monthlyInterestRateBasis.label;
+
       const cashflowDerived = useMemo(() =>
         computeCashflowProjections(cashflowPlan, {
           loanAmount,
@@ -4979,8 +4986,16 @@
       const plannedCollateralDelta = cashflowDerived?.collateralDeltaPlanned ?? 0;
       const collateralAfterPlan = Math.max(0, cashflowDerived?.collateralAfterPlan ?? (totals.totalCollateralValue + plannedCollateralDelta));
       const monthlyLoanCost = useMemo(
-        () => plannedOutstandingPrincipal * (Math.pow(1 + chosenAPR / 365, 30) - 1),
-        [plannedOutstandingPrincipal, chosenAPR],
+        () => {
+          const outstandingBase = isBinance
+            ? Math.max(0, binanceNetLoanValue)
+            : Math.max(0, plannedOutstanding);
+          if (!(outstandingBase > 0)) return 0;
+          const annualRate = Math.max(0, Number.isFinite(monthlyInterestRateValue) ? monthlyInterestRateValue : 0);
+          if (!(annualRate > 0)) return 0;
+          return outstandingBase * (Math.pow(1 + annualRate / 365, 30) - 1);
+        },
+        [isBinance, binanceNetLoanValue, plannedOutstanding, monthlyInterestRateValue],
       );
       const lowCostHeadroom = useMemo(
         () => Math.max(0, capLowCost - plannedOutstandingPrincipal * usdPerUsdt),
@@ -5525,7 +5540,7 @@
                   key: 'interest-monthly',
                   title: 'Interés mensual estimado',
                   value: formatLoan(monthlyLoanCost),
-                  subtle: `${toPct(chosenAPR, 2)} APR base`,
+                  subtle: `${toPct(monthlyInterestRateValue, 2)} ${monthlyInterestRateLabel}`,
                 },
               ] : [
                 { key: 'balance', title: 'Balance total', value: formatUsd(totals.total) },
