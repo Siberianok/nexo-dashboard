@@ -1802,7 +1802,9 @@
         maximumFractionDigits: safeDecimals,
       });
     };
-    const FX_SYMBOLS = SUPPORTED_CURRENCIES.filter((c) => !['USD', 'USDT'].includes(c.code)).map((c) => c.code);
+    const FX_SYMBOLS = SUPPORTED_CURRENCIES
+      .filter((c) => c.code !== 'USDT')
+      .map((c) => c.code);
 
     const PLATFORM_BASE_CONFIGS = {
       nexo: {
@@ -3894,21 +3896,39 @@
           const symbols = FX_SYMBOLS.join(',');
           let ratesPayload = {};
           if (symbols) {
-            const res = await fetch(`https://api.exchangerate.host/latest?base=USD&symbols=${symbols}`);
+            const res = await fetch(`https://api.exchangerate.host/latest?base=USDT&symbols=${symbols}`);
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             ratesPayload = await res.json();
           }
-          const nextRates = sanitizeExchangeRates(ratesPayload?.rates || {});
+          const rawRates = ratesPayload?.rates && typeof ratesPayload.rates === 'object' ? ratesPayload.rates : {};
+          let usdPerUsdt = Number(rawRates?.USD);
+          if (!(Number.isFinite(usdPerUsdt) && usdPerUsdt > 0)) {
+            usdPerUsdt = null;
+          }
           try {
             const usdtRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=usd');
             if (usdtRes.ok) {
               const usdtData = await usdtRes.json();
               const usdtUsd = Number(usdtData?.tether?.usd);
               if (Number.isFinite(usdtUsd) && usdtUsd > 0) {
-                nextRates.USDT = 1 / usdtUsd;
+                usdPerUsdt = usdtUsd;
               }
             }
           } catch {}
+          const normalizedRates = {};
+          if (Number.isFinite(usdPerUsdt) && usdPerUsdt > 0) {
+            Object.entries(rawRates).forEach(([code, perUsdt]) => {
+              if (code === 'USD' || code === 'USDT') return;
+              const value = Number(perUsdt);
+              if (Number.isFinite(value) && value > 0) {
+                normalizedRates[code] = value / usdPerUsdt;
+              }
+            });
+          }
+          const nextRates = sanitizeExchangeRates(normalizedRates);
+          if (Number.isFinite(usdPerUsdt) && usdPerUsdt > 0) {
+            nextRates.USDT = 1 / usdPerUsdt;
+          }
           setParams((prev) => ({
             ...prev,
             exchangeRates: nextRates,
