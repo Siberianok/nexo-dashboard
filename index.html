@@ -2144,12 +2144,14 @@
             netAnnualRate: 0.0488,
             liquidationLtv: 0.85,
             liquidationPriceHint: 0.35021,
-            initialLtv: 0.4756,
+            initialLtv: 0.6955,
             currentLtv: 0.4756,
             collateralAmount: 35175.5669,
             collateralIndexPrice: 0.625901,
             collateralUsd: 22016.4214,
-            initialCollateralValue: 22016.4214,
+            initialCollateralValue: 14808.9137,
+            collateralPriceAtOrigination: 0.421,
+            originationAt: '2025-07-20T20:03:00Z',
             borrowIndexPrice: 1,
           },
           ALGO: {
@@ -2160,12 +2162,14 @@
             netAnnualRate: 0.0456,
             liquidationLtv: 0.85,
             liquidationPriceHint: 0.02152,
-            initialLtv: 0.1024,
+            initialLtv: 0.5987,
             currentLtv: 0.1024,
             collateralAmount: 65699.7595,
             collateralIndexPrice: 0.1786328,
             collateralUsd: 11736.1328,
-            initialCollateralValue: 11736.1328,
+            initialCollateralValue: 11736.132,
+            collateralPriceAtOrigination: 0.1786328,
+            originationAt: '2025-07-17T16:49:00Z',
             borrowIndexPrice: 1,
             payments: [
               { id: "algo-payment-1", amount: 5890.97, date: "2024-03-12", note: "Pago capital" },
@@ -3143,6 +3147,26 @@
           const borrowIndexPrice = Number(entry.borrowIndexPrice);
           const collateralIndexPrice = Number(entry.collateralIndexPrice);
           const currentLtv = Number(entry.currentLtv);
+          const collateralPriceAtOriginationRaw = Number(
+            entry.collateralPriceAtOrigination
+            ?? entry.originationPriceUsd
+            ?? entry.initialCollateralPrice
+            ?? entry.priceAtBorrow
+          );
+          const originationTimestampCandidate = Number(entry.originationTs ?? entry.originationTimestamp ?? entry.borrowTimestamp);
+          let originationAtIso = null;
+          let originationTs = null;
+          if (typeof entry.originationAt === 'string' && entry.originationAt) {
+            const parsed = Date.parse(entry.originationAt);
+            if (!Number.isNaN(parsed)) {
+              originationTs = parsed;
+              originationAtIso = new Date(parsed).toISOString();
+            }
+          }
+          if (!originationTs && Number.isFinite(originationTimestampCandidate) && originationTimestampCandidate > 0) {
+            originationTs = originationTimestampCandidate;
+            originationAtIso = new Date(originationTimestampCandidate).toISOString();
+          }
           const loanCoin = sanitizeTicker(entry.loanCoin || entry.borrowCoin || entry.loanTicker || '');
           const lastUpdatedTs = Number(entry.lastUpdatedTs);
           const borrowDate = typeof entry.borrowDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(entry.borrowDate)
@@ -3151,6 +3175,18 @@
           const lastUpdated = typeof entry.lastUpdated === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(entry.lastUpdated)
             ? entry.lastUpdated
             : fallbackDate;
+          if (!originationAtIso && borrowDate) {
+            const parsed = Date.parse(`${borrowDate}T00:00:00Z`);
+            if (!Number.isNaN(parsed)) {
+              originationTs = parsed;
+              originationAtIso = new Date(parsed).toISOString();
+            }
+          }
+          const resolvedCollateralPriceAtOrigination = Number.isFinite(collateralPriceAtOriginationRaw) && collateralPriceAtOriginationRaw > 0
+            ? collateralPriceAtOriginationRaw
+            : (Number.isFinite(initialCollateralValueRaw) && Number.isFinite(collateralAmountRaw) && initialCollateralValueRaw > 0 && collateralAmountRaw > 0
+              ? initialCollateralValueRaw / collateralAmountRaw
+              : null);
           acc[key] = {
             originalPrincipal: original > 0 ? original : Math.max(0, outstanding + paidTotal - interestAccrued),
             outstanding: outstanding > 0 ? outstanding : Math.max(0, original - paidTotal + interestAccrued),
@@ -3173,6 +3209,11 @@
             borrowIndexPrice: Number.isFinite(borrowIndexPrice) && borrowIndexPrice > 0 ? borrowIndexPrice : null,
             collateralIndexPrice: Number.isFinite(collateralIndexPrice) && collateralIndexPrice > 0 ? collateralIndexPrice : null,
             currentLtv: Number.isFinite(currentLtv) && currentLtv >= 0 ? currentLtv : null,
+            collateralPriceAtOrigination: Number.isFinite(resolvedCollateralPriceAtOrigination) && resolvedCollateralPriceAtOrigination > 0
+              ? resolvedCollateralPriceAtOrigination
+              : null,
+            originationAt: originationAtIso,
+            originationTs: Number.isFinite(originationTs) && originationTs > 0 ? originationTs : null,
           };
           return acc;
         }, {});
