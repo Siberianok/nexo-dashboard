@@ -3139,9 +3139,14 @@
           const rawInterest = Number(entry.interestAccrued);
           const computedInterest = Math.max(0, outstanding - Math.max(0, original - paidTotal));
           const interestAccrued = Number.isFinite(rawInterest) && rawInterest >= 0 ? rawInterest : computedInterest;
+          const principalOutstandingRaw = Number(entry.principalOutstanding);
+          const resolvedPrincipalOutstanding = Number.isFinite(principalOutstandingRaw) && principalOutstandingRaw >= 0
+            ? principalOutstandingRaw
+            : Math.max(0, outstanding - interestAccrued);
           const annualRate = Number(entry.annualRate);
           const netAnnualRate = Number(entry.netAnnualRate);
           const liquidationPriceHint = Number(entry.liquidationPriceHint);
+          const marginCallPriceHint = Number(entry.marginCallPrice ?? entry.marginCallPriceHint);
           const liquidationLtv = Number(entry.liquidationLtv);
           const marginCallLtv = Number(entry.marginCallLtv);
           const initialLtv = Number(entry.initialLtv);
@@ -3190,15 +3195,18 @@
             : (Number.isFinite(initialCollateralValueRaw) && Number.isFinite(collateralAmountRaw) && initialCollateralValueRaw > 0 && collateralAmountRaw > 0
               ? initialCollateralValueRaw / collateralAmountRaw
               : null);
+          const etbRaw = Number(entry.etb);
           acc[key] = {
             originalPrincipal: original > 0 ? original : Math.max(0, outstanding + paidTotal - interestAccrued),
             outstanding: outstanding > 0 ? outstanding : Math.max(0, original - paidTotal + interestAccrued),
+            principalOutstanding: resolvedPrincipalOutstanding,
             payments,
             paidTotal,
             interestAccrued,
             annualRate: Number.isFinite(annualRate) && annualRate > 0 ? annualRate : null,
             netAnnualRate: Number.isFinite(netAnnualRate) && netAnnualRate >= 0 ? netAnnualRate : null,
             liquidationPriceHint: Number.isFinite(liquidationPriceHint) && liquidationPriceHint > 0 ? liquidationPriceHint : null,
+            marginCallPrice: Number.isFinite(marginCallPriceHint) && marginCallPriceHint > 0 ? marginCallPriceHint : null,
             liquidationLtv: Number.isFinite(liquidationLtv) && liquidationLtv > 0 ? liquidationLtv : null,
             marginCallLtv: Number.isFinite(marginCallLtv) && marginCallLtv > 0 ? marginCallLtv : null,
             borrowDate,
@@ -3217,6 +3225,7 @@
               : null,
             originationAt: originationAtIso,
             originationTs: Number.isFinite(originationTs) && originationTs > 0 ? originationTs : null,
+            etb: Number.isFinite(etbRaw) ? etbRaw : null,
           };
           return acc;
         }, {});
@@ -5118,24 +5127,29 @@
               ? (hasPlannedOutstanding ? plannedOutstanding : mappedLoanRaw)
               : 0;
             const ledgerEntry = isBinance ? binanceLoanLedger[ticker] : null;
-            const manualAllocation = manualActive
+            const manualAllocationBaseline = manualActive
               ? Math.max(0, asset.loanAssigned || 0)
               : (directLoanActive ? mappedLoan : loanBase * share);
-            const ledgerOutstandingHint = Number.isFinite(ledgerEntry?.outstanding) && ledgerEntry.outstanding >= 0
-              ? Math.max(0, ledgerEntry.outstanding)
-              : 0;
+            const ledgerOutstandingRaw = Number(ledgerEntry?.outstanding);
+            const ledgerOutstanding = Number.isFinite(ledgerOutstandingRaw) && ledgerOutstandingRaw >= 0
+              ? ledgerOutstandingRaw
+              : null;
             const paidTotal = Math.max(0, Number(ledgerEntry?.paidTotal) || 0);
             const interestAccrued = Math.max(0, Number(ledgerEntry?.interestAccrued) || 0);
             const originalPrincipal = Number.isFinite(ledgerEntry?.originalPrincipal) && ledgerEntry.originalPrincipal > 0
               ? ledgerEntry.originalPrincipal
-              : Math.max(0, manualAllocation + paidTotal - interestAccrued);
-            const ledgerNetOutstanding = Math.max(0, originalPrincipal + interestAccrued - paidTotal);
-            const fallbackOutstanding = ledgerNetOutstanding > 0
-              ? ledgerNetOutstanding
-              : (ledgerOutstandingHint > 0 ? ledgerOutstandingHint : manualAllocation);
+              : Math.max(0, manualAllocationBaseline + paidTotal - interestAccrued);
+            const ledgerPrincipalOutstandingRaw = Number(ledgerEntry?.principalOutstanding);
+            const ledgerPrincipalOutstanding = Number.isFinite(ledgerPrincipalOutstandingRaw) && ledgerPrincipalOutstandingRaw >= 0
+              ? ledgerPrincipalOutstandingRaw
+              : Math.max(0, (ledgerOutstanding != null ? ledgerOutstanding - interestAccrued : originalPrincipal - paidTotal));
+            const derivedOutstanding = Math.max(0, ledgerPrincipalOutstanding + interestAccrued);
+            const fallbackOutstanding = ledgerOutstanding != null
+              ? ledgerOutstanding
+              : (derivedOutstanding > 0 ? derivedOutstanding : manualAllocationBaseline);
             const loanNetOutstanding = hasPlannedOutstanding
-              ? plannedOutstanding
-              : fallbackOutstanding;
+              ? Math.max(0, plannedOutstanding)
+              : Math.max(0, fallbackOutstanding);
             const usageVsCap = maxBorrowForAsset > 0 ? loanNetOutstanding / maxBorrowForAsset : 0;
             const qty = Number(asset.qty) || 0;
             const ledgerCollateralAmount = Number.isFinite(ledgerEntry?.collateralAmount) && ledgerEntry.collateralAmount > 0
@@ -5190,17 +5204,18 @@
                     ? borrowInfo.netAnnual
                     : fallbackNetApr)))
               : Math.max(0, (Number.isFinite(chosenAPR) ? chosenAPR : 0) - baseOffset);
-            const netApr = Number.isFinite(netAprRaw) ? netAprRaw : 0;
+            const netApr = Number.isFinite(netAprRaw) ? netAprRaw : null;
             const aprOffset = isBinance
-              ? (Number.isFinite(annualApr) && Number.isFinite(netApr) ? annualApr - netApr : 0)
+              ? (Number.isFinite(annualApr) && Number.isFinite(netApr) ? Math.max(0, annualApr - netApr) : 0)
               : baseOffset;
             const borrowUsdValue = borrowValueIndex;
             const computedEtb = Number.isFinite(initialLtv) && initialLtv > 0 && collateralQtyForCalc > 0 && Number.isFinite(ledgerCollateralIndexPrice)
-              ? Math.max(0, collateralQtyForCalc * ledgerCollateralIndexPrice * initialLtv - borrowUsdValue)
+              ? collateralQtyForCalc * ledgerCollateralIndexPrice * initialLtv - borrowUsdValue
               : null;
-            const etb = Number.isFinite(computedEtb)
-              ? computedEtb
-              : (Number.isFinite(ledgerEntry?.etb) ? ledgerEntry.etb : null);
+            const ledgerEtb = Number.isFinite(ledgerEntry?.etb) ? ledgerEntry.etb : null;
+            const etb = ledgerEtb != null
+              ? ledgerEtb
+              : (Number.isFinite(computedEtb) ? computedEtb : null);
             let tone = "ok";
             if (isBinance) {
               const warnCut = ltvHealthyThreshold || 0;
@@ -5230,12 +5245,9 @@
             const marginCallThreshold = Number.isFinite(ledgerEntry?.marginCallLtv) && ledgerEntry.marginCallLtv > 0
               ? ledgerEntry.marginCallLtv
               : marginCallLtv;
-            const ledgerPrincipalOutstanding = Number.isFinite(ledgerEntry?.principalOutstanding) && ledgerEntry.principalOutstanding >= 0
-              ? ledgerEntry.principalOutstanding
-              : Math.max(0, fallbackOutstanding - interestAccrued);
             const principalOutstanding = hasPlannedOutstanding
-              ? plannedOutstanding
-              : ledgerPrincipalOutstanding;
+              ? Math.max(0, loanNetOutstanding - interestAccrued)
+              : (Number.isFinite(ledgerPrincipalOutstanding) ? ledgerPrincipalOutstanding : Math.max(0, loanNetOutstanding - interestAccrued));
             const liquidationBaseLoan = hasPlannedOutstanding
               ? plannedOutstanding
               : loanNetOutstanding;
@@ -5246,12 +5258,16 @@
               ? (liquidationBaseLoan > 0 ? (ledgerBorrowIndexPrice * liquidationBaseLoan) / marginCallThreshold : 0)
               : null;
             const computedLiquidationPrice = liquidationValue != null && collateralQtyForCalc > 0 ? liquidationValue / collateralQtyForCalc : null;
-            const liquidationPrice = Number.isFinite(computedLiquidationPrice) && computedLiquidationPrice > 0
+            let liquidationPrice = Number.isFinite(computedLiquidationPrice) && computedLiquidationPrice > 0
               ? computedLiquidationPrice
-              : (Number.isFinite(ledgerEntry?.liquidationPriceHint) && ledgerEntry.liquidationPriceHint > 0
-                ? ledgerEntry.liquidationPriceHint
-                : null);
-            const marginCallPrice = Number.isFinite(marginCallValue) && collateralQtyForCalc > 0 ? marginCallValue / collateralQtyForCalc : null;
+              : null;
+            if (!(liquidationPrice > 0) && Number.isFinite(ledgerEntry?.liquidationPriceHint) && ledgerEntry.liquidationPriceHint > 0) {
+              liquidationPrice = ledgerEntry.liquidationPriceHint;
+            }
+            let marginCallPrice = Number.isFinite(marginCallValue) && collateralQtyForCalc > 0 ? marginCallValue / collateralQtyForCalc : null;
+            if (!(marginCallPrice > 0) && Number.isFinite(ledgerEntry?.marginCallPrice) && ledgerEntry.marginCallPrice > 0) {
+              marginCallPrice = ledgerEntry.marginCallPrice;
+            }
             const referencePrice = ledgerCollateralIndexPrice ?? (Number(asset.price) > 0 ? asset.price : null);
             const liquidationBufferValue = Number.isFinite(liquidationValue) && collateralIndexValue != null
               ? collateralIndexValue - liquidationValue
@@ -5325,10 +5341,18 @@
         });
         const totalAllocated = loanShareDenom > 0 ? loanShareDenom : loanBase;
         const weightedAprOffset = totalAllocated > 0
-          ? itemsWithShare.reduce((acc, item) => acc + Math.max(0, item.aprOffset || 0) * ((item.loanShareAmount || 0) / totalAllocated), 0)
+          ? itemsWithShare.reduce((acc, item) => {
+              const offset = Number.isFinite(item.aprOffset) ? item.aprOffset : 0;
+              return acc + Math.max(0, offset) * ((item.loanShareAmount || 0) / totalAllocated);
+            }, 0)
           : (isBinance ? binanceBorrowAdjustment : 0);
         const weightedNetApr = totalAllocated > 0
-          ? itemsWithShare.reduce((acc, item) => acc + (item.netApr ?? chosenAPR) * ((item.loanShareAmount || 0) / totalAllocated), 0)
+          ? itemsWithShare.reduce((acc, item) => {
+              const baseNet = Number.isFinite(item.netApr)
+                ? item.netApr
+                : (isBinance ? binanceBorrowNetAnnualRate : chosenAPR);
+              return acc + baseNet * ((item.loanShareAmount || 0) / totalAllocated);
+            }, 0)
           : (isBinance ? binanceBorrowNetAnnualRate : Math.max(0, chosenAPR - weightedAprOffset));
         return {
           items: itemsWithShare.map(({ loanShareAmount, ...rest }) => rest),
