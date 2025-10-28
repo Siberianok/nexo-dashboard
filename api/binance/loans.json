@@ -92,13 +92,13 @@
                 "notes": "Demo estático para QA",
                 "payments": [
                     {
-                        "id": "algo-payment-1",
+                        "id": "bnb-payment-1",
                         "amount": 5890.97,
                         "date": "2024-03-12",
                         "note": "Pago capital"
                     },
                     {
-                        "id": "algo-payment-2",
+                        "id": "bnb-payment-2",
                         "amount": 2.77,
                         "date": "2024-03-12",
                         "note": "Pago interés"
