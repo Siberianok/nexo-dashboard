@@ -172,8 +172,8 @@
         BNB: { liqBias: -0.05 },
         SOL: { liqBias: 0.05 },
         DOGE: { liqBias: 0.08 },
-        ADA: { initialLtv: 0.4756, marginCallLtv: 0.8, liquidationLtv: 0.85 },
-        ALGO: { initialLtv: 0.1024, marginCallLtv: 0.8, liquidationLtv: 0.85 },
+        ADA: { initialLtv: 0.48, marginCallLtv: 0.8, liquidationLtv: 0.84124 },
+        ALGO: { initialLtv: 0.1, marginCallLtv: 0.8, liquidationLtv: 0.85143 },
       },
       skipAssets: ['USDT', 'USDC', 'BUSD', 'TUSD', 'FDUSD'],
       universe: {
@@ -789,8 +789,8 @@
     },
 
     "assetOverrides": {
-      "ADA":  { "initialLtv": 0.4756, "marginCallLtv": 0.8, "liquidationLtv": 0.85 },
-      "ALGO": { "initialLtv": 0.1024, "marginCallLtv": 0.8, "liquidationLtv": 0.85 }
+      "ADA":  { "initialLtv": 0.48, "marginCallLtv": 0.8, "liquidationLtv": 0.84124 },
+      "ALGO": { "initialLtv": 0.1, "marginCallLtv": 0.8, "liquidationLtv": 0.85143 }
     }
   }
   </script>
@@ -1974,8 +1974,8 @@
           USDT: 0.80,
           USDC: 0.80,
           BUSD: 0.85,
-          ADA: 0.4756,
-          ALGO: 0.1024,
+          ADA: 0.48,
+          ALGO: 0.1,
           XRP: 0.50,
           SOL: 0.50,
         },
@@ -2138,19 +2138,22 @@
         loanLedger: {
           ADA: {
             originalPrincipal: 10300,
-            outstanding: 10425.73,
-            interestAccrued: 125.73,
+            outstanding: 10362.8,
+            interestAccrued: 62.8,
             annualRate: 0.0499,
             netAnnualRate: 0.0488,
-            liquidationLtv: 0.85,
-            liquidationPriceHint: 0.35021,
-            initialLtv: 0.4756,
-            currentLtv: 0.4756,
+            liquidationLtv: 0.84124,
+            liquidationPriceHint: 0.3502,
+            initialLtv: 0.48,
+            currentLtv: 0.48,
             collateralAmount: 35175.5669,
-            collateralIndexPrice: 0.625901,
-            collateralUsd: 22016.4214,
-            initialCollateralValue: 22016.4214,
+            collateralIndexPrice: 0.6137546,
+            collateralUsd: 21589.1667,
+            initialCollateralValue: 21589.1667,
             borrowIndexPrice: 1,
+            payments: [
+              { id: "ada-payment-20250115", amount: 62.93, date: "2025-01-15", note: "Pago capital USDT" }
+            ],
           },
           ALGO: {
             originalPrincipal: 7026,
@@ -2158,14 +2161,14 @@
             interestAccrued: 68.77,
             annualRate: 0.0499,
             netAnnualRate: 0.0456,
-            liquidationLtv: 0.85,
+            liquidationLtv: 0.85143,
             liquidationPriceHint: 0.02152,
-            initialLtv: 0.1024,
-            currentLtv: 0.1024,
+            initialLtv: 0.1,
+            currentLtv: 0.1,
             collateralAmount: 65699.7595,
-            collateralIndexPrice: 0.1786328,
-            collateralUsd: 11736.1328,
-            initialCollateralValue: 11736.1328,
+            collateralIndexPrice: 0.1832275,
+            collateralUsd: 12038.0,
+            initialCollateralValue: 12038.0,
             borrowIndexPrice: 1,
             payments: [
               { id: "algo-payment-1", amount: 5890.97, date: "2024-03-12", note: "Pago capital" },
@@ -2192,12 +2195,12 @@
           earnOnCollateral: true,
           binanceBorrowTicker: "ADA",
           loanRequests: [
-            { id: "loan-bin-ada", ticker: "ADA", amount: 10425.73 },
+            { id: "loan-bin-ada", ticker: "ADA", amount: 10362.8 },
             { id: "loan-bin-algo", ticker: "ALGO", amount: 1203.8 },
           ],
         },
         previewSnapshot: {
-          loanAmount: 11629.53,
+          loanAmount: 11566.6,
           repayInDays: 90,
           currency: "USDT",
           params: {
@@ -2208,7 +2211,7 @@
             refreshSec: LIVE_REFRESH_SECONDS,
             binanceBorrowTicker: "ADA",
             loanRequests: [
-              { id: "loan-preview-ada", ticker: "ADA", amount: 10425.73 },
+              { id: "loan-preview-ada", ticker: "ADA", amount: 10362.8 },
               { id: "loan-preview-algo", ticker: "ALGO", amount: 1203.8 },
             ],
           },
@@ -2218,9 +2221,9 @@
             { id: 3, name: "BNB", ticker: "BNB", qty: 120, price: 230, priceAuto: false, useAsCollateral: true },
             { id: 4, name: "USD Coin", ticker: "USDC", qty: 1500, price: 1, priceAuto: false, useAsCollateral: true },
             { id: 5, name: "BUSD", ticker: "BUSD", qty: 800, price: 1, priceAuto: false, useAsCollateral: true },
-            { id: 6, name: "Cardano", ticker: "ADA", qty: 35175.57, price: 0.625901, priceAuto: false, useAsCollateral: true },
+            { id: 6, name: "Cardano", ticker: "ADA", qty: 35175.57, price: 0.613755, priceAuto: false, useAsCollateral: true },
             { id: 7, name: "XRP", ticker: "XRP", qty: 3000, price: 0.52, priceAuto: false, useAsCollateral: false },
-            { id: 8, name: "Algorand", ticker: "ALGO", qty: 65699.76, price: 0.178633, priceAuto: false, useAsCollateral: true },
+            { id: 8, name: "Algorand", ticker: "ALGO", qty: 65699.76, price: 0.183227, priceAuto: false, useAsCollateral: true },
           ],
         },
         exportPrefix: "binance_dashboard",
