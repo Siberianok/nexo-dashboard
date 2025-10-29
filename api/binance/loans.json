@@ -7,12 +7,12 @@
         "tagline": "Snapshot demo para smoke test estático.",
         "earnAprTop": {
             "ADA": 0.03,
-            "BNB": 0.012,
+            "ALGO": 0.00047,
             "USDT": 0.045
         },
         "ltvByTicker": {
             "ADA": 0.48,
-            "BNB": 0.7,
+            "ALGO": 0.64,
             "USDT": 0.9
         },
         "borrowRates": {
@@ -23,11 +23,11 @@
                 "hourly": 9.132420091324201e-06,
                 "adjustmentAnnual": 0
             },
-            "BNB": {
-                "label": "Préstamo flexible BNB",
-                "loanAsset": "BNB",
-                "annual": 0.061,
-                "hourly": 6.963470319634703e-06,
+            "ALGO": {
+                "label": "Préstamo flexible ALGO",
+                "loanAsset": "ALGO",
+                "annual": 0.079,
+                "hourly": 9.01826484018265e-06,
                 "adjustmentAnnual": 0
             },
             "USDT": {
@@ -40,82 +40,70 @@
         },
         "loanLedger": {
             "ADA": {
-                "originalPrincipal": 12000,
+                "originalPrincipal": 10300,
                 "principalOutstanding": 10300,
-                "outstanding": 10362.8,
-                "interestAccrued": 62.8,
+                "outstanding": 10300,
+                "interestAccrued": 0,
                 "netAnnualRate": 0.0175,
-                "etb": -762.8,
+                "etb": -206.05,
                 "annualRate": 0.08,
                 "marginCallLtv": 0.8,
-                "marginCallPrice": 0.647675,
+                "marginCallPrice": 0.393563769750294,
                 "liquidationLtv": 0.84124,
-                "liquidationPriceHint": 0.615924,
-                "initialLtv": 0.48,
-                "currentLtv": 0.48,
-                "collateralAmount": 20000,
-                "collateralIndexPrice": 1,
+                "liquidationPriceHint": 0.3742701438355702,
+                "initialLtv": 0.7478646456062593,
+                "currentLtv": 0.4742088705802575,
+                "collateralAmount": 32713.88524449,
+                "collateralIndexPrice": 0.6639500762922741,
+                "collateralUsd": 21720.3866038958,
+                "collateralPriceAtOrigination": 0.421,
+                "initialCollateralValue": 13772.54568793029,
                 "borrowIndexPrice": 1,
                 "loanCoin": "USDT",
+                "originationAt": "2025-07-20T00:00:00Z",
                 "lastUpdated": "2025-01-15",
                 "lastUpdatedTs": 1736899200000,
                 "notes": "Demo estático para QA",
-                "payments": [
-                    {
-                        "id": "ada-payment-20250115",
-                        "amount": 62.93,
-                        "date": "2025-01-15",
-                        "note": "Pago capital USDT"
-                    }
-                ]
+                "payments": []
             },
-            "BNB": {
-                "originalPrincipal": 4500,
-                "principalOutstanding": 4500,
-                "outstanding": 4515.75,
-                "interestAccrued": 15.75,
-                "netAnnualRate": 0.037,
-                "etb": 484.25,
-                "annualRate": 0.061,
+            "ALGO": {
+                "originalPrincipal": 7026,
+                "principalOutstanding": 7026,
+                "outstanding": 7026,
+                "interestAccrued": 0,
+                "netAnnualRate": 0.0142,
+                "etb": -121.54,
+                "annualRate": 0.079,
                 "marginCallLtv": 0.8,
-                "marginCallPrice": 225.7875,
-                "liquidationLtv": 0.88,
-                "liquidationPriceHint": 205.261364,
-                "initialLtv": 0.5,
-                "currentLtv": 0.48,
-                "collateralAmount": 25,
-                "collateralIndexPrice": 400,
+                "marginCallPrice": 0.14287761443466816,
+                "liquidationLtv": 0.85143,
+                "liquidationPriceHint": 0.1342471977117726,
+                "initialLtv": 0.6398718015265647,
+                "currentLtv": 0.583644289824189,
+                "collateralAmount": 61468.69147242,
+                "collateralIndexPrice": 0.1958420454728782,
+                "collateralUsd": 12038.1542705,
+                "collateralPriceAtOrigination": 0.1786328,
+                "initialCollateralValue": 10980.32447005451,
                 "borrowIndexPrice": 1,
                 "loanCoin": "USDT",
+                "originationAt": "2025-07-17T00:00:00Z",
                 "lastUpdated": "2025-01-15",
                 "lastUpdatedTs": 1736899200000,
                 "notes": "Demo estático para QA",
-                "payments": [
-                    {
-                        "id": "bnb-payment-1",
-                        "amount": 5890.97,
-                        "date": "2024-03-12",
-                        "note": "Pago capital"
-                    },
-                    {
-                        "id": "bnb-payment-2",
-                        "amount": 2.77,
-                        "date": "2024-03-12",
-                        "note": "Pago interés"
-                    }
-                ]
+                "payments": []
             }
         },
         "collateralParams": {
             "ADA": {
-                "initialLTV": 0.48,
+                "initialLTV": 0.7478646456062593,
                 "marginCall": 0.8,
                 "liquidationLTV": 0.84124
             },
-            "BNB": {
-                "initialLTV": 0.5,
+            "ALGO": {
+                "initialLTV": 0.6398718015265647,
                 "marginCall": 0.8,
-                "liquidationLTV": 0.88
+                "liquidationLTV": 0.85143
             }
         },
         "collateralYield": {
@@ -124,8 +112,8 @@
                 "source": "simple-earn",
                 "fetchedAt": "2025-01-15T00:00:00.000Z"
             },
-            "BNB": {
-                "apr": 0.012,
+            "ALGO": {
+                "apr": 0.00047,
                 "source": "simple-earn",
                 "fetchedAt": "2025-01-15T00:00:00.000Z"
             }
