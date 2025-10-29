@@ -4787,8 +4787,8 @@
           initialLtvWeight: 0,
         });
       }, [isBinance, binanceLoanLedger, loanAmount, ltvByTicker, defaultLtv]);
-      const binanceOriginalPrincipalTotal = isBinance ? totalLoanPairsDebt : binanceLedgerTotals.original;
-      const binanceInterestAccruedTotal = isBinance ? totalLoanPairsAccrued : binanceLedgerTotals.interest;
+      const binanceOriginalPrincipalTotal = isBinance ? binanceLedgerTotals.original : totalLoanPairsDebt;
+      const binanceInterestAccruedTotal = isBinance ? binanceLedgerTotals.interest : totalLoanPairsAccrued;
       const binanceInitialCollateralTotal = binanceLedgerTotals.initialCollateral;
       const binanceInitialLtvWeighted = binanceLedgerTotals.initialLtvWeight > 0
         ? binanceLedgerTotals.initialLtvWeightedSum / binanceLedgerTotals.initialLtvWeight
