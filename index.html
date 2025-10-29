@@ -7933,9 +7933,7 @@
       const borrowDate = ledger.borrowDate;
       const lastUpdated = ledger.lastUpdated;
       const loanCoin = item.loanCoin || ledger.loanCoin || null;
-      const etbValue = Number.isFinite(item.etb) ? item.etb : (Number.isFinite(ledger.etb) ? ledger.etb : null);
       const allocatedLoanLabel = formatLoan(item.allocatedLoan);
-      const etbLabel = etbValue != null ? formatLoan(etbValue) : '—';
       return (
         <div className="nx-card-secondary p-4">
           <div className="flex items-start justify-between gap-3">
@@ -7955,7 +7953,9 @@
               </div>
               <div>
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">{highlightEtbDetails ? 'ETB neto asignado' : 'Préstamo & flujos'}</div>
-                <div className="text-sm font-semibold text-neutral-800">{highlightEtbDetails ? etbLabel : allocatedLoanLabel}</div>
+                {!highlightEtbDetails && (
+                  <div className="text-sm font-semibold text-neutral-800">{allocatedLoanLabel}</div>
+                )}
                 {highlightEtbDetails && (
                   <div className="text-[10px] text-neutral-500">Préstamo vigente {allocatedLoanLabel}</div>
                 )}
