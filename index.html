@@ -4880,8 +4880,8 @@
           acc.paid += paid;
           acc.initialCollateral += Number.isFinite(collateralBase) && collateralBase > 0 ? collateralBase : 0;
           if (Number.isFinite(resolvedInitialLtv) && resolvedInitialLtv > 0 && original > 0) {
-            acc.initialLtvWeightedSum += original * resolvedInitialLtv;
-            acc.initialLtvWeight += original;
+            acc.initialLtvSum += resolvedInitialLtv;
+            acc.initialLtvCount += 1;
           }
           return acc;
         }, {
@@ -4892,8 +4892,8 @@
           interestGenerated: 0,
           paid: 0,
           initialCollateral: 0,
-          initialLtvWeightedSum: 0,
-          initialLtvWeight: 0,
+          initialLtvSum: 0,
+          initialLtvCount: 0,
         });
       }, [isBinance, binanceLoanLedger, loanAmount, ltvByTicker, defaultLtv]);
       const binanceOriginalPrincipalTotal = isBinance ? binanceLedgerTotals.original : totalLoanPairsDebt;
@@ -4901,15 +4901,15 @@
       const binanceInterestPaidTotal = isBinance ? binanceLedgerTotals.interestPaid : 0;
       const binanceInterestGeneratedTotal = isBinance ? binanceLedgerTotals.interestGenerated : 0;
       const binanceInitialCollateralTotal = binanceLedgerTotals.initialCollateral;
-      const binanceInitialLtvWeighted = binanceLedgerTotals.initialLtvWeight > 0
-        ? binanceLedgerTotals.initialLtvWeightedSum / binanceLedgerTotals.initialLtvWeight
+      const binanceInitialLtvAverage = binanceLedgerTotals.initialLtvCount > 0
+        ? binanceLedgerTotals.initialLtvSum / binanceLedgerTotals.initialLtvCount
         : null;
       const binanceInitialLtvFromCollateral = binanceInitialCollateralTotal > 0
         ? binanceOriginalPrincipalTotal / binanceInitialCollateralTotal
         : null;
       const binanceTotalToRepay = Math.max(0, binanceOriginalPrincipalTotal + binanceInterestGeneratedTotal);
-      const binanceInitialLtv = Number.isFinite(binanceInitialLtvWeighted)
-        ? binanceInitialLtvWeighted
+      const binanceInitialLtv = Number.isFinite(binanceInitialLtvAverage)
+        ? binanceInitialLtvAverage
         : (Number.isFinite(binanceInitialLtvFromCollateral) ? binanceInitialLtvFromCollateral : 0);
       const pct = (value, digits = 1) => formatPercent(Number(value), {
         minimumFractionDigits: digits,
@@ -5356,11 +5356,28 @@
         [capLowCost, plannedOutstandingPrincipal, usdPerUsdt],
       );
       const currentOverallLTV = useMemo(() => {
+        if (isBinance) {
+          const items = Array.isArray(collateralBreakdown?.items) ? collateralBreakdown.items : [];
+          let sum = 0;
+          let count = 0;
+          items.forEach((item) => {
+            const apiValue = Number.isFinite(item?.ltvFromApi) && item.ltvFromApi >= 0 ? item.ltvFromApi : null;
+            const fallbackValue = Number.isFinite(item?.actualLtv) && item.actualLtv >= 0 ? item.actualLtv : null;
+            const ltvValue = apiValue ?? fallbackValue;
+            if (ltvValue != null) {
+              sum += ltvValue;
+              count += 1;
+            }
+          });
+          if (count > 0) {
+            return sum / count;
+          }
+        }
         if (!(totals.totalCollateralValue > 0)) return 0;
         const netLoanBase = isBinance ? binanceNetLoanValue : plannedOutstanding;
         const netLoanUsd = netLoanBase * usdPerUsdt;
         return netLoanUsd / totals.totalCollateralValue;
-      }, [isBinance, binanceNetLoanValue, plannedOutstanding, totals.totalCollateralValue, usdPerUsdt]);
+      }, [isBinance, collateralBreakdown, binanceNetLoanValue, plannedOutstanding, totals.totalCollateralValue, usdPerUsdt]);
       const plannedOverallLTV = collateralAfterPlan > 0 && Number.isFinite(plannedOutstanding)
         ? (plannedOutstanding * usdPerUsdt) / collateralAfterPlan
         : (plannedOutstanding > 0 ? 1 : 0);
