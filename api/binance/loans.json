@@ -40,10 +40,10 @@
         },
         "loanLedger": {
             "ADA": {
-                "originalPrincipal": 10300,
-                "principalOutstanding": 10300,
-                "outstanding": 10300,
-                "interestAccrued": 0,
+                "originalPrincipal": 10424.23305221,
+                "principalOutstanding": 10424.23305221,
+                "outstanding": 10425.78556987,
+                "interestAccrued": 1.55251766,
                 "netAnnualRate": 0.0175,
                 "etb": -206.05,
                 "annualRate": 0.08,
@@ -52,7 +52,7 @@
                 "liquidationLtv": 0.84124,
                 "liquidationPriceHint": 0.3742701438355702,
                 "initialLtv": 0.7478646456062593,
-                "currentLtv": 0.4742088705802575,
+                "currentLtv": 0.48,
                 "collateralAmount": 32713.88524449,
                 "collateralIndexPrice": 0.6639500762922741,
                 "collateralUsd": 21720.3866038958,
@@ -68,9 +68,9 @@
             },
             "ALGO": {
                 "originalPrincipal": 7026,
-                "principalOutstanding": 7026,
-                "outstanding": 7026,
-                "interestAccrued": 0,
+                "principalOutstanding": 1191.1585991,
+                "outstanding": 1203.81542705,
+                "interestAccrued": 12.65682795,
                 "netAnnualRate": 0.0142,
                 "etb": -121.54,
                 "annualRate": 0.079,
@@ -79,7 +79,7 @@
                 "liquidationLtv": 0.85143,
                 "liquidationPriceHint": 0.1342471977117726,
                 "initialLtv": 0.6398718015265647,
-                "currentLtv": 0.583644289824189,
+                "currentLtv": 0.1,
                 "collateralAmount": 61468.69147242,
                 "collateralIndexPrice": 0.1958420454728782,
                 "collateralUsd": 12038.1542705,
@@ -91,7 +91,13 @@
                 "lastUpdated": "2025-01-15",
                 "lastUpdatedTs": 1736899200000,
                 "notes": "Demo estático para QA",
-                "payments": []
+                "payments": [
+                    {
+                        "id": "ALGO-payment-1",
+                        "amount": 5834.8414009,
+                        "note": "Amortización acumulada"
+                    }
+                ]
             }
         },
         "collateralParams": {
