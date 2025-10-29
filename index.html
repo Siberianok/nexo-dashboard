@@ -16,7 +16,7 @@
     const API_PREFIX = (() => {
       try {
         const resolved = new URL(STATIC_PREFIX, window.location.href).pathname;
-        return (resolved.endsWith('/') ? resolved : `${resolved}/`).replace(/\/+/g, '/');
+        return (resolved.endsWith('/') ? resolved : `${resolved}/`).replace(/\/g, '/');
       } catch (_) {
         return REMOTE_PREFIX;
       }
