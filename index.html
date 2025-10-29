@@ -4904,10 +4904,13 @@
       const binanceInitialLtvWeighted = binanceLedgerTotals.initialLtvWeight > 0
         ? binanceLedgerTotals.initialLtvWeightedSum / binanceLedgerTotals.initialLtvWeight
         : null;
-      const binanceTotalToRepay = Math.max(0, binanceOriginalPrincipalTotal + binanceInterestGeneratedTotal);
-      const binanceInitialLtv = binanceInitialCollateralTotal > 0
+      const binanceInitialLtvFromCollateral = binanceInitialCollateralTotal > 0
         ? binanceOriginalPrincipalTotal / binanceInitialCollateralTotal
-        : (Number.isFinite(binanceInitialLtvWeighted) ? binanceInitialLtvWeighted : 0);
+        : null;
+      const binanceTotalToRepay = Math.max(0, binanceOriginalPrincipalTotal + binanceInterestGeneratedTotal);
+      const binanceInitialLtv = Number.isFinite(binanceInitialLtvWeighted)
+        ? binanceInitialLtvWeighted
+        : (Number.isFinite(binanceInitialLtvFromCollateral) ? binanceInitialLtvFromCollateral : 0);
       const pct = (value, digits = 1) => formatPercent(Number(value), {
         minimumFractionDigits: digits,
         maximumFractionDigits: digits,
