@@ -137,7 +137,6 @@
     },
     "metadata": {
         "mode": "github-pages-static",
-        "apiBase": "./api/binance",
-        "documentation": "docs/preview.md"
+        "apiBase": "./api/binance"
     }
 }

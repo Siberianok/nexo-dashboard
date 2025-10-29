@@ -64,7 +64,6 @@ Ambos flags se pueden combinar. El estado se muestra en los indicadores (“forz
 
 ## 📂 Estructura del repo
 - `index.html`: todo el simulador (React + lógica + estilos).
-- `docs/`: notas internas (checklists Binance, roadmap, etc.).
 - `README.md`: este documento.
 
 ¡Listo! Con sólo `index.html` podés seguir iterando los presets, exportar/importar configuraciones (`Exportar JSON`) y documentar tus propios snapshots sin depender de servicios externos.
