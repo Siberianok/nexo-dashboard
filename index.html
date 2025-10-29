@@ -1361,6 +1361,181 @@
     const normalizeTicker = (value) => (typeof value === 'string' ? value.trim().toUpperCase() : '');
 
     const MS_IN_HOUR = 60 * 60 * 1000;
+    const MS_IN_DAY = 24 * MS_IN_HOUR;
+
+    const BASE_LOAN_SIM_CONFIG = {
+      borrowAprUSDT: 0.0482874,
+      ltvFloor: 0.35,
+      ltvThreshold: {
+        ADA: { liq: 0.91 },
+        ALGO: { liq: 0.91 },
+      },
+      collateralApr: {
+        ADA: 0.03,
+        ALGO: 0.04,
+      },
+      alpha: {
+        ADA: 0.0561375,
+        ALGO: 0.32924,
+      },
+      pairs: {
+        ADA: {
+          debt: 10425.78556987,
+          collateralAmount: 32713.88524449,
+          price: 0.6639500762922741,
+          startedAtMs: Date.parse('2025-10-27T13:22:04Z'),
+          updatedAtMs: Date.parse('2025-10-28T16:22:56.448Z'),
+        },
+        ALGO: {
+          debt: 1203.81542705,
+          collateralAmount: 61468.69147242,
+          price: 0.1958420454728782,
+          startedAtMs: Date.parse('2025-08-28T00:00:00Z'),
+          updatedAtMs: Date.parse('2025-11-15T11:22:16.883Z'),
+        },
+      },
+    };
+
+    const mergeLoanSimConfig = (base, override) => {
+      if (!override || typeof override !== 'object') return base;
+      const next = { ...base };
+      if (override.borrowAprUSDT != null) next.borrowAprUSDT = Number(override.borrowAprUSDT);
+      if (override.ltvFloor != null) next.ltvFloor = Number(override.ltvFloor);
+      if (override.snapshotMs != null) next.snapshotMs = Number(override.snapshotMs);
+      if (override.ltvThreshold && typeof override.ltvThreshold === 'object') {
+        next.ltvThreshold = { ...base.ltvThreshold, ...override.ltvThreshold };
+      }
+      if (override.collateralApr && typeof override.collateralApr === 'object') {
+        next.collateralApr = { ...base.collateralApr, ...override.collateralApr };
+      }
+      if (override.alpha && typeof override.alpha === 'object') {
+        next.alpha = { ...base.alpha, ...override.alpha };
+      }
+      if (override.pairs && typeof override.pairs === 'object') {
+        const mergedPairs = { ...base.pairs };
+        Object.keys(override.pairs).forEach((key) => {
+          const incoming = override.pairs[key];
+          mergedPairs[key] = mergedPairs[key]
+            ? { ...mergedPairs[key], ...incoming }
+            : { ...incoming };
+        });
+        next.pairs = mergedPairs;
+      }
+      return next;
+    };
+
+    const resolveLoanSimConfig = () => {
+      const base = BASE_LOAN_SIM_CONFIG;
+      if (typeof window === 'undefined') return base;
+      const override = window.__LOAN_SIM_CONFIG__;
+      if (!override) return base;
+      try {
+        return mergeLoanSimConfig(base, override);
+      } catch (error) {
+        console.warn(LOG_PREFIX, 'No se pudo mergear __LOAN_SIM_CONFIG__.', error);
+        return base;
+      }
+    };
+
+    const normalizeNumber = (value, fallback = 0) => {
+      if (value == null) return fallback;
+      if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : fallback;
+      }
+      if (typeof value === 'string') {
+        const parsed = Number(value.trim());
+        return Number.isFinite(parsed) ? parsed : fallback;
+      }
+      if (value instanceof Date) {
+        const time = value.getTime();
+        return Number.isFinite(time) ? time : fallback;
+      }
+      return fallback;
+    };
+
+    const normalizeTimestamp = (value, fallback = null) => {
+      if (value == null) {
+        return fallback;
+      }
+      if (typeof value === 'number') {
+        return Number.isFinite(value) ? value : fallback;
+      }
+      if (value instanceof Date) {
+        const time = value.getTime();
+        return Number.isFinite(time) ? time : fallback;
+      }
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        if (!trimmed) return fallback;
+        const parsed = Date.parse(trimmed);
+        return Number.isFinite(parsed) ? parsed : fallback;
+      }
+      return fallback;
+    };
+
+    const computeLoanPairState = (config) => {
+      const borrowApr = Number(config?.borrowAprUSDT) || 0;
+      const ltvFloor = Number(config?.ltvFloor) || 0;
+      const thresholds = config?.ltvThreshold || {};
+      const collateralAprMap = config?.collateralApr || {};
+      const alphaMap = config?.alpha || {};
+      const snapshotMs = normalizeTimestamp(config?.snapshotMs, null);
+      const pairs = config?.pairs && typeof config.pairs === 'object' ? config.pairs : {};
+      const result = {};
+      Object.keys(pairs).forEach((asset) => {
+        const entry = pairs[asset] || {};
+        const debt = normalizeNumber(entry.debt, 0);
+        const collateralAmount = normalizeNumber(entry.collateralAmount, 0);
+        const price = normalizeNumber(entry.price, 0);
+        const startedAtMs = normalizeTimestamp(entry.startedAtMs, null);
+        const updatedAtMs = normalizeTimestamp(entry.updatedAtMs, snapshotMs);
+        const collateralValue = collateralAmount > 0 && price > 0 ? collateralAmount * price : 0;
+        const ltv = collateralValue > 0 && debt > 0 ? debt / collateralValue : 0;
+        const rawThreshold = thresholds[asset];
+        const liquidationThreshold = rawThreshold && typeof rawThreshold === 'object' && rawThreshold.liq != null
+          ? Number(rawThreshold.liq)
+          : Number(rawThreshold);
+        const fallbackThreshold = thresholds.default && typeof thresholds.default === 'object' && thresholds.default.liq != null
+          ? Number(thresholds.default.liq)
+          : Number(thresholds.default);
+        const liqLtv = Number.isFinite(liquidationThreshold)
+          ? liquidationThreshold
+          : (Number.isFinite(fallbackThreshold) ? fallbackThreshold : null);
+        const priceLiq = liqLtv && liqLtv > 0 && collateralAmount > 0
+          ? debt / (collateralAmount * liqLtv)
+          : null;
+        const collateralApr = normalizeNumber(collateralAprMap[asset], 0);
+        const alpha = normalizeNumber(alphaMap[asset], 0);
+        const ltvClamp = Math.max(ltv, ltvFloor);
+        const netApr = borrowApr - ltvClamp * alpha * collateralApr;
+        const referenceUpdatedMs = updatedAtMs != null ? updatedAtMs : (snapshotMs != null ? snapshotMs : startedAtMs);
+        const effectiveUpdatedMs = referenceUpdatedMs != null ? referenceUpdatedMs : Date.now();
+        const deltaMs = startedAtMs != null ? Math.max(0, effectiveUpdatedMs - startedAtMs) : 0;
+        const deltaDays = deltaMs / MS_IN_DAY;
+        const accrued = debt > 0 && borrowApr !== 0
+          ? debt * borrowApr * (deltaDays / 365)
+          : 0;
+        result[asset] = {
+          asset,
+          debt,
+          collateralAmount,
+          price,
+          collateralValue,
+          ltv,
+          priceLiq,
+          borrowApr,
+          collateralApr,
+          netApr,
+          accrued,
+          startedAtMs,
+          updatedAtMs: effectiveUpdatedMs,
+          alpha,
+          ltvThreshold: liqLtv,
+          deltaDays,
+        };
+      });
+      return result;
+    };
     const HOURS_IN_YEAR = 365 * 24;
     const annualToHourly = (apr) => {
       const normalized = Number(apr);
@@ -2670,6 +2845,20 @@
       const loyaltyModelFallback = platformDefaultParams?.loyaltyModel ?? loyaltyModels[0]?.id ?? "vsRest";
       const isBinance = id === "binance";
       const [nowTs, setNowTs] = useState(() => Date.now());
+      const loanSimConfig = useMemo(() => resolveLoanSimConfig(), []);
+      const loanPairsState = useMemo(() => computeLoanPairState(loanSimConfig), [loanSimConfig]);
+      const loanPairsArray = useMemo(
+        () => Object.values(loanPairsState || {}),
+        [loanPairsState],
+      );
+      const totalLoanPairsDebt = useMemo(
+        () => loanPairsArray.reduce((sum, pair) => sum + Math.max(0, Number(pair?.debt) || 0), 0),
+        [loanPairsArray],
+      );
+      const totalLoanPairsAccrued = useMemo(
+        () => loanPairsArray.reduce((sum, pair) => sum + Math.max(0, Number(pair?.accrued) || 0), 0),
+        [loanPairsArray],
+      );
       useEffect(() => {
         writeSimModelConfigToDom(simModelConfig);
       }, [simModelConfig]);
@@ -4224,7 +4413,18 @@
       const usdPerUsdt = Number.isFinite(usdtPerUsdRaw) && usdtPerUsdRaw > 0 ? 1 / usdtPerUsdRaw : 1;
       const loanRate = usdRate * usdPerUsdt;
       const formatUsd = useCallback((value, showCurrency = true) => fmt(value * usdRate, currency, showCurrency), [usdRate, currency]);
-      const formatLoan = useCallback((value, showCurrency = true) => fmt(value * loanRate, currency, showCurrency), [loanRate, currency]);
+      const formatLoan = useCallback((value, showCurrency = true) => {
+        const amount = (Number(value) || 0) * loanRate;
+        if (!Number.isFinite(amount)) {
+          return showCurrency ? '—' : '0';
+        }
+        const formatter = new Intl.NumberFormat(DEFAULT_LOCALE, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 4,
+        });
+        const formatted = formatter.format(amount);
+        return showCurrency ? `${formatted} ${currency}` : formatted;
+      }, [loanRate, currency]);
       const simCalibrate = useCallback((points = []) => {
         if (!isBinance) {
           console.warn('[sim-calibrate] Disponible solo para Binance Loans');
@@ -4587,8 +4787,8 @@
           initialLtvWeight: 0,
         });
       }, [isBinance, binanceLoanLedger, loanAmount, ltvByTicker, defaultLtv]);
-      const binanceOriginalPrincipalTotal = binanceLedgerTotals.original;
-      const binanceInterestAccruedTotal = binanceLedgerTotals.interest;
+      const binanceOriginalPrincipalTotal = isBinance ? totalLoanPairsDebt : binanceLedgerTotals.original;
+      const binanceInterestAccruedTotal = isBinance ? totalLoanPairsAccrued : binanceLedgerTotals.interest;
       const binanceInitialCollateralTotal = binanceLedgerTotals.initialCollateral;
       const binanceInitialLtvWeighted = binanceLedgerTotals.initialLtvWeight > 0
         ? binanceLedgerTotals.initialLtvWeightedSum / binanceLedgerTotals.initialLtvWeight
@@ -5389,14 +5589,45 @@
         const loanShareDenom = netOutstandingTotal > 0
           ? netOutstandingTotal
           : (fallbackLoanBase > 0 ? fallbackLoanBase : loanBase);
-        const itemsWithShare = items.map((item) => {
+        const calibratedItems = items.map((item) => {
+          const key = sanitizeTicker(item.ticker || item.id || '');
+          const pairState = key ? loanPairsState[key] : null;
+          if (!pairState) {
+            return item;
+          }
+          const collateralValueOverride = Number.isFinite(pairState.collateralValue)
+            ? pairState.collateralValue
+            : item.value;
+          const liquidationThresholdOverride = Number.isFinite(pairState.ltvThreshold)
+            ? pairState.ltvThreshold
+            : item.liquidationThreshold;
+          return {
+            ...item,
+            value: Number.isFinite(collateralValueOverride) ? collateralValueOverride : item.value,
+            allocatedLoan: pairState.debt,
+            loanNetOutstanding: pairState.debt,
+            interestAccrued: pairState.accrued,
+            netApr: pairState.netApr,
+            annualApr: pairState.borrowApr,
+            actualLtv: pairState.ltv,
+            liquidationPrice: pairState.priceLiq ?? item.liquidationPrice,
+            liquidationThreshold: liquidationThresholdOverride,
+            collateralApr: pairState.collateralApr,
+            loanPairState: pairState,
+          };
+        });
+        const calibratedOutstandingTotal = calibratedItems.reduce((acc, item) => acc + Math.max(0, item.loanNetOutstanding || 0), 0);
+        const effectiveLoanShareDenom = calibratedOutstandingTotal > 0
+          ? calibratedOutstandingTotal
+          : loanShareDenom;
+        const itemsWithShare = calibratedItems.map((item) => {
           const shareAmount = item.loanNetOutstanding > 0
             ? item.loanNetOutstanding
             : Math.max(0, item.allocatedLoan || 0);
-          const loanShare = loanShareDenom > 0 ? shareAmount / loanShareDenom : 0;
+          const loanShare = effectiveLoanShareDenom > 0 ? shareAmount / effectiveLoanShareDenom : 0;
           return { ...item, loanShare, loanShareAmount: shareAmount };
         });
-        const totalAllocated = loanShareDenom > 0 ? loanShareDenom : loanBase;
+        const totalAllocated = effectiveLoanShareDenom > 0 ? effectiveLoanShareDenom : loanBase;
         const weightedAprOffset = totalAllocated > 0
           ? itemsWithShare.reduce((acc, item) => {
               const offset = Number.isFinite(item.aprOffset) ? item.aprOffset : 0;
@@ -5417,8 +5648,8 @@
           manualEnabled,
           manualTotal,
           loanAllocated: totalAllocated || loanBase,
-          loanShareDenom,
-          netOutstandingTotal,
+          loanShareDenom: effectiveLoanShareDenom,
+          netOutstandingTotal: calibratedOutstandingTotal,
           weightedAprOffset,
           weightedNetApr,
         };
@@ -5626,6 +5857,7 @@
                     healthyThreshold={ltvHealthyThreshold}
                     warnThreshold={ltvWarnThreshold}
                     autoRepayThreshold={autoRepayLtv}
+                    loanPairsState={loanPairsState}
                   />
                 </div>
               </section>
@@ -7512,12 +7744,12 @@
             <div className="grid gap-3 text-xs sm:grid-cols-2">
               <div className="nx-card-secondary p-3">
                 <div className="text-[10px] font-semibold uppercase text-neutral-500">APR préstamo</div>
-                <div className="text-sm font-semibold text-neutral-800">{borrowApr != null ? formatPercent(borrowApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</div>
+                <div className="text-sm font-semibold text-neutral-800">{borrowApr != null ? formatPercent(borrowApr, { minimumFractionDigits: 5, maximumFractionDigits: 5 }) : '—'}</div>
               </div>
               <div className="nx-card-secondary p-3">
                 <div className="text-[10px] font-semibold uppercase text-neutral-500">APR neto</div>
                 <div className={`text-sm font-semibold ${netApr != null && netApr < 0 ? 'text-emerald-600' : 'text-neutral-800'}`}>
-                  {netApr != null ? formatPercent(netApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
+                  {netApr != null ? formatPercent(netApr, { minimumFractionDigits: 5, maximumFractionDigits: 5 }) : '—'}
                 </div>
               </div>
               <div className="nx-card-secondary p-3">
@@ -7563,7 +7795,7 @@
       const interestAccrued = Number.isFinite(item.interestAccrued) ? Math.max(0, item.interestAccrued) : 0;
       const interestLabel = interestAccrued > 0 ? formatLoan(interestAccrued) : '—';
       const liquidationPrice = Number.isFinite(item.liquidationPrice) && item.liquidationPrice > 0 ? item.liquidationPrice : null;
-      const liquidationDigits = liquidationPrice != null && liquidationPrice < 0.1 ? { minimumFractionDigits: 6, maximumFractionDigits: 8 } : { minimumFractionDigits: 4, maximumFractionDigits: 6 };
+      const liquidationDigits = { minimumFractionDigits: 6, maximumFractionDigits: 8 };
       const liquidationPriceLabel = liquidationPrice != null ? `$${formatDecimal(liquidationPrice, liquidationDigits)}` : '—';
       const liquidationLtv = Number.isFinite(item.liquidationThreshold) ? item.liquidationThreshold : null;
       const marginCallLtv = Number.isFinite(item.marginCallThreshold) ? item.marginCallThreshold : null;
@@ -7572,7 +7804,7 @@
       const marginCallLtvLabel = marginCallLtv != null ? formatPercent(marginCallLtv, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : null;
       const autoLiquidationLabel = autoLiquidationLtv != null ? formatPercent(autoLiquidationLtv, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : null;
       const marginCallPrice = Number.isFinite(item.marginCallPrice) && item.marginCallPrice > 0 ? item.marginCallPrice : null;
-      const marginCallDigits = marginCallPrice != null && marginCallPrice < 0.1 ? { minimumFractionDigits: 6, maximumFractionDigits: 8 } : { minimumFractionDigits: 4, maximumFractionDigits: 6 };
+      const marginCallDigits = { minimumFractionDigits: 6, maximumFractionDigits: 8 };
       const marginCallPriceLabel = marginCallPrice != null ? `$${formatDecimal(marginCallPrice, marginCallDigits)}` : '—';
       const showMarginCall = marginCallLtvLabel != null && (liquidationLtv == null || Math.abs(marginCallLtv - liquidationLtv) > 0.0005 || marginCallPrice != null);
       const showAutoLiquidation = autoLiquidationLabel != null && (liquidationLtv == null || Math.abs(autoLiquidationLtv - liquidationLtv) > 0.0005);
@@ -7614,7 +7846,7 @@
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">LTV neto</div>
-                <div className="text-sm font-semibold text-neutral-800">{formatPercent(item.actualLtv, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div>
+                <div className="text-sm font-semibold text-neutral-800">{formatPercent(item.actualLtv, { minimumFractionDigits: 3, maximumFractionDigits: 3 })}</div>
                 {ltvApi != null && (
                   <div className="text-[10px] text-neutral-500">LTV API {formatPercent(ltvApi, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div>
                 )}
@@ -7627,11 +7859,11 @@
               <div className="space-y-2">
                 <div>
                   <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Tasa anual (APR)</div>
-                  <div className="text-sm font-semibold text-neutral-800">{annualAprValue != null ? formatPercent(annualAprValue, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</div>
+                  <div className="text-sm font-semibold text-neutral-800">{annualAprValue != null ? formatPercent(annualAprValue, { minimumFractionDigits: 5, maximumFractionDigits: 5 }) : '—'}</div>
                   {vipApr != null && (
                     <div className="mt-1">
                       <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">APR VIP</div>
-                      <div className="text-sm font-semibold text-neutral-800">{formatPercent(vipApr, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                      <div className="text-sm font-semibold text-neutral-800">{formatPercent(vipApr, { minimumFractionDigits: 5, maximumFractionDigits: 5 })}</div>
                     </div>
                   )}
                 </div>
@@ -7665,7 +7897,7 @@
           </div>
           <div className="mt-3">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500">Tasa anual neta</div>
-            <div className={`text-base font-semibold ${netTone}`}>{netAprValue != null ? formatPercent(netAprValue, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</div>
+            <div className={`text-base font-semibold ${netTone}`}>{netAprValue != null ? formatPercent(netAprValue, { minimumFractionDigits: 5, maximumFractionDigits: 5 }) : '—'}</div>
             {(borrowDate || lastUpdated) && (
               <div className="mt-1 text-[10px] text-neutral-500">
                 {borrowDate && <div>Inicio préstamo: {borrowDate}</div>}
@@ -7824,7 +8056,7 @@
       );
     }
 
-    function CollateralLoanShareCard({ breakdown, currency, formatUsd, formatLoan, loanAmount, overallLTV, healthyThreshold, warnThreshold, autoRepayThreshold }) {
+    function CollateralLoanShareCard({ breakdown, currency, formatUsd, formatLoan, loanAmount, overallLTV, healthyThreshold, warnThreshold, autoRepayThreshold, loanPairsState = {} }) {
       const items = (breakdown || []).map((item) => {
         const share = item.loanShare > 0 ? item.loanShare : item.share;
         return { ...item, share: Math.max(0, share) };
@@ -7839,8 +8071,11 @@
 
       const toneColors = { ok: '#34d399', warn: '#facc15', danger: '#fb7185' };
       const assetPalette = ['#2563eb', '#f97316', '#10b981', '#8b5cf6', '#ec4899', '#14b8a6', '#facc15', '#0ea5e9', '#ef4444', '#22d3ee'];
+      const normalizedPairs = loanPairsState && typeof loanPairsState === 'object' ? loanPairsState : {};
       const distribution = items.map((item) => {
         const ledger = item.ledger || {};
+        const pairKey = (item.ticker || item.id || '').toUpperCase();
+        const pairState = pairKey ? normalizedPairs[pairKey] : null;
         const precomputedOutstanding = Number.isFinite(item.loanNetOutstanding)
           ? Math.max(0, item.loanNetOutstanding)
           : null;
@@ -7850,12 +8085,17 @@
         const ledgerOutstanding = Math.max(0, ledgerOriginal + ledgerInterest - ledgerPaid);
         const recordedOutstanding = Number.isFinite(ledger.outstanding) ? Math.max(0, ledger.outstanding) : 0;
         const fallbackOutstanding = Number.isFinite(item.allocatedLoan) ? Math.max(0, item.allocatedLoan) : 0;
-        const amount = precomputedOutstanding != null
-          ? precomputedOutstanding
-          : (ledgerOutstanding > 0
-            ? ledgerOutstanding
-            : (recordedOutstanding > 0 ? recordedOutstanding : fallbackOutstanding));
-        return { ...item, amount };
+        const calibratedOutstanding = pairState && Number.isFinite(pairState.debt)
+          ? Math.max(0, pairState.debt)
+          : null;
+        const amount = calibratedOutstanding != null
+          ? calibratedOutstanding
+          : (precomputedOutstanding != null
+            ? precomputedOutstanding
+            : (ledgerOutstanding > 0
+              ? ledgerOutstanding
+              : (recordedOutstanding > 0 ? recordedOutstanding : fallbackOutstanding)));
+        return { ...item, amount, pairState };
       }).filter((item) => item.amount > 0);
       if (distribution.length === 0) {
         return (
