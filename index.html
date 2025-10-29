@@ -2755,6 +2755,74 @@
 
     const todayISO = () => new Date().toISOString().slice(0, 10);
 
+    const toUtcMidnightTs = (value) => {
+      if (typeof value !== 'string') return null;
+      const trimmed = value.trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
+      const parsed = Date.parse(`${trimmed}T00:00:00Z`);
+      return Number.isNaN(parsed) ? null : parsed;
+    };
+
+    const computeLedgerInterestProjection = ({ payments, annualRate, startTs, referenceTs, originalPrincipal }) => {
+      if (!Array.isArray(payments) || payments.length === 0) return null;
+      if (!Number.isFinite(originalPrincipal) || !(originalPrincipal > 0)) return null;
+      if (!Number.isFinite(annualRate) || annualRate <= 0) return null;
+      const start = Number.isFinite(startTs) && startTs > 0 ? startTs : null;
+      if (!start) return null;
+
+      const schedule = payments
+        .map((payment) => {
+          const amount = Math.max(0, Number(payment?.amount) || 0);
+          if (!(amount > 0)) return null;
+          const ts = toUtcMidnightTs(payment?.date);
+          if (!Number.isFinite(ts)) return null;
+          return { amount, ts };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.ts - b.ts);
+
+      if (schedule.length === 0) return null;
+
+      let principal = originalPrincipal;
+      let interestBalance = 0;
+      let lastTs = start;
+
+      schedule.forEach(({ amount, ts }) => {
+        const effectiveTs = ts > lastTs ? ts : lastTs;
+        const deltaDays = Math.max(0, (effectiveTs - lastTs) / MS_IN_DAY);
+        if (deltaDays > 0 && principal > 0) {
+          interestBalance += principal * annualRate * (deltaDays / 365);
+        }
+
+        let remaining = amount;
+        if (remaining > 0 && interestBalance > 0) {
+          const interestPaid = Math.min(interestBalance, remaining);
+          interestBalance -= interestPaid;
+          remaining -= interestPaid;
+        }
+
+        if (remaining > 0 && principal > 0) {
+          const principalPaid = Math.min(principal, remaining);
+          principal -= principalPaid;
+        }
+
+        lastTs = effectiveTs;
+      });
+
+      const reference = Number.isFinite(referenceTs) && referenceTs > lastTs ? referenceTs : lastTs;
+      if (reference > lastTs && principal > 0) {
+        const deltaDays = Math.max(0, (reference - lastTs) / MS_IN_DAY);
+        if (deltaDays > 0) {
+          interestBalance += principal * annualRate * (deltaDays / 365);
+        }
+      }
+
+      return {
+        principalOutstanding: principal,
+        interestOutstanding: interestBalance,
+      };
+    };
+
     function SimuladorPrestamos() {
       const initialPlatformId = PLATFORM_IDS[0];
       const [platformId, setPlatformId] = useState(() => {
@@ -3340,18 +3408,48 @@
           const resolvedOriginalPrincipal = original > 0
             ? Math.max(original, fallbackOriginalPrincipal)
             : fallbackOriginalPrincipal;
-          const interestAccrued = interestFromLedger != null
+          let interestAccrued = interestFromLedger != null
             ? interestFromLedger
             : Math.max(0, outstanding - Math.max(0, resolvedOriginalPrincipal - paidTotal));
           const principalRepaid = Math.max(0, paidTotal - interestAccrued);
-          const resolvedPrincipalOutstanding = Number.isFinite(principalOutstandingRaw) && principalOutstandingRaw >= 0
+          let resolvedPrincipalOutstanding = Number.isFinite(principalOutstandingRaw) && principalOutstandingRaw >= 0
             ? principalOutstandingRaw
             : Math.max(0, resolvedOriginalPrincipal - principalRepaid);
-          const resolvedOutstanding = outstanding > 0
+          let resolvedOutstanding = outstanding > 0
             ? outstanding
             : Math.max(0, resolvedPrincipalOutstanding + interestAccrued);
           const annualRate = Number(entry.annualRate);
           const netAnnualRate = Number(entry.netAnnualRate);
+          const rateForSchedule = Number.isFinite(annualRate) && annualRate > 0
+            ? annualRate
+            : (Number.isFinite(netAnnualRate) && netAnnualRate > 0 ? netAnnualRate : null);
+          const referenceTsCandidate = Number.isFinite(lastUpdatedTs) && lastUpdatedTs > 0
+            ? lastUpdatedTs
+            : toUtcMidnightTs(lastUpdated);
+          const interestProjection = computeLedgerInterestProjection({
+            payments,
+            annualRate: rateForSchedule,
+            startTs: originationTs,
+            referenceTs: referenceTsCandidate,
+            originalPrincipal: resolvedOriginalPrincipal,
+          });
+          if (interestProjection) {
+            const schedulePrincipal = Math.min(
+              Math.max(0, interestProjection.principalOutstanding),
+              resolvedOriginalPrincipal
+            );
+            if (schedulePrincipal > resolvedPrincipalOutstanding) {
+              resolvedPrincipalOutstanding = schedulePrincipal;
+            }
+            const scheduleInterest = Math.max(0, interestProjection.interestOutstanding);
+            if (scheduleInterest > interestAccrued) {
+              interestAccrued = scheduleInterest;
+            }
+            resolvedOutstanding = Math.max(
+              resolvedOutstanding,
+              resolvedPrincipalOutstanding + interestAccrued,
+            );
+          }
           const liquidationPriceHint = Number(entry.liquidationPriceHint);
           const marginCallPriceHint = Number(entry.marginCallPrice ?? entry.marginCallPriceHint);
           const liquidationLtv = Number(entry.liquidationLtv);
