@@ -6580,19 +6580,7 @@
                     <input type="checkbox" ref={collateralMasterRef} className="h-4 w-4" checked={allCollateral} onChange={(e) => handleToggleAllCollateral(e.target.checked)} />
                     Colateral (todos)
                   </label>
-                  <label className="flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 shadow-sm">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-amber-500"
-                      checked={!!params.manualLoanAllocation}
-                      onChange={(e) => setParams({ ...params, manualLoanAllocation: e.target.checked })}
-                    />
-                    Asignar préstamo manualmente
-                  </label>
                 </div>
-                {params.manualLoanAllocation && (
-                  <p className="mt-2 text-center text-xs text-neutral-500">Distribuí el préstamo por activo en la columna "Préstamo asignado" para reflejar cómo Binance exige definir el colateral.</p>
-                )}
               </div>
 
               <div className="overflow-x-auto rounded-2xl nx-card">
@@ -6618,7 +6606,6 @@
                       <Th>Precio (USD)</Th>
                       <Th>Auto</Th>
                       <Th>Valor</Th>
-                      <Th>Préstamo asignado (USD)</Th>
                       <Th>Colateral</Th>
                       <Th>LTV (fijo)</Th>
                       <Th>APR Earn (flex máx)</Th>
@@ -6676,15 +6663,6 @@
                         </Td>
                         <Td align="center" className="font-medium">{formatUsd(a.value)}</Td>
                         <Td align="center">
-                          <LocaleNumberInput
-                            value={a.loanAssigned}
-                            onChange={(v) => handleAssetChange(a.id, { loanAssigned: Math.max(0, v) })}
-                            decimals={2}
-                            disabled={!params.manualLoanAllocation}
-                            className={`w-full rounded-xl border border-neutral-300 px-2 py-1 text-center focus:outline-none focus:ring-2 ${focusRingClass} ${!params.manualLoanAllocation ? 'bg-neutral-50 text-neutral-400' : ''}`}
-                          />
-                        </Td>
-                        <Td align="center">
                           <div className="flex flex-col items-center gap-2">
                             <span className="nx-chip" style={collateralChipStyle}>{collateralActive ? 'Colateral' : 'Fuera'}</span>
                             <input type="checkbox" title="Si está activo, este activo cuenta como colateral para LTV y Tope por LTVs" checked={collateralActive} onChange={(e) => handleAssetChange(a.id, { useAsCollateral: e.target.checked })} className="h-5 w-5" />
@@ -6724,7 +6702,6 @@
                       <Td align="center">—</Td>
                       <Td align="center">—</Td>
                       <Td align="center">{formatUsd(totals.totalCollateralValue)}</Td>
-                      <Td align="center">{formatUsd(totals.withValue.filter((item) => item.useAsCollateral).reduce((acc, item) => acc + Math.max(0, item.loanAssigned || 0), 0))}</Td>
                       <Td align="center">{totals.withValue.filter((item) => item.useAsCollateral).length}</Td>
                       <Td align="center">—</Td>
                       <Td align="center">—</Td>
@@ -6752,7 +6729,6 @@
                       <Td align="center">—</Td>
                       <Td align="center">—</Td>
                       <Td align="center">{formatUsd(totals.total)}</Td>
-                      <Td align="center">{formatUsd(totals.withValue.reduce((acc, item) => acc + Math.max(0, item.loanAssigned || 0), 0))}</Td>
                       <Td align="center">{totals.withValue.length}</Td>
                       <Td align="center">—</Td>
                       <Td align="center">—</Td>
