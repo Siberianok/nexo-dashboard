@@ -940,24 +940,130 @@
       animation:nx-spin 1s linear infinite;
     }
     @keyframes nx-spin{to{transform:rotate(360deg);}}
-    .nx-chip{
-      display:inline-flex;
-      align-items:center;
-      gap:.35rem;
-      padding:.2rem .65rem;
-      border-radius:9999px;
-      font-size:.72rem;
-      font-weight:600;
-      letter-spacing:.01em;
+    .nx-text-positive{color:var(--theme-tone-positive,var(--theme-tone-positive-strong,#15803d)) !important;}
+    .nx-text-positive-strong{color:var(--theme-tone-positive-strong,var(--theme-tone-positive,#166534)) !important;}
+    .nx-text-positive-muted{color:var(--theme-tone-positive-muted,rgba(22,163,74,0.82)) !important;}
+    .nx-text-positive-soft{color:var(--theme-tone-positive-soft-text,rgba(134,239,172,0.95)) !important;}
+    .nx-text-warning{color:var(--theme-tone-warning,var(--theme-tone-warning-strong,#b45309)) !important;}
+    .nx-text-warning-muted{color:var(--theme-tone-warning-muted,rgba(217,119,6,0.82)) !important;}
+    .nx-text-warning-soft{color:var(--theme-tone-warning-soft-text,rgba(254,243,199,0.9)) !important;}
+    .nx-text-danger{color:var(--theme-tone-danger,var(--theme-tone-danger-strong,#b91c1c)) !important;}
+    .nx-text-danger-strong{color:var(--theme-tone-danger-strong,#b91c1c) !important;}
+    .nx-text-danger-muted{color:var(--theme-tone-danger-muted,rgba(239,68,68,0.82)) !important;}
+    .nx-text-danger-soft{color:var(--theme-tone-danger-soft-text,rgba(254,226,226,0.92)) !important;}
+    .nx-bg-positive-soft{background:var(--theme-tone-positive-bg-soft,rgba(16,185,129,0.16)) !important;}
+    .nx-bg-warning-soft{background:var(--theme-tone-warning-bg-soft,rgba(251,191,36,0.18)) !important;}
+    .nx-bg-danger-soft{background:var(--theme-tone-danger-bg-soft,rgba(248,113,113,0.18)) !important;}
+    .nx-border-positive{border-color:var(--theme-tone-positive-border,rgba(16,185,129,0.32)) !important;}
+    .nx-border-warning{border-color:var(--theme-tone-warning-border,rgba(245,158,11,0.32)) !important;}
+    .nx-border-danger{border-color:var(--theme-tone-danger-border,rgba(248,113,113,0.32)) !important;}
+    .nx-badge-positive{background:var(--theme-tone-positive-badge-bg,rgba(16,185,129,0.16));color:var(--theme-tone-positive-badge-text,#0f766e) !important;}
+    .nx-badge-warning{background:var(--theme-tone-warning-badge-bg,rgba(251,191,36,0.16));color:var(--theme-tone-warning-badge-text,#b45309) !important;}
+    .nx-badge-danger{background:var(--theme-tone-danger-badge-bg,rgba(248,113,113,0.16));color:var(--theme-tone-danger-badge-text,#b91c1c) !important;}
+    .nx-link-danger{color:var(--theme-tone-danger,var(--theme-tone-danger-strong,#dc2626));transition:color .2s ease;}
+    .nx-link-danger:hover{color:var(--theme-tone-danger-strong,#b91c1c);}
+    .nx-link-warning{color:var(--theme-tone-warning,var(--theme-tone-warning-strong,#b45309));transition:color .2s ease;}
+    .nx-link-warning:hover{color:var(--theme-tone-warning-strong,#92400e);}
+    .nx-kpi-highlight-ok{background:var(--theme-kpi-highlight-ok-bg,linear-gradient(140deg,rgba(16,185,129,0.95) 0%,rgba(37,99,235,0.88) 100%));color:var(--theme-kpi-highlight-ok-text,#ecfdf5);}
+    .nx-kpi-highlight-warn{background:var(--theme-kpi-highlight-warn-bg,linear-gradient(140deg,rgba(251,191,36,0.95) 0%,rgba(245,158,11,0.9) 100%));color:var(--theme-kpi-highlight-warn-text,#1f2937);}
+    .nx-kpi-highlight-danger{background:var(--theme-kpi-highlight-danger-bg,linear-gradient(140deg,rgba(248,113,113,0.95) 0%,rgba(239,68,68,0.92) 100%));color:var(--theme-kpi-highlight-danger-text,#fff);}
+    .nx-surface-soft{background:var(--theme-surface-accent-soft,linear-gradient(140deg,rgba(226,232,255,0.94) 0%,rgba(191,219,254,0.9) 52%,rgba(219,234,254,0.86) 100%));border-color:var(--theme-surface-accent-border,rgba(148,163,184,0.3));box-shadow:var(--theme-surface-accent-shadow,0 12px 24px rgba(59,130,246,0.12));}
+    .nx-surface-halo{background:var(--theme-surface-accent-halo,radial-gradient(120% 120% at 50% 35%,rgba(59,130,246,0.22) 0%,rgba(191,219,254,0.18) 45%,rgba(248,250,252,0.92) 100%));border-color:var(--theme-surface-accent-border,rgba(148,163,184,0.28));box-shadow:var(--theme-surface-accent-shadow,0 16px 30px rgba(59,130,246,0.16));}
+    .nx-surface-vivid{background:var(--theme-surface-accent-vivid,radial-gradient(130% 130% at 14% 0%,rgba(79,70,229,0.24) 0%,rgba(59,130,246,0.18) 42%,rgba(14,165,233,0.14) 100%));border-color:var(--theme-surface-accent-border,rgba(148,163,184,0.3));box-shadow:var(--theme-surface-accent-shadow,0 16px 32px rgba(15,23,42,0.16));}
+    .nx-stress-card{background:var(--theme-stress-card-bg,rgba(255,255,255,0.85));border-color:var(--theme-stress-card-border,rgba(148,163,184,0.32));box-shadow:var(--theme-stress-card-shadow,0 12px 22px rgba(15,23,42,0.08));transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease;}
+    .nx-stress-card--active{background:var(--theme-stress-card-active-bg,linear-gradient(150deg,rgba(59,130,246,0.92) 0%,rgba(14,165,233,0.88) 100%));border-color:var(--theme-stress-card-active-border,rgba(59,130,246,0.45));box-shadow:var(--theme-stress-card-active-shadow,0 16px 30px rgba(59,130,246,0.24));color:var(--theme-stress-card-active-text,#0f172a);transform:translateY(-2px);}
+    .nx-stress-card__meta{color:var(--theme-stress-card-meta-text,rgba(71,85,105,0.9));}
+    .nx-stress-card--active .nx-stress-card__meta{color:inherit;}
+    .nx-chip{display:inline-flex;align-items:center;gap:.35rem;padding:.2rem .65rem;border-radius:9999px;font-size:.72rem;font-weight:600;letter-spacing:.01em;}
+    .nx-table-row{
+      border-bottom:1px solid var(--theme-table-row-border,var(--theme-border-subtle,rgba(148,163,184,0.22)));
+      background:var(--theme-table-row-bg,rgba(248,250,252,0.85));
+      transition:background .2s ease,border-color .2s ease;
     }
-    body[data-theme="dark"] .text-neutral-900,
-    body[data-theme="dark"] .text-neutral-800,
-    body[data-theme="dark"] .text-neutral-700{color:#e2e8f0 !important;}
-    body[data-theme="dark"] .text-neutral-600{color:#cbd5f5 !important;}
-    body[data-theme="dark"] .text-neutral-500{color:#94a3b8 !important;}
-    body[data-theme="dark"] .bg-neutral-50,
-    body[data-theme="dark"] .bg-white{background-color:rgba(15,23,42,0.6) !important;}
-    body[data-theme="dark"] .border-neutral-200{border-color:rgba(148,163,184,0.35) !important;}
+    .nx-table-row:nth-child(even){
+      background:var(--theme-table-row-alt-bg,rgba(237,242,255,0.78));
+    }
+    .nx-table-row:hover{
+      background:var(--theme-table-row-hover-bg,rgba(226,232,240,0.65));
+    }
+    .nx-dropdown{
+      background:var(--theme-dropdown-bg,rgba(255,255,255,0.95));
+      border:1px solid var(--theme-dropdown-border,var(--theme-border-subtle,rgba(148,163,184,0.25)));
+      color:var(--theme-dropdown-text,var(--theme-page-text,#0f172a));
+      box-shadow:var(--theme-dropdown-shadow,0 20px 40px rgba(15,23,42,0.18));
+    }
+    .nx-dropdown button:hover{
+      background:var(--theme-dropdown-hover,rgba(226,232,240,0.6));
+    }
+    body[data-theme] .text-neutral-900,
+    body[data-theme] .text-neutral-800,
+    body[data-theme] .text-neutral-700{
+      color:var(--theme-text-strong,var(--theme-page-text,#0f172a)) !important;
+    }
+    body[data-theme] .text-neutral-600{
+      color:var(--theme-text-muted,var(--theme-page-muted,#475569)) !important;
+    }
+    body[data-theme] .text-neutral-500{
+      color:var(--theme-text-soft,rgba(100,116,139,0.92)) !important;
+    }
+    body[data-theme] .text-neutral-400{
+      color:var(--theme-text-softer,rgba(148,163,184,0.85)) !important;
+    }
+    body[data-theme] .text-neutral-300{
+      color:var(--theme-text-softest,rgba(203,213,225,0.8)) !important;
+    }
+    body[data-theme] .bg-white{
+      background:var(--theme-surface-base,#ffffff) !important;
+    }
+    body[data-theme] .bg-neutral-50,
+    body[data-theme] .bg-neutral-100,
+    body[data-theme] .bg-neutral-200{
+      background:var(--theme-surface-subtle,rgba(248,250,252,0.9)) !important;
+    }
+    body[data-theme] .border-neutral-100,
+    body[data-theme] .border-neutral-200{
+      border-color:var(--theme-border-subtle,rgba(148,163,184,0.28)) !important;
+    }
+    body[data-theme] .border-neutral-300{
+      border-color:var(--theme-border-strong,rgba(99,102,241,0.35)) !important;
+    }
+    body[data-theme] .hover\:bg-neutral-100:hover{
+      background:var(--theme-surface-hover,rgba(226,232,240,0.65)) !important;
+    }
+    body[data-theme] .shadow-sm{
+      box-shadow:var(--theme-shadow-sm,0 10px 20px rgba(15,23,42,0.08)) !important;
+    }
+    body[data-theme] input[type="text"],
+    body[data-theme] input[type="number"],
+    body[data-theme] input[type="date"],
+    body[data-theme] input[type="email"],
+    body[data-theme] input[type="password"],
+    body[data-theme] select,
+    body[data-theme] textarea{
+      background:var(--theme-input-bg,rgba(255,255,255,0.9));
+      color:var(--theme-input-text,var(--theme-page-text,#0f172a));
+      border-color:var(--theme-input-border,rgba(148,163,184,0.3));
+      box-shadow:var(--theme-input-shadow,0 2px 6px rgba(15,23,42,0.08));
+      transition:border-color .2s ease, box-shadow .2s ease, background .2s ease, color .2s ease;
+    }
+    body[data-theme] input::placeholder,
+    body[data-theme] textarea::placeholder{
+      color:var(--theme-input-placeholder,rgba(100,116,139,0.7));
+    }
+    body[data-theme] input:focus,
+    body[data-theme] select:focus,
+    body[data-theme] textarea:focus{
+      outline:none;
+      border-color:var(--theme-input-border-active,var(--theme-input-border,rgba(148,163,184,0.3)));
+      box-shadow:0 0 0 2px var(--theme-input-focus-ring,rgba(37,99,235,0.25));
+    }
+    body[data-theme] input:disabled,
+    body[data-theme] select:disabled,
+    body[data-theme] textarea:disabled{
+      background:var(--theme-input-disabled-bg,rgba(226,232,240,0.55));
+      color:var(--theme-input-disabled-text,rgba(100,116,139,0.65));
+      box-shadow:none;
+    }
     .nx-btn-ghost{
       background:var(--theme-ghost-bg);
       color:var(--theme-ghost-text);
@@ -1070,6 +1176,84 @@
         '--theme-chip-auto-text': '#047857',
         '--theme-chip-off-bg': 'rgba(148,163,184,0.18)',
         '--theme-chip-off-text': '#475569',
+        '--theme-tone-positive': '#2563eb',
+        '--theme-tone-positive-strong': '#1d4ed8',
+        '--theme-tone-positive-muted': 'rgba(59,130,246,0.82)',
+        '--theme-tone-positive-soft-text': 'rgba(219,234,254,0.92)',
+        '--theme-tone-positive-bg-soft': 'linear-gradient(140deg, rgba(191,219,254,0.38) 0%, rgba(148,163,255,0.32) 100%)',
+        '--theme-tone-positive-border': 'rgba(59,130,246,0.32)',
+        '--theme-tone-positive-badge-bg': 'rgba(96,165,250,0.18)',
+        '--theme-tone-positive-badge-text': '#1d4ed8',
+        '--theme-tone-warning': '#f97316',
+        '--theme-tone-warning-strong': '#c2410c',
+        '--theme-tone-warning-muted': 'rgba(249,115,22,0.82)',
+        '--theme-tone-warning-soft-text': 'rgba(254,215,170,0.92)',
+        '--theme-tone-warning-bg-soft': 'linear-gradient(140deg, rgba(253,186,116,0.3) 0%, rgba(251,146,60,0.28) 100%)',
+        '--theme-tone-warning-border': 'rgba(251,146,60,0.32)',
+        '--theme-tone-warning-badge-bg': 'rgba(251,191,36,0.2)',
+        '--theme-tone-warning-badge-text': '#b45309',
+        '--theme-tone-danger': '#ef4444',
+        '--theme-tone-danger-strong': '#b91c1c',
+        '--theme-tone-danger-muted': 'rgba(248,113,113,0.82)',
+        '--theme-tone-danger-soft-text': 'rgba(254,226,226,0.92)',
+        '--theme-tone-danger-bg-soft': 'linear-gradient(140deg, rgba(248,113,113,0.28) 0%, rgba(239,68,68,0.24) 100%)',
+        '--theme-tone-danger-border': 'rgba(239,68,68,0.32)',
+        '--theme-tone-danger-badge-bg': 'rgba(248,113,113,0.18)',
+        '--theme-tone-danger-badge-text': '#b91c1c',
+        '--theme-kpi-highlight-ok-bg': 'linear-gradient(140deg,rgba(37,99,235,0.95) 0%,rgba(14,165,233,0.9) 100%)',
+        '--theme-kpi-highlight-ok-text': '#f8fafc',
+        '--theme-kpi-highlight-warn-bg': 'linear-gradient(140deg,rgba(251,191,36,0.96) 0%,rgba(249,115,22,0.9) 100%)',
+        '--theme-kpi-highlight-warn-text': '#1f2937',
+        '--theme-kpi-highlight-danger-bg': 'linear-gradient(140deg,rgba(248,113,113,0.95) 0%,rgba(239,68,68,0.9) 100%)',
+        '--theme-kpi-highlight-danger-text': '#ffffff',
+        '--theme-surface-accent-soft': 'linear-gradient(140deg, rgba(226,232,255,0.94) 0%, rgba(191,219,254,0.9) 52%, rgba(219,234,254,0.86) 100%)',
+        '--theme-surface-accent-halo': 'radial-gradient(120% 120% at 50% 35%, rgba(59,130,246,0.22) 0%, rgba(191,219,254,0.18) 45%, rgba(248,250,252,0.92) 100%)',
+        '--theme-surface-accent-vivid': 'radial-gradient(130% 130% at 14% 0%, rgba(79,70,229,0.24) 0%, rgba(59,130,246,0.18) 42%, rgba(14,165,233,0.14) 100%)',
+        '--theme-surface-accent-border': 'rgba(148,163,184,0.28)',
+        '--theme-surface-accent-shadow': '0 16px 30px rgba(32,82,193,0.16)',
+        '--theme-stress-card-bg': 'linear-gradient(160deg, rgba(236,244,255,0.92) 0%, rgba(210,226,255,0.88) 100%)',
+        '--theme-stress-card-border': 'rgba(99,132,241,0.35)',
+        '--theme-stress-card-shadow': '0 12px 26px rgba(37,99,235,0.18)',
+        '--theme-stress-card-active-bg': 'linear-gradient(150deg, rgba(37,99,235,0.94) 0%, rgba(14,165,233,0.88) 100%)',
+        '--theme-stress-card-active-border': 'rgba(14,165,233,0.52)',
+        '--theme-stress-card-active-text': '#f8fafc',
+        '--theme-stress-card-active-shadow': '0 16px 32px rgba(32,82,193,0.25)',
+        '--theme-stress-card-meta-text': 'rgba(30,64,175,0.75)',
+        '--theme-stress-badge-bg': 'rgba(37,99,235,0.18)',
+        '--theme-stress-badge-text': '#1d4ed8',
+        '--theme-text-strong': '#0f172a',
+        '--theme-text-muted': '#334155',
+        '--theme-text-soft': 'rgba(71,85,105,0.9)',
+        '--theme-text-softer': 'rgba(100,116,139,0.85)',
+        '--theme-text-softest': 'rgba(148,163,184,0.8)',
+        '--theme-surface-base': 'rgba(255,255,255,0.96)',
+        '--theme-surface-subtle': 'rgba(244,248,255,0.88)',
+        '--theme-surface-hover': 'rgba(221,230,255,0.75)',
+        '--theme-border-subtle': 'rgba(99,132,241,0.28)',
+        '--theme-border-strong': 'rgba(51,94,201,0.45)',
+        '--theme-shadow-sm': '0 14px 28px rgba(30,64,175,0.16)',
+        '--theme-input-bg': 'rgba(255,255,255,0.92)',
+        '--theme-input-text': '#0f172a',
+        '--theme-input-border': 'rgba(99,132,241,0.35)',
+        '--theme-input-border-active': 'rgba(51,94,201,0.55)',
+        '--theme-input-focus-ring': 'rgba(51,94,201,0.28)',
+        '--theme-input-placeholder': 'rgba(100,116,139,0.7)',
+        '--theme-input-disabled-bg': 'rgba(226,232,240,0.6)',
+        '--theme-input-disabled-text': 'rgba(100,116,139,0.65)',
+        '--theme-input-shadow': '0 6px 12px rgba(15,33,90,0.12)',
+        '--theme-dropdown-bg': 'linear-gradient(160deg, rgba(244,248,255,0.98) 0%, rgba(225,236,255,0.94) 100%)',
+        '--theme-dropdown-border': 'rgba(99,132,241,0.4)',
+        '--theme-dropdown-text': '#0f172a',
+        '--theme-dropdown-shadow': '0 18px 40px rgba(30,64,175,0.2)',
+        '--theme-dropdown-hover': 'rgba(221,230,255,0.75)',
+        '--theme-table-row-border': 'rgba(148,163,184,0.2)',
+        '--theme-table-row-bg': 'rgba(248,250,252,0.92)',
+        '--theme-table-row-alt-bg': 'rgba(229,237,255,0.9)',
+        '--theme-table-row-hover-bg': 'rgba(221,230,255,0.82)',
+        '--theme-metric-chip-bg': 'rgba(236,243,255,0.9)',
+        '--theme-metric-chip-text': '#1d4ed8',
+        '--theme-metric-chip-accent-bg': 'rgba(191,219,254,0.85)',
+        '--theme-metric-chip-accent-text': '#1d4ed8',
       },
       binance: {
         '--theme-surface-soft': 'linear-gradient(180deg,#fff6e6 0%,#ffedcc 100%)',
@@ -1116,6 +1300,84 @@
         '--theme-chip-auto-text': '#047857',
         '--theme-chip-off-bg': 'rgba(254,215,170,0.35)',
         '--theme-chip-off-text': '#9a3412',
+        '--theme-tone-positive': '#f59e0b',
+        '--theme-tone-positive-strong': '#b45309',
+        '--theme-tone-positive-muted': 'rgba(245,158,11,0.82)',
+        '--theme-tone-positive-soft-text': 'rgba(254,240,138,0.92)',
+        '--theme-tone-positive-bg-soft': 'linear-gradient(140deg, rgba(253,230,138,0.32) 0%, rgba(252,211,77,0.28) 100%)',
+        '--theme-tone-positive-border': 'rgba(245,158,11,0.38)',
+        '--theme-tone-positive-badge-bg': 'rgba(245,158,11,0.22)',
+        '--theme-tone-positive-badge-text': '#92400e',
+        '--theme-tone-warning': '#f97316',
+        '--theme-tone-warning-strong': '#c2410c',
+        '--theme-tone-warning-muted': 'rgba(249,115,22,0.82)',
+        '--theme-tone-warning-soft-text': 'rgba(255,237,213,0.92)',
+        '--theme-tone-warning-bg-soft': 'linear-gradient(140deg, rgba(254,215,170,0.3) 0%, rgba(251,146,60,0.28) 100%)',
+        '--theme-tone-warning-border': 'rgba(251,146,60,0.4)',
+        '--theme-tone-warning-badge-bg': 'rgba(253,186,116,0.24)',
+        '--theme-tone-warning-badge-text': '#c2410c',
+        '--theme-tone-danger': '#f87171',
+        '--theme-tone-danger-strong': '#dc2626',
+        '--theme-tone-danger-muted': 'rgba(248,113,113,0.85)',
+        '--theme-tone-danger-soft-text': 'rgba(254,228,226,0.9)',
+        '--theme-tone-danger-bg-soft': 'linear-gradient(140deg, rgba(248,113,113,0.26) 0%, rgba(244,63,94,0.26) 100%)',
+        '--theme-tone-danger-border': 'rgba(239,68,68,0.4)',
+        '--theme-tone-danger-badge-bg': 'rgba(248,113,113,0.22)',
+        '--theme-tone-danger-badge-text': '#b91c1c',
+        '--theme-kpi-highlight-ok-bg': 'linear-gradient(140deg,rgba(245,158,11,0.96) 0%,rgba(217,119,6,0.9) 100%)',
+        '--theme-kpi-highlight-ok-text': '#1f2937',
+        '--theme-kpi-highlight-warn-bg': 'linear-gradient(140deg,rgba(249,115,22,0.96) 0%,rgba(234,88,12,0.9) 100%)',
+        '--theme-kpi-highlight-warn-text': '#1f2937',
+        '--theme-kpi-highlight-danger-bg': 'linear-gradient(140deg,rgba(248,113,113,0.95) 0%,rgba(239,68,68,0.9) 100%)',
+        '--theme-kpi-highlight-danger-text': '#ffffff',
+        '--theme-surface-accent-soft': 'linear-gradient(140deg, rgba(255,247,230,0.94) 0%, rgba(254,243,199,0.9) 52%, rgba(253,230,138,0.86) 100%)',
+        '--theme-surface-accent-halo': 'radial-gradient(120% 120% at 50% 35%, rgba(245,158,11,0.26) 0%, rgba(253,224,71,0.18) 45%, rgba(255,247,230,0.9) 100%)',
+        '--theme-surface-accent-vivid': 'radial-gradient(130% 130% at 14% 0%, rgba(30,41,59,0.35) 0%, rgba(180,83,9,0.32) 42%, rgba(245,158,11,0.25) 100%)',
+        '--theme-surface-accent-border': 'rgba(217,119,6,0.35)',
+        '--theme-surface-accent-shadow': '0 16px 30px rgba(146,64,14,0.22)',
+        '--theme-stress-card-bg': 'linear-gradient(160deg, rgba(255,244,219,0.92) 0%, rgba(254,228,175,0.88) 100%)',
+        '--theme-stress-card-border': 'rgba(245,158,11,0.38)',
+        '--theme-stress-card-shadow': '0 12px 26px rgba(146,64,14,0.18)',
+        '--theme-stress-card-active-bg': 'linear-gradient(150deg, rgba(30,41,59,0.92) 0%, rgba(234,179,8,0.9) 55%, rgba(245,158,11,0.88) 100%)',
+        '--theme-stress-card-active-border': 'rgba(253,224,71,0.55)',
+        '--theme-stress-card-active-text': '#fffbeb',
+        '--theme-stress-card-active-shadow': '0 16px 30px rgba(146,64,14,0.28)',
+        '--theme-stress-card-meta-text': 'rgba(120,53,15,0.78)',
+        '--theme-stress-badge-bg': 'rgba(217,119,6,0.22)',
+        '--theme-stress-badge-text': '#7c2d12',
+        '--theme-text-strong': '#fefce8',
+        '--theme-text-muted': '#fde68a',
+        '--theme-text-soft': 'rgba(253,224,71,0.88)',
+        '--theme-text-softer': 'rgba(245,158,11,0.78)',
+        '--theme-text-softest': 'rgba(217,119,6,0.7)',
+        '--theme-surface-base': 'rgba(17,24,39,0.92)',
+        '--theme-surface-subtle': 'rgba(30,41,59,0.88)',
+        '--theme-surface-hover': 'rgba(55,65,81,0.75)',
+        '--theme-border-subtle': 'rgba(234,179,8,0.3)',
+        '--theme-border-strong': 'rgba(253,224,71,0.45)',
+        '--theme-shadow-sm': '0 18px 32px rgba(17,24,39,0.45)',
+        '--theme-input-bg': 'rgba(17,24,39,0.9)',
+        '--theme-input-text': '#fde68a',
+        '--theme-input-border': 'rgba(234,179,8,0.45)',
+        '--theme-input-border-active': 'rgba(253,224,71,0.65)',
+        '--theme-input-focus-ring': 'rgba(253,224,71,0.35)',
+        '--theme-input-placeholder': 'rgba(253,224,71,0.6)',
+        '--theme-input-disabled-bg': 'rgba(55,65,81,0.72)',
+        '--theme-input-disabled-text': 'rgba(253,224,71,0.55)',
+        '--theme-input-shadow': '0 12px 26px rgba(15,23,42,0.45)',
+        '--theme-dropdown-bg': 'linear-gradient(160deg, rgba(30,41,59,0.95) 0%, rgba(17,24,39,0.92) 100%)',
+        '--theme-dropdown-border': 'rgba(253,224,71,0.32)',
+        '--theme-dropdown-text': '#fef9c3',
+        '--theme-dropdown-shadow': '0 24px 46px rgba(15,23,42,0.6)',
+        '--theme-dropdown-hover': 'rgba(234,179,8,0.18)',
+        '--theme-table-row-border': 'rgba(234,179,8,0.24)',
+        '--theme-table-row-bg': 'rgba(17,24,39,0.9)',
+        '--theme-table-row-alt-bg': 'rgba(30,41,59,0.9)',
+        '--theme-table-row-hover-bg': 'rgba(180,83,9,0.35)',
+        '--theme-metric-chip-bg': 'rgba(30,41,59,0.88)',
+        '--theme-metric-chip-text': '#fef3c7',
+        '--theme-metric-chip-accent-bg': 'rgba(180,83,9,0.45)',
+        '--theme-metric-chip-accent-text': '#fde68a',
       },
       youhodler: {
         '--theme-surface-soft': 'linear-gradient(180deg,#e0f2ff 0%,#f5fbff 100%)',
@@ -1162,6 +1424,84 @@
         '--theme-chip-auto-text': '#0369a1',
         '--theme-chip-off-bg': 'rgba(148,163,184,0.2)',
         '--theme-chip-off-text': '#475569',
+        '--theme-tone-positive': '#0ea5e9',
+        '--theme-tone-positive-strong': '#0369a1',
+        '--theme-tone-positive-muted': 'rgba(14,165,233,0.82)',
+        '--theme-tone-positive-soft-text': 'rgba(224,242,255,0.92)',
+        '--theme-tone-positive-bg-soft': 'linear-gradient(140deg, rgba(191,219,254,0.28) 0%, rgba(125,211,252,0.26) 100%)',
+        '--theme-tone-positive-border': 'rgba(14,165,233,0.36)',
+        '--theme-tone-positive-badge-bg': 'rgba(14,165,233,0.2)',
+        '--theme-tone-positive-badge-text': '#0369a1',
+        '--theme-tone-warning': '#2563eb',
+        '--theme-tone-warning-strong': '#1d4ed8',
+        '--theme-tone-warning-muted': 'rgba(37,99,235,0.8)',
+        '--theme-tone-warning-soft-text': 'rgba(224,231,255,0.92)',
+        '--theme-tone-warning-bg-soft': 'linear-gradient(140deg, rgba(191,219,254,0.28) 0%, rgba(147,197,253,0.26) 100%)',
+        '--theme-tone-warning-border': 'rgba(37,99,235,0.32)',
+        '--theme-tone-warning-badge-bg': 'rgba(59,130,246,0.2)',
+        '--theme-tone-warning-badge-text': '#1d4ed8',
+        '--theme-tone-danger': '#ef4444',
+        '--theme-tone-danger-strong': '#b91c1c',
+        '--theme-tone-danger-muted': 'rgba(239,68,68,0.82)',
+        '--theme-tone-danger-soft-text': 'rgba(254,226,226,0.92)',
+        '--theme-tone-danger-bg-soft': 'linear-gradient(140deg, rgba(248,113,113,0.24) 0%, rgba(239,68,68,0.24) 100%)',
+        '--theme-tone-danger-border': 'rgba(239,68,68,0.32)',
+        '--theme-tone-danger-badge-bg': 'rgba(248,113,113,0.16)',
+        '--theme-tone-danger-badge-text': '#be123c',
+        '--theme-kpi-highlight-ok-bg': 'linear-gradient(140deg,rgba(14,165,233,0.95) 0%,rgba(37,99,235,0.92) 100%)',
+        '--theme-kpi-highlight-ok-text': '#f8fafc',
+        '--theme-kpi-highlight-warn-bg': 'linear-gradient(140deg,rgba(59,130,246,0.95) 0%,rgba(37,99,235,0.9) 100%)',
+        '--theme-kpi-highlight-warn-text': '#f8fafc',
+        '--theme-kpi-highlight-danger-bg': 'linear-gradient(140deg,rgba(248,113,113,0.95) 0%,rgba(239,68,68,0.9) 100%)',
+        '--theme-kpi-highlight-danger-text': '#ffffff',
+        '--theme-surface-accent-soft': 'linear-gradient(140deg, rgba(224,242,255,0.94) 0%, rgba(191,219,254,0.9) 52%, rgba(219,234,254,0.86) 100%)',
+        '--theme-surface-accent-halo': 'radial-gradient(120% 120% at 50% 35%, rgba(14,165,233,0.24) 0%, rgba(191,219,254,0.18) 45%, rgba(224,242,255,0.92) 100%)',
+        '--theme-surface-accent-vivid': 'radial-gradient(130% 130% at 14% 0%, rgba(14,116,233,0.28) 0%, rgba(59,130,246,0.2) 42%, rgba(56,189,248,0.16) 100%)',
+        '--theme-surface-accent-border': 'rgba(59,130,246,0.3)',
+        '--theme-surface-accent-shadow': '0 16px 30px rgba(14,165,233,0.2)',
+        '--theme-stress-card-bg': 'linear-gradient(160deg, rgba(224,242,255,0.9) 0%, rgba(191,219,254,0.86) 100%)',
+        '--theme-stress-card-border': 'rgba(37,99,235,0.32)',
+        '--theme-stress-card-shadow': '0 12px 26px rgba(37,99,235,0.18)',
+        '--theme-stress-card-active-bg': 'linear-gradient(150deg, rgba(14,165,233,0.94) 0%, rgba(37,99,235,0.9) 100%)',
+        '--theme-stress-card-active-border': 'rgba(14,165,233,0.5)',
+        '--theme-stress-card-active-text': '#f8fafc',
+        '--theme-stress-card-active-shadow': '0 16px 32px rgba(14,116,233,0.24)',
+        '--theme-stress-card-meta-text': 'rgba(30,64,175,0.78)',
+        '--theme-stress-badge-bg': 'rgba(14,165,233,0.22)',
+        '--theme-stress-badge-text': '#0f172a',
+        '--theme-text-strong': '#0f172a',
+        '--theme-text-muted': '#1e3a8a',
+        '--theme-text-soft': 'rgba(37,99,235,0.82)',
+        '--theme-text-softer': 'rgba(59,130,246,0.72)',
+        '--theme-text-softest': 'rgba(148,197,255,0.68)',
+        '--theme-surface-base': 'rgba(255,255,255,0.96)',
+        '--theme-surface-subtle': 'rgba(224,242,255,0.9)',
+        '--theme-surface-hover': 'rgba(191,219,254,0.78)',
+        '--theme-border-subtle': 'rgba(59,130,246,0.28)',
+        '--theme-border-strong': 'rgba(37,99,235,0.45)',
+        '--theme-shadow-sm': '0 14px 28px rgba(37,99,235,0.18)',
+        '--theme-input-bg': 'rgba(255,255,255,0.94)',
+        '--theme-input-text': '#0f172a',
+        '--theme-input-border': 'rgba(59,130,246,0.35)',
+        '--theme-input-border-active': 'rgba(37,99,235,0.55)',
+        '--theme-input-focus-ring': 'rgba(37,99,235,0.28)',
+        '--theme-input-placeholder': 'rgba(59,130,246,0.55)',
+        '--theme-input-disabled-bg': 'rgba(224,242,255,0.65)',
+        '--theme-input-disabled-text': 'rgba(59,130,246,0.6)',
+        '--theme-input-shadow': '0 8px 16px rgba(14,116,233,0.18)',
+        '--theme-dropdown-bg': 'linear-gradient(160deg, rgba(224,242,255,0.98) 0%, rgba(210,233,255,0.94) 100%)',
+        '--theme-dropdown-border': 'rgba(59,130,246,0.35)',
+        '--theme-dropdown-text': '#0f172a',
+        '--theme-dropdown-shadow': '0 20px 42px rgba(37,99,235,0.2)',
+        '--theme-dropdown-hover': 'rgba(191,219,254,0.8)',
+        '--theme-table-row-border': 'rgba(148,197,255,0.25)',
+        '--theme-table-row-bg': 'rgba(224,242,255,0.95)',
+        '--theme-table-row-alt-bg': 'rgba(210,233,255,0.9)',
+        '--theme-table-row-hover-bg': 'rgba(191,219,254,0.82)',
+        '--theme-metric-chip-bg': 'rgba(224,242,255,0.92)',
+        '--theme-metric-chip-text': '#1d4ed8',
+        '--theme-metric-chip-accent-bg': 'rgba(191,219,254,0.88)',
+        '--theme-metric-chip-accent-text': '#0ea5e9',
       },
       ledn: {
         '--theme-surface-soft': 'linear-gradient(180deg,#f3f4f6 0%,#ffffff 100%)',
@@ -1208,6 +1548,84 @@
         '--theme-chip-auto-text': '#047857',
         '--theme-chip-off-bg': 'rgba(148,163,184,0.22)',
         '--theme-chip-off-text': '#475569',
+        '--theme-tone-positive': '#0f766e',
+        '--theme-tone-positive-strong': '#0d5b56',
+        '--theme-tone-positive-muted': 'rgba(15,118,110,0.82)',
+        '--theme-tone-positive-soft-text': 'rgba(178,245,234,0.92)',
+        '--theme-tone-positive-bg-soft': 'linear-gradient(140deg, rgba(45,212,191,0.3) 0%, rgba(20,184,166,0.26) 100%)',
+        '--theme-tone-positive-border': 'rgba(20,184,166,0.36)',
+        '--theme-tone-positive-badge-bg': 'rgba(45,212,191,0.2)',
+        '--theme-tone-positive-badge-text': '#0f766e',
+        '--theme-tone-warning': '#f59e0b',
+        '--theme-tone-warning-strong': '#b45309',
+        '--theme-tone-warning-muted': 'rgba(245,158,11,0.82)',
+        '--theme-tone-warning-soft-text': 'rgba(254,243,199,0.9)',
+        '--theme-tone-warning-bg-soft': 'linear-gradient(140deg, rgba(253,230,138,0.3) 0%, rgba(250,204,21,0.26) 100%)',
+        '--theme-tone-warning-border': 'rgba(245,158,11,0.36)',
+        '--theme-tone-warning-badge-bg': 'rgba(253,230,138,0.22)',
+        '--theme-tone-warning-badge-text': '#92400e',
+        '--theme-tone-danger': '#f87171',
+        '--theme-tone-danger-strong': '#dc2626',
+        '--theme-tone-danger-muted': 'rgba(248,113,113,0.82)',
+        '--theme-tone-danger-soft-text': 'rgba(254,226,226,0.92)',
+        '--theme-tone-danger-bg-soft': 'linear-gradient(140deg, rgba(248,113,113,0.26) 0%, rgba(239,68,68,0.24) 100%)',
+        '--theme-tone-danger-border': 'rgba(239,68,68,0.32)',
+        '--theme-tone-danger-badge-bg': 'rgba(248,113,113,0.2)',
+        '--theme-tone-danger-badge-text': '#b91c1c',
+        '--theme-kpi-highlight-ok-bg': 'linear-gradient(140deg,rgba(20,184,166,0.96) 0%,rgba(13,148,136,0.9) 100%)',
+        '--theme-kpi-highlight-ok-text': '#ecfdf5',
+        '--theme-kpi-highlight-warn-bg': 'linear-gradient(140deg,rgba(245,158,11,0.95) 0%,rgba(234,179,8,0.88) 100%)',
+        '--theme-kpi-highlight-warn-text': '#0f172a',
+        '--theme-kpi-highlight-danger-bg': 'linear-gradient(140deg,rgba(248,113,113,0.95) 0%,rgba(239,68,68,0.9) 100%)',
+        '--theme-kpi-highlight-danger-text': '#ffffff',
+        '--theme-surface-accent-soft': 'linear-gradient(140deg, rgba(230,252,247,0.94) 0%, rgba(210,245,236,0.9) 52%, rgba(191,237,226,0.86) 100%)',
+        '--theme-surface-accent-halo': 'radial-gradient(120% 120% at 50% 35%, rgba(20,184,166,0.22) 0%, rgba(153,246,228,0.18) 45%, rgba(236,253,245,0.92) 100%)',
+        '--theme-surface-accent-vivid': 'radial-gradient(130% 130% at 14% 0%, rgba(15,118,110,0.26) 0%, rgba(13,148,136,0.22) 42%, rgba(45,212,191,0.18) 100%)',
+        '--theme-surface-accent-border': 'rgba(20,184,166,0.28)',
+        '--theme-surface-accent-shadow': '0 16px 30px rgba(13,148,136,0.2)',
+        '--theme-stress-card-bg': 'linear-gradient(160deg, rgba(230,252,247,0.9) 0%, rgba(210,245,236,0.86) 100%)',
+        '--theme-stress-card-border': 'rgba(45,212,191,0.32)',
+        '--theme-stress-card-shadow': '0 12px 26px rgba(13,148,136,0.18)',
+        '--theme-stress-card-active-bg': 'linear-gradient(150deg, rgba(15,118,110,0.92) 0%, rgba(20,184,166,0.9) 100%)',
+        '--theme-stress-card-active-border': 'rgba(20,184,166,0.5)',
+        '--theme-stress-card-active-text': '#ecfdf5',
+        '--theme-stress-card-active-shadow': '0 16px 32px rgba(13,148,136,0.24)',
+        '--theme-stress-card-meta-text': 'rgba(15,118,110,0.78)',
+        '--theme-stress-badge-bg': 'rgba(20,184,166,0.22)',
+        '--theme-stress-badge-text': '#0f766e',
+        '--theme-text-strong': '#0f172a',
+        '--theme-text-muted': '#065f46',
+        '--theme-text-soft': 'rgba(15,118,110,0.82)',
+        '--theme-text-softer': 'rgba(20,184,166,0.72)',
+        '--theme-text-softest': 'rgba(110,231,183,0.68)',
+        '--theme-surface-base': 'rgba(255,255,255,0.95)',
+        '--theme-surface-subtle': 'rgba(236,253,245,0.9)',
+        '--theme-surface-hover': 'rgba(209,250,229,0.78)',
+        '--theme-border-subtle': 'rgba(45,212,191,0.28)',
+        '--theme-border-strong': 'rgba(15,118,110,0.45)',
+        '--theme-shadow-sm': '0 14px 28px rgba(13,148,136,0.18)',
+        '--theme-input-bg': 'rgba(255,255,255,0.94)',
+        '--theme-input-text': '#0f172a',
+        '--theme-input-border': 'rgba(45,212,191,0.35)',
+        '--theme-input-border-active': 'rgba(15,118,110,0.52)',
+        '--theme-input-focus-ring': 'rgba(20,184,166,0.3)',
+        '--theme-input-placeholder': 'rgba(20,184,166,0.55)',
+        '--theme-input-disabled-bg': 'rgba(236,253,245,0.6)',
+        '--theme-input-disabled-text': 'rgba(15,118,110,0.6)',
+        '--theme-input-shadow': '0 8px 16px rgba(13,148,136,0.18)',
+        '--theme-dropdown-bg': 'linear-gradient(160deg, rgba(236,253,245,0.98) 0%, rgba(209,250,229,0.94) 100%)',
+        '--theme-dropdown-border': 'rgba(45,212,191,0.35)',
+        '--theme-dropdown-text': '#0f172a',
+        '--theme-dropdown-shadow': '0 20px 42px rgba(13,148,136,0.22)',
+        '--theme-dropdown-hover': 'rgba(167,243,208,0.82)',
+        '--theme-table-row-border': 'rgba(110,231,183,0.32)',
+        '--theme-table-row-bg': 'rgba(236,253,245,0.95)',
+        '--theme-table-row-alt-bg': 'rgba(209,250,229,0.9)',
+        '--theme-table-row-hover-bg': 'rgba(167,243,208,0.82)',
+        '--theme-metric-chip-bg': 'rgba(236,253,245,0.92)',
+        '--theme-metric-chip-text': '#0f766e',
+        '--theme-metric-chip-accent-bg': 'rgba(209,250,229,0.88)',
+        '--theme-metric-chip-accent-text': '#047857',
       },
       dark: {
         '--theme-surface-soft': 'linear-gradient(180deg,#0f172a 0%,#111827 45%,#020617 100%)',
@@ -1254,6 +1672,84 @@
         '--theme-chip-auto-text': '#bbf7d0',
         '--theme-chip-off-bg': 'rgba(148,163,184,0.28)',
         '--theme-chip-off-text': '#e2e8f0',
+        '--theme-tone-positive': '#22d3ee',
+        '--theme-tone-positive-strong': '#0ea5e9',
+        '--theme-tone-positive-muted': 'rgba(125,211,252,0.85)',
+        '--theme-tone-positive-soft-text': 'rgba(165,243,252,0.95)',
+        '--theme-tone-positive-bg-soft': 'linear-gradient(140deg, rgba(13,148,136,0.38) 0%, rgba(59,130,246,0.32) 100%)',
+        '--theme-tone-positive-border': 'rgba(56,189,248,0.35)',
+        '--theme-tone-positive-badge-bg': 'rgba(56,189,248,0.24)',
+        '--theme-tone-positive-badge-text': '#0ea5e9',
+        '--theme-tone-warning': '#facc15',
+        '--theme-tone-warning-strong': '#f59e0b',
+        '--theme-tone-warning-muted': 'rgba(250,204,21,0.82)',
+        '--theme-tone-warning-soft-text': 'rgba(254,243,199,0.9)',
+        '--theme-tone-warning-bg-soft': 'linear-gradient(140deg, rgba(250,204,21,0.32) 0%, rgba(251,191,36,0.28) 100%)',
+        '--theme-tone-warning-border': 'rgba(250,204,21,0.38)',
+        '--theme-tone-warning-badge-bg': 'rgba(250,204,21,0.24)',
+        '--theme-tone-warning-badge-text': '#facc15',
+        '--theme-tone-danger': '#f87171',
+        '--theme-tone-danger-strong': '#fb7185',
+        '--theme-tone-danger-muted': 'rgba(252,165,165,0.85)',
+        '--theme-tone-danger-soft-text': 'rgba(254,205,211,0.9)',
+        '--theme-tone-danger-bg-soft': 'linear-gradient(140deg, rgba(248,113,113,0.3) 0%, rgba(244,63,94,0.26) 100%)',
+        '--theme-tone-danger-border': 'rgba(248,113,113,0.4)',
+        '--theme-tone-danger-badge-bg': 'rgba(248,113,113,0.26)',
+        '--theme-tone-danger-badge-text': '#fecdd3',
+        '--theme-kpi-highlight-ok-bg': 'linear-gradient(140deg,rgba(37,99,235,0.85) 0%,rgba(14,165,233,0.88) 100%)',
+        '--theme-kpi-highlight-ok-text': '#ecfeff',
+        '--theme-kpi-highlight-warn-bg': 'linear-gradient(140deg,rgba(250,204,21,0.85) 0%,rgba(234,179,8,0.82) 100%)',
+        '--theme-kpi-highlight-warn-text': '#0f172a',
+        '--theme-kpi-highlight-danger-bg': 'linear-gradient(140deg,rgba(248,113,113,0.85) 0%,rgba(244,63,94,0.82) 100%)',
+        '--theme-kpi-highlight-danger-text': '#fee2e2',
+        '--theme-surface-accent-soft': 'linear-gradient(140deg, rgba(30,41,59,0.85) 0%, rgba(15,23,42,0.88) 52%, rgba(12,31,54,0.9) 100%)',
+        '--theme-surface-accent-halo': 'radial-gradient(120% 120% at 50% 35%, rgba(37,99,235,0.32) 0%, rgba(15,23,42,0.4) 45%, rgba(15,23,42,0.88) 100%)',
+        '--theme-surface-accent-vivid': 'radial-gradient(130% 130% at 14% 0%, rgba(17,24,39,0.65) 0%, rgba(30,64,175,0.45) 42%, rgba(8,145,178,0.35) 100%)',
+        '--theme-surface-accent-border': 'rgba(59,130,246,0.35)',
+        '--theme-surface-accent-shadow': '0 18px 36px rgba(2,6,23,0.55)',
+        '--theme-stress-card-bg': 'linear-gradient(160deg, rgba(15,23,42,0.88) 0%, rgba(12,31,54,0.88) 100%)',
+        '--theme-stress-card-border': 'rgba(59,130,246,0.32)',
+        '--theme-stress-card-shadow': '0 12px 28px rgba(2,6,23,0.55)',
+        '--theme-stress-card-active-bg': 'linear-gradient(150deg, rgba(59,130,246,0.85) 0%, rgba(14,116,233,0.82) 100%)',
+        '--theme-stress-card-active-border': 'rgba(125,211,252,0.55)',
+        '--theme-stress-card-active-text': '#ecfeff',
+        '--theme-stress-card-active-shadow': '0 18px 40px rgba(15,23,42,0.6)',
+        '--theme-stress-card-meta-text': 'rgba(203,213,225,0.85)',
+        '--theme-stress-badge-bg': 'rgba(14,165,233,0.22)',
+        '--theme-stress-badge-text': '#bae6fd',
+        '--theme-text-strong': '#e2e8f0',
+        '--theme-text-muted': '#cbd5f5',
+        '--theme-text-soft': 'rgba(148,163,184,0.86)',
+        '--theme-text-softer': 'rgba(100,116,139,0.75)',
+        '--theme-text-softest': 'rgba(71,85,105,0.7)',
+        '--theme-surface-base': 'rgba(15,23,42,0.92)',
+        '--theme-surface-subtle': 'rgba(30,41,59,0.88)',
+        '--theme-surface-hover': 'rgba(37,47,66,0.82)',
+        '--theme-border-subtle': 'rgba(71,85,105,0.45)',
+        '--theme-border-strong': 'rgba(59,130,246,0.45)',
+        '--theme-shadow-sm': '0 18px 36px rgba(2,6,23,0.6)',
+        '--theme-input-bg': 'rgba(17,24,39,0.92)',
+        '--theme-input-text': '#e2e8f0',
+        '--theme-input-border': 'rgba(59,130,246,0.35)',
+        '--theme-input-border-active': 'rgba(125,211,252,0.55)',
+        '--theme-input-focus-ring': 'rgba(59,130,246,0.32)',
+        '--theme-input-placeholder': 'rgba(148,163,184,0.7)',
+        '--theme-input-disabled-bg': 'rgba(30,41,59,0.78)',
+        '--theme-input-disabled-text': 'rgba(148,163,184,0.55)',
+        '--theme-input-shadow': '0 12px 26px rgba(2,6,23,0.58)',
+        '--theme-dropdown-bg': 'linear-gradient(160deg, rgba(17,24,39,0.96) 0%, rgba(15,23,42,0.94) 100%)',
+        '--theme-dropdown-border': 'rgba(59,130,246,0.32)',
+        '--theme-dropdown-text': '#e2e8f0',
+        '--theme-dropdown-shadow': '0 24px 48px rgba(2,6,23,0.65)',
+        '--theme-dropdown-hover': 'rgba(30,41,59,0.8)',
+        '--theme-table-row-border': 'rgba(59,130,246,0.28)',
+        '--theme-table-row-bg': 'rgba(15,23,42,0.92)',
+        '--theme-table-row-alt-bg': 'rgba(17,24,39,0.9)',
+        '--theme-table-row-hover-bg': 'rgba(59,130,246,0.24)',
+        '--theme-metric-chip-bg': 'rgba(17,24,39,0.92)',
+        '--theme-metric-chip-text': '#bae6fd',
+        '--theme-metric-chip-accent-bg': 'rgba(59,130,246,0.32)',
+        '--theme-metric-chip-accent-text': '#e0f2fe',
       },
     });
 
@@ -1322,9 +1818,9 @@
     };
 
     const ACCENT_SURFACES = Object.freeze({
-      vivid: 'radial-gradient(130% 130% at 14% 0%, rgba(79,70,229,0.24) 0%, rgba(59,130,246,0.18) 42%, rgba(14,165,233,0.14) 100%)',
-      soft: 'linear-gradient(140deg, rgba(226,232,255,0.94) 0%, rgba(191,219,254,0.9) 52%, rgba(219,234,254,0.86) 100%)',
-      halo: 'radial-gradient(120% 120% at 50% 35%, rgba(59,130,246,0.22) 0%, rgba(191,219,254,0.18) 45%, rgba(248,250,252,0.92) 100%)',
+      vivid: 'var(--theme-surface-accent-vivid, radial-gradient(130% 130% at 14% 0%, rgba(79,70,229,0.24) 0%, rgba(59,130,246,0.18) 42%, rgba(14,165,233,0.14) 100%))',
+      soft: 'var(--theme-surface-accent-soft, linear-gradient(140deg, rgba(226,232,255,0.94) 0%, rgba(191,219,254,0.9) 52%, rgba(219,234,254,0.86) 100%))',
+      halo: 'var(--theme-surface-accent-halo, radial-gradient(120% 120% at 50% 35%, rgba(59,130,246,0.22) 0%, rgba(191,219,254,0.18) 45%, rgba(248,250,252,0.92) 100%))',
     });
 
     const ensureThemeStyles = () => {
@@ -1381,8 +1877,8 @@
 
     const ALERT_TONE_STYLES = Object.freeze({
       info: { border: 'border-sky-200', bg: 'bg-sky-50', text: 'text-sky-700' },
-      warn: { border: 'border-amber-200', bg: 'bg-amber-50', text: 'text-amber-700' },
-      danger: { border: 'border-rose-200', bg: 'bg-rose-50', text: 'text-rose-700' },
+      warn: { border: 'nx-border-warning', bg: 'nx-bg-warning-soft', text: 'nx-text-warning' },
+      danger: { border: 'nx-border-danger', bg: 'nx-bg-danger-soft', text: 'nx-text-danger' },
     });
 
     const normalizeAlertItems = (alerts) => {
@@ -6080,7 +6576,7 @@
                       <p className={`text-sm md:text-base font-medium text-white/80 ${accentClass}`}>{platformTagline}</p>
                       <div className="flex flex-wrap items-center gap-3 text-xs text-white/75">
                         <span className="flex items-center gap-1 rounded-full border border-white/20 px-3 py-1">
-                          <span className="h-2 w-2 rounded-full bg-emerald-300" />
+                          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--theme-tone-positive,#22c55e)' }} />
                           {forceOn ? 'Simulación forzada' : 'Datos en vivo'}
                         </span>
                         {simMode && <span className="rounded-full border border-white/20 px-3 py-1">Modo dinámico</span>}
@@ -6112,13 +6608,13 @@
                           Plantillas &amp; datos
                         </button>
                         {exportMenuOpen && (
-                          <div className="absolute right-0 z-20 mt-3 w-60 rounded-2xl border border-neutral-200 bg-white p-2 text-neutral-700 shadow-2xl">
-                            <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold hover:bg-neutral-100" onClick={handleExportJSON}>Exportar JSON</button>
-                            <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold hover:bg-neutral-100" onClick={handleImportRequest}>Importar JSON</button>
-                            <div className="my-1 border-t border-neutral-200" />
-                            <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-neutral-100" onClick={handleResetParams}>Reset parámetros</button>
-                            <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-neutral-100" onClick={handleResetAssets}>Reset activos</button>
-                            <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-neutral-100" onClick={handleResetPlanners}>Reset planners</button>
+                          <div className="nx-dropdown absolute right-0 z-20 mt-3 w-60 rounded-2xl border p-2 text-sm shadow-2xl">
+                            <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold transition-colors" onClick={handleExportJSON}>Exportar JSON</button>
+                            <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold transition-colors" onClick={handleImportRequest}>Importar JSON</button>
+                            <div className="my-1 border-t" style={{ borderColor: 'var(--theme-border-subtle, rgba(148,163,184,0.28))' }} />
+                            <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm transition-colors" onClick={handleResetParams}>Reset parámetros</button>
+                            <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm transition-colors" onClick={handleResetAssets}>Reset activos</button>
+                            <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm transition-colors" onClick={handleResetPlanners}>Reset planners</button>
                           </div>
                         )}
                       </div>
@@ -6170,7 +6666,7 @@
                 <div className="flex flex-wrap items-center gap-4 text-xs text-white/80">
                   {isBinance && (
                     <div className="flex items-center gap-2 rounded-full border border-white/20 px-3 py-1">
-                      {binanceLiveMeta?.loading ? <span className="nx-spinner" /> : <span className="h-2 w-2 rounded-full bg-emerald-300" />}
+                      {binanceLiveMeta?.loading ? <span className="nx-spinner" /> : <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--theme-tone-positive,#22c55e)' }} />}
                       <span>{binanceLiveMeta?.loading ? 'Sincronizando Binance…' : `Último sync: ${binanceSyncLabel}`}</span>
                     </div>
                   )}
@@ -6369,7 +6865,7 @@
                         </span>
                       </div>
                       {!(loanDraftAmount > 0) && (
-                        <p className="mt-2 text-center text-xs text-amber-600">Ingresá un monto mayor a cero para habilitar la carga del préstamo.</p>
+                        <p className="mt-2 text-center text-xs nx-text-warning">Ingresá un monto mayor a cero para habilitar la carga del préstamo.</p>
                       )}
 
                       <div className="mt-4 w-full">
@@ -6412,7 +6908,7 @@
                                     <button
                                       type="button"
                                       onClick={() => handleRemoveLoanRequest(request.id)}
-                                      className="text-rose-600 hover:underline"
+                                      className="nx-link-danger hover:underline"
                                     >
                                       Quitar
                                     </button>
@@ -6613,7 +7109,7 @@
                     </tr>
                   </thead>
                   <tbody>
-                    {totals.withValue.map((a) => {
+                    {totals.withValue.map((a, idx) => {
                       const autoActive = a.priceAuto !== false;
                       const collateralActive = a.useAsCollateral;
                       const autoChipStyle = autoActive
@@ -6623,7 +7119,7 @@
                         ? { background: 'var(--theme-chip-auto-bg, rgba(16,185,129,0.16))', color: 'var(--theme-chip-auto-text, #047857)' }
                         : { background: 'var(--theme-chip-off-bg, rgba(148,163,184,0.16))', color: 'var(--theme-chip-off-text, #475569)' };
                       return (
-                        <tr key={a.id} className="border-t border-neutral-100 even:bg-neutral-50/60 hover:bg-neutral-100/50 transition-colors">
+                        <tr key={a.id} className={`nx-table-row transition-colors ${idx === 0 ? 'rounded-t-xl' : ''}`}>
                           <Td
                             align="center"
                             className="sticky left-0 z-10"
@@ -6669,10 +7165,26 @@
                           </div>
                         </Td>
                         <Td align="center" title="Política de LTV fija por plataforma">
-                          <span className="inline-block rounded-xl bg-neutral-100 px-3 py-1 font-semibold">{pct(ltvByTicker[sanitizeTicker(a.ticker)] ?? a.ltv ?? 0)}</span>
+                          <span
+                            className="inline-block rounded-xl px-3 py-1 font-semibold"
+                            style={{
+                              background: 'var(--theme-metric-chip-bg, rgba(236,243,255,0.9))',
+                              color: 'var(--theme-metric-chip-text, #1d4ed8)',
+                            }}
+                          >
+                            {pct(ltvByTicker[sanitizeTicker(a.ticker)] ?? a.ltv ?? 0)}
+                          </span>
                         </Td>
                         <Td align="center" title="Flexible Savings – tasa tope mostrada públicamente">
-                          <span className="inline-block rounded-xl bg-blue-50 text-blue-700 px-3 py-1 font-semibold">{pct(earnAprTop[sanitizeTicker(a.ticker)] ?? 0)}</span>
+                          <span
+                            className="inline-block rounded-xl px-3 py-1 font-semibold"
+                            style={{
+                              background: 'var(--theme-metric-chip-accent-bg, rgba(191,219,254,0.85))',
+                              color: 'var(--theme-metric-chip-accent-text, #1d4ed8)',
+                            }}
+                          >
+                            {pct(earnAprTop[sanitizeTicker(a.ticker)] ?? 0)}
+                          </span>
                         </Td>
                         <Td align="center">
                           <button onClick={() => removeRow(a.id)} className="nx-btn nx-btn-ghost nx-btn-sm">Borrar</button>
@@ -6681,7 +7193,7 @@
                       );
                     })}
                     <tr
-                      className="text-sm font-semibold"
+                      className="nx-table-row text-sm font-semibold"
                       style={{ background: 'var(--theme-table-sticky-bg, rgba(255,255,255,0.9))', color: 'var(--theme-page-text, #0f172a)' }}
                     >
                       <Td
@@ -6775,7 +7287,7 @@
                               <div className="text-xs text-neutral-500">{idea.status}</div>
                             </div>
                           </div>
-                          <span className={`text-xs font-semibold ${active ? 'text-emerald-600' : 'text-neutral-400'}`}>
+                          <span className={`text-xs font-semibold ${active ? 'nx-text-positive' : 'text-neutral-400'}`}>
                             {active ? 'Cerrar' : 'Ver más'}
                           </span>
                         </div>
@@ -6952,10 +7464,10 @@
       const formatMoney = (value) => fmt(value * rate, currency);
 
       const summaryTiles = [
-        { label: 'Balance final proyectado', value: formatMoney(netFinal), tone: netFinal >= 0 ? 'text-emerald-600' : 'text-rose-600', hint: `Mínimo ${formatMoney(minNet)}` },
+        { label: 'Balance final proyectado', value: formatMoney(netFinal), tone: netFinal >= 0 ? 'nx-text-positive' : 'nx-text-danger', hint: `Mínimo ${formatMoney(minNet)}` },
         { label: 'Capital pendiente (plan)', value: formatMoney(outstandingPlan), tone: 'text-neutral-700', hint: outstandingPlan > 0 ? `Principal ${formatMoney(outstandingPrincipalPlan)} · Interés ${formatMoney(outstandingInterestPlan)}` : '—' },
         { label: 'Pagos programados', value: formatMoney(totalScheduledOutflows), tone: totalScheduledOutflows > 0 ? 'text-neutral-700' : 'text-neutral-500', hint: totalScheduledOutflows > 0 ? `Capital ${formatMoney(scheduledPrincipalPlan)} · Interés cancelado ${formatMoney(scheduledInterestPlan)}` : 'Sin pagos programados' },
-        { label: 'Pago final proyectado', value: formatMoney(projectedPayoffPlan), tone: projectedPayoffPlan >= 0 ? 'text-neutral-700' : 'text-rose-600', hint: outstandingPlan > 0 ? 'Restante tras plan' : 'Cubierto por plan' },
+        { label: 'Pago final proyectado', value: formatMoney(projectedPayoffPlan), tone: projectedPayoffPlan >= 0 ? 'text-neutral-700' : 'nx-text-danger', hint: outstandingPlan > 0 ? 'Restante tras plan' : 'Cubierto por plan' },
         { label: 'Earn mensual', value: fmt(earnMonthly * rate, currency), tone: 'text-neutral-700', hint: earnEligible ? 'Earn activo' : (forceOn ? 'Earn forzado (sim)' : 'Earn inactivo') },
       ];
 
@@ -6979,8 +7491,7 @@
               </div>
 
           <div
-            className="rounded-2xl border border-sky-200/70 p-4 space-y-4 shadow-sm"
-            style={{ background: ACCENT_SURFACES.soft }}
+            className="rounded-2xl border p-4 space-y-4 shadow-sm nx-surface-soft"
           >
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
@@ -6995,7 +7506,10 @@
                 </div>
                 <div className="grid grid-cols-1 gap-3 text-xs sm:grid-cols-2 xl:grid-cols-3">
                   {scenarioKeys.map((key) => (
-                    <div key={`scenario-${key}`} className={`rounded-2xl border ${activeScenario === key ? 'border-blue-400 bg-blue-50/40' : 'border-neutral-200 bg-neutral-50/60'} p-3 space-y-2`}>
+                    <div
+                      key={`scenario-${key}`}
+                      className={`rounded-2xl border p-3 space-y-2 nx-stress-card ${activeScenario === key ? 'nx-stress-card--active text-white' : ''}`}
+                    >
                       <div className="flex items-center justify-between">
                         <span className="font-semibold text-neutral-700">{scenarioLabels[key] || key}</span>
                         <LocaleNumberInput
@@ -7006,9 +7520,9 @@
                           className={`w-20 rounded-full border border-neutral-300 px-2 py-1 text-right focus:outline-none focus:ring-2 ${focusRingClass}`}
                         />
                       </div>
-                      <div className="text-[11px] text-neutral-500">Shock sobre colateral</div>
-                      <div className="text-[11px] text-neutral-600">LTV final: {derived?.scenarioSummaries?.[key]?.last != null && Number.isFinite(derived.scenarioSummaries[key].last) ? formatPercent(derived.scenarioSummaries[key].last, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—'}</div>
-                      <div className="text-[11px] text-neutral-600">Saldo: {derived?.scenarioSummaries?.[key]?.net != null ? formatMoney(derived.scenarioSummaries[key].net) : formatMoney(netFinal)}</div>
+                      <div className="text-[11px] nx-stress-card__meta">Shock sobre colateral</div>
+                      <div className="text-[11px] nx-stress-card__meta">LTV final: {derived?.scenarioSummaries?.[key]?.last != null && Number.isFinite(derived.scenarioSummaries[key].last) ? formatPercent(derived.scenarioSummaries[key].last, { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—'}</div>
+                      <div className="text-[11px] nx-stress-card__meta">Saldo: {derived?.scenarioSummaries?.[key]?.net != null ? formatMoney(derived.scenarioSummaries[key].net) : formatMoney(netFinal)}</div>
                     </div>
                   ))}
                 </div>
@@ -7030,7 +7544,7 @@
               </div>
 
               {fundingGaps.length > 0 && (
-                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+                <div className="rounded-2xl border px-4 py-3 text-xs nx-bg-danger-soft nx-border-danger nx-text-danger">
                   <div className="font-semibold mb-1">Gaps de liquidez detectados</div>
                   <ul className="list-disc pl-5 space-y-1">
                     {fundingGaps.map((gap, idx) => (
@@ -7054,8 +7568,7 @@
                   {(safePlan.payments || []).map((item) => (
                     <div
                       key={item.id}
-                      className="grid grid-cols-1 md:grid-cols-5 gap-2 rounded-2xl border border-sky-200/70 px-4 py-3 text-xs shadow-sm"
-                      style={{ background: ACCENT_SURFACES.halo }}
+                      className="grid grid-cols-1 md:grid-cols-5 gap-2 rounded-2xl border px-4 py-3 text-xs shadow-sm nx-surface-halo"
                     >
                       <div>
                         <div className="text-[11px] uppercase text-neutral-400">Fecha</div>
@@ -7090,7 +7603,7 @@
                         <input type="text" value={item.label || ''} onChange={(e) => updateListItem('payments', item.id, { label: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
                       </div>
                       <div className="flex items-end justify-end sm:col-span-2 xl:col-span-1">
-                        <button className="text-rose-600 hover:underline" onClick={() => removeListItem('payments', item.id)}>Eliminar</button>
+                        <button className="nx-link-danger hover:underline" onClick={() => removeListItem('payments', item.id)}>Eliminar</button>
                       </div>
                     </div>
                   ))}
@@ -7109,8 +7622,7 @@
                   {(safePlan.earns || []).map((item) => (
                     <div
                       key={item.id}
-                      className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-6 rounded-2xl border border-sky-200/70 px-4 py-3 text-xs shadow-sm"
-                      style={{ background: ACCENT_SURFACES.halo }}
+                      className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-6 rounded-2xl border px-4 py-3 text-xs shadow-sm nx-surface-halo"
                     >
                       <div>
                         <div className="text-[11px] uppercase text-neutral-400">Inicio</div>
@@ -7144,7 +7656,7 @@
                       </div>
                       <div className="flex items-end justify-between gap-2 sm:col-span-2 xl:col-span-1">
                         <input type="text" value={item.token || ''} placeholder="Token" onChange={(e) => updateListItem('earns', item.id, { token: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
-                        <button className="text-rose-600 hover:underline" onClick={() => removeListItem('earns', item.id)}>Eliminar</button>
+                      <button className="nx-link-danger hover:underline" onClick={() => removeListItem('earns', item.id)}>Eliminar</button>
                       </div>
                     </div>
                   ))}
@@ -7163,8 +7675,7 @@
                   {(safePlan.manual || []).map((item) => (
                     <div
                       key={item.id}
-                      className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5 rounded-2xl border border-sky-200/70 px-4 py-3 text-xs shadow-sm"
-                      style={{ background: ACCENT_SURFACES.halo }}
+                      className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-5 rounded-2xl border px-4 py-3 text-xs shadow-sm nx-surface-halo"
                     >
                       <div>
                         <div className="text-[11px] uppercase text-neutral-400">Fecha</div>
@@ -7197,7 +7708,7 @@
                       </div>
                       <div className="flex items-end justify-between gap-2 sm:col-span-2 xl:col-span-1">
                         <input type="text" value={item.label || ''} placeholder="Descripción" onChange={(e) => updateListItem('manual', item.id, { label: e.target.value })} className={`w-full rounded-full border border-neutral-300 px-2 py-1 focus:outline-none focus:ring-2 ${focusRingClass}`} />
-                        <button className="text-rose-600 hover:underline" onClick={() => removeListItem('manual', item.id)}>Eliminar</button>
+                        <button className="nx-link-danger hover:underline" onClick={() => removeListItem('manual', item.id)}>Eliminar</button>
                       </div>
                     </div>
                   ))}
@@ -7569,8 +8080,7 @@
         <Card title="Benchmark CeFi vs. CeFi/DeFi">
           <div className="space-y-6 text-xs">
             <div
-              className="rounded-2xl border border-sky-200/70 px-4 py-3 space-y-1 text-neutral-600 shadow-sm"
-              style={{ background: ACCENT_SURFACES.soft }}
+              className="rounded-2xl border px-4 py-3 space-y-1 text-neutral-600 shadow-sm nx-surface-soft"
             >
               <div>Monto base: {formatMoney(baseAmount)} · APR préstamo: {formatPercent(chosenAPR, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · Plazo: {termDays} días</div>
               <div>Escenario cashflow: {scenarioName || 'Base'} · Saldo neto proyectado: {cashflowNet != null ? formatMoney(cashflowNet) : '—'}</div>
@@ -7584,8 +8094,7 @@
               <div className="space-y-2">
                 {matrix.length === 0 && (
                   <div
-                    className="rounded-xl border border-sky-200/70 px-4 py-3 text-neutral-500 shadow-sm"
-                    style={{ background: ACCENT_SURFACES.soft }}
+                    className="rounded-xl border px-4 py-3 text-neutral-500 shadow-sm nx-surface-soft"
                   >
                     Define al menos una tasa APR/APY para combinar estrategias.
                   </div>
@@ -7593,8 +8102,7 @@
                 {matrix.map((item) => (
                   <div
                     key={item.id}
-                    className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1.5fr)_minmax(0,0.8fr)_minmax(0,0.9fr)_minmax(0,0.6fr)] rounded-2xl border border-sky-200/70 px-4 py-3 shadow-sm"
-                    style={{ background: ACCENT_SURFACES.halo }}
+                    className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1.5fr)_minmax(0,1.5fr)_minmax(0,0.8fr)_minmax(0,0.9fr)_minmax(0,0.6fr)] rounded-2xl border px-4 py-3 shadow-sm nx-surface-halo"
                   >
                     <input type="text" value={item.platform || ''} onChange={(e) => updateRate(item.id, { platform: e.target.value })} className="rounded-full border border-neutral-300 px-2 py-1" placeholder="Plataforma" />
                     <input type="text" value={item.product || ''} onChange={(e) => updateRate(item.id, { product: e.target.value })} className="rounded-full border border-neutral-300 px-2 py-1" placeholder="Producto" />
@@ -7609,7 +8117,7 @@
                       className="rounded-full border border-neutral-300 px-2 py-1 text-right"
                     />
                     <div className="flex items-end justify-end">
-                      <button className="text-rose-600 hover:underline" onClick={() => removeRate(item.id)}>Eliminar</button>
+                      <button className="nx-link-danger hover:underline" onClick={() => removeRate(item.id)}>Eliminar</button>
                     </div>
                   </div>
                 ))}
@@ -7624,8 +8132,7 @@
               <div className="space-y-3">
                 {strategies.length === 0 && (
                   <div
-                    className="rounded-xl border border-sky-200/70 px-4 py-3 text-neutral-500 shadow-sm"
-                    style={{ background: ACCENT_SURFACES.soft }}
+                    className="rounded-xl border px-4 py-3 text-neutral-500 shadow-sm nx-surface-soft"
                   >
                     Crea combinaciones préstamo → rendimiento para medir el spread neto.
                   </div>
@@ -7636,8 +8143,7 @@
                   return (
                     <div
                       key={strategy.id}
-                      className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1.8fr)_minmax(0,1.2fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,0.6fr)] rounded-2xl border border-sky-200/70 px-4 py-3 shadow-sm"
-                      style={{ background: ACCENT_SURFACES.halo }}
+                      className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1.8fr)_minmax(0,1.2fr)_minmax(0,1.1fr)_minmax(0,1.1fr)_minmax(0,0.9fr)_minmax(0,0.6fr)] rounded-2xl border px-4 py-3 shadow-sm nx-surface-halo"
                     >
                       <div className="md:col-span-2 space-y-1">
                         <input type="text" value={strategy.label || ''} onChange={(e) => updateStrategy(strategy.id, { label: e.target.value })} className="w-full rounded-full border border-neutral-300 px-2 py-1" placeholder="Nombre de la estrategia" />
@@ -7695,13 +8201,13 @@
                         <label className="flex items-center gap-2"><input type="checkbox" checked={strategy.riskNewProtocol === true} onChange={(e) => updateStrategy(strategy.id, { riskNewProtocol: e.target.checked })} /> Smart contract nuevo</label>
                       </div>
                       <div className="space-y-1">
-                        <div className={`text-sm font-semibold ${metrics.spread >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatMoney(metrics.spread)}</div>
+                        <div className={`text-sm font-semibold ${metrics.spread >= 0 ? 'nx-text-positive' : 'nx-text-danger'}`}>{formatMoney(metrics.spread)}</div>
                         <div className="text-[11px] text-neutral-500">Anualizado: {formatPercent(metrics.annualized, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                         <div className="text-[11px] text-neutral-500">Ajustado riesgo: {formatPercent(metrics.adjustedAnnual, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                       </div>
                       <div className="flex items-end justify-between gap-2">
                         <div className="text-sm font-semibold text-neutral-700">#{position || '–'}</div>
-                        <button className="text-rose-600 hover:underline" onClick={() => removeStrategy(strategy.id)}>Eliminar</button>
+                        <button className="nx-link-danger hover:underline" onClick={() => removeStrategy(strategy.id)}>Eliminar</button>
                       </div>
                     </div>
                   );
@@ -7728,23 +8234,47 @@
 
     // UI helpers (pocas funciones y tono visual)
     function KPI({ title, value, subtle, tone, variant }) {
-      const toneCls = tone === 'ok' ? 'text-emerald-200' : tone === 'danger' ? 'text-rose-200' : '';
-      const highlightGradients = {
-        ok: { background: 'linear-gradient(140deg,rgba(16,185,129,0.95) 0%,rgba(59,130,246,0.88) 100%)', color: '#ecfdf5' },
-        warn: { background: 'linear-gradient(140deg,rgba(251,191,36,0.95) 0%,rgba(245,158,11,0.9) 100%)', color: '#fef3c7' },
-        danger: { background: 'linear-gradient(140deg,rgba(248,113,113,0.95) 0%,rgba(239,68,68,0.92) 100%)', color: '#fee2e2' },
-      };
-      const highlightStyle = variant === 'highlight' ? highlightGradients[tone] || highlightGradients.ok : {};
+      const toneValueClass = tone === 'ok'
+        ? 'nx-text-positive-strong'
+        : tone === 'warn'
+          ? 'nx-text-warning'
+          : tone === 'danger'
+            ? 'nx-text-danger'
+            : '';
+      const toneSubtleClass = tone === 'ok'
+        ? 'nx-text-positive-muted'
+        : tone === 'warn'
+          ? 'nx-text-warning-muted'
+          : tone === 'danger'
+            ? 'nx-text-danger-muted'
+            : 'text-neutral-500';
+      const highlightClass = tone === 'danger'
+        ? 'nx-kpi-highlight-danger'
+        : tone === 'warn'
+          ? 'nx-kpi-highlight-warn'
+          : 'nx-kpi-highlight-ok';
       const baseCls = variant === 'button' || variant === 'highlight' ? 'nx-kpi-btn' : 'bg-white nx-kpi';
-      const valueClass = variant === 'highlight' ? 'text-white drop-shadow-sm' : toneCls;
+      const valueClass = variant === 'highlight'
+        ? 'text-white drop-shadow-sm'
+        : toneValueClass;
       const titleClass = variant === 'highlight' ? 'text-white/80' : (variant === 'button' ? 'text-white/80' : 'text-neutral-500');
-      const subtleClass = variant === 'highlight' ? 'text-white/80' : (variant === 'button' ? 'text-white/70' : 'text-neutral-500');
+      const subtleClass = variant === 'highlight'
+        ? 'text-white/80'
+        : (variant === 'button'
+          ? 'text-white/70'
+          : toneSubtleClass);
+      const containerClasses = [
+        'relative overflow-hidden rounded-2xl p-4 shadow-sm transition-transform duration-200 cursor-pointer',
+        baseCls,
+      ];
+      if (variant === 'highlight') {
+        containerClasses.push(highlightClass);
+      }
       return (
         <div
-          className={`relative overflow-hidden rounded-2xl p-4 shadow-sm transition-transform duration-200 ${baseCls} cursor-pointer`}
+          className={containerClasses.join(' ')}
           role="button"
           aria-label={title}
-          style={highlightStyle}
         >
           <div className={`text-xs uppercase tracking-wide text-center ${titleClass}`}>{title}</div>
           <div className={`mt-1 text-xl font-bold text-center ${valueClass}`}>{value}</div>
@@ -7893,9 +8423,9 @@
     }
     function Pill({ label, value, tone = "neutral" }) {
       const tones = {
-        ok: "bg-emerald-50 text-emerald-700 border-emerald-200",
-        warn: "bg-amber-50 text-amber-700 border-amber-200",
-        danger: "bg-rose-50 text-rose-700 border-rose-200",
+        ok: "nx-badge-positive nx-border-positive",
+        warn: "nx-badge-warning nx-border-warning",
+        danger: "nx-badge-danger nx-border-danger",
         neutral: "bg-neutral-50 text-neutral-700 border-neutral-200",
       };
       return (
@@ -7906,7 +8436,7 @@
       );
     }
     function Line({ label, value, muted = false, tone }) {
-      const color = tone === "ok" ? "text-emerald-700" : tone === "warn" ? "text-amber-700" : tone === "danger" ? "text-rose-700" : "";
+      const color = tone === "ok" ? "nx-text-positive-strong" : tone === "warn" ? "nx-text-warning" : tone === "danger" ? "nx-text-danger" : "";
       return (
         <div className="flex items-center justify-between gap-4">
           <span className={`text-sm ${muted ? "text-neutral-400" : "text-neutral-700"}`}>{label}</span>
@@ -7983,9 +8513,9 @@
       const status = statusZone?.label ?? '—';
       const toneKey = statusZone?.tone ?? 'warn';
       const toneStyles = {
-        ok: { text: 'text-emerald-500', bg: 'bg-emerald-100/70', dot: '#22c55e' },
-        warn: { text: 'text-amber-500', bg: 'bg-amber-100/70', dot: '#facc15' },
-        danger: { text: 'text-rose-500', bg: 'bg-rose-100/70', dot: '#ef4444' },
+        ok: { text: 'nx-text-positive', bg: 'nx-bg-positive-soft nx-border-positive', dot: '#22c55e' },
+        warn: { text: 'nx-text-warning', bg: 'nx-bg-warning-soft nx-border-warning', dot: '#facc15' },
+        danger: { text: 'nx-text-danger', bg: 'nx-bg-danger-soft nx-border-danger', dot: '#ef4444' },
       };
       const statusTone = toneStyles[toneKey] ?? toneStyles.warn;
       const valueLabelY = center + radius * 0.44;
@@ -8065,7 +8595,7 @@
               Salud
             </text>
           </svg>
-          <div className={`mt-4 flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${statusTone.bg} ${statusTone.text}`}>
+          <div className={`mt-4 flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${statusTone.bg} ${statusTone.text}`}>
             <span className="inline-flex h-2.5 w-2.5 rounded-full" style={{ backgroundColor: statusTone.dot }} />
             {status}
           </div>
@@ -8167,9 +8697,9 @@
               <div className="text-xs uppercase text-blue-600">Interés total</div>
               <div className="text-sm font-semibold text-blue-700">{fmt(lastPoint.cost * rate, currency)}</div>
             </div>
-            <div className="rounded-xl bg-emerald-50/70 px-3 py-2">
-              <div className="text-xs uppercase text-emerald-600">Earn acumulado</div>
-              <div className="text-sm font-semibold text-emerald-700">{fmt(lastPoint.earn * rate, currency)}</div>
+        <div className="rounded-xl border px-3 py-2 nx-bg-positive-soft nx-border-positive">
+              <div className="text-xs uppercase nx-text-positive">Earn acumulado</div>
+              <div className="text-sm font-semibold nx-text-positive-strong">{fmt(lastPoint.earn * rate, currency)}</div>
             </div>
             <div className="rounded-xl bg-violet-50/70 px-3 py-2">
               <div className="text-xs uppercase text-violet-600">Balance estimado</div>
@@ -8203,9 +8733,9 @@
       const cacheLabel = fetchedAgo ? `Último cálculo hace ${fetchedAgo}.` : null;
       const metadataSource = snapshot?.metadata?.model || origin;
       return (
-        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-          <div className="text-sm font-semibold text-emerald-700">Modelo dinámico activo (sin backend)</div>
-          <div className="mt-1 text-xs font-medium text-emerald-700/80">Fórmulas + datos públicos (spot/funding)</div>
+        <div className="rounded-2xl border px-4 py-3 nx-bg-positive-soft nx-border-positive">
+          <div className="text-sm font-semibold nx-text-positive-strong">Modelo dinámico activo (sin backend)</div>
+          <div className="mt-1 text-xs font-medium nx-text-positive-muted">Fórmulas + datos públicos (spot/funding)</div>
           <div className="mt-3 space-y-2">
             {detailItems.map((item) => (
               <Line key={item.label} label={item.label} value={item.value} tone={item.tone} />
@@ -8213,9 +8743,9 @@
             <Line label="Modelo" value={metadataSource} muted />
           </div>
           {cacheLabel && (
-            <div className="mt-2 text-[11px] font-medium text-emerald-700/80">{cacheLabel}</div>
+            <div className="mt-2 text-[11px] font-medium nx-text-positive-muted">{cacheLabel}</div>
           )}
-          <div className="mt-3 rounded-xl border border-emerald-200/70 bg-white/80 p-3 text-[11px] text-emerald-800/80">
+          <div className="mt-3 rounded-xl border bg-white/80 p-3 text-[11px] nx-border-positive nx-text-positive-muted">
             LTV y precio de liquidación se autoajustan con volatilidad y pueden calibrarse por activo.
           </div>
         </div>
@@ -8256,9 +8786,9 @@
         return 'Sincronización manual disponible.';
       })();
       const statusTone = status === 'error'
-        ? 'text-rose-600'
+        ? 'nx-text-danger'
         : dataStale && status !== 'missing' && status !== 'incomplete'
-          ? 'text-amber-600'
+          ? 'nx-text-warning'
           : 'text-neutral-800';
       return (
         <Card title="Binance Loans – API en vivo">
@@ -8292,10 +8822,10 @@
                 <div className="text-xs font-semibold uppercase text-neutral-500">Estado</div>
                 <div className={`text-sm font-semibold ${statusTone}`}>{statusLabel}</div>
                 {error && status !== 'error' && (
-                  <div className="text-xs text-rose-600 mt-1">{error}</div>
+                  <div className="text-xs nx-text-danger mt-1">{error}</div>
                 )}
                 {dataStale && !loading && status === 'ok' && (
-                  <div className="text-xs text-amber-600 mt-1">Datos con más de 90s · revisa la conexión.</div>
+                  <div className="text-xs nx-text-warning mt-1">Datos con más de 90s · revisa la conexión.</div>
                 )}
               </div>
               <button
@@ -8314,7 +8844,7 @@
               </div>
               <div className="nx-card-secondary p-3">
                 <div className="text-[10px] font-semibold uppercase text-neutral-500">APR neto</div>
-                <div className={`text-sm font-semibold ${netApr != null && netApr < 0 ? 'text-emerald-600' : 'text-neutral-800'}`}>
+                <div className={`text-sm font-semibold ${netApr != null && netApr < 0 ? 'nx-text-positive' : 'text-neutral-800'}`}> 
                   {netApr != null ? formatPercent(netApr, { minimumFractionDigits: 5, maximumFractionDigits: 5 }) : '—'}
                 </div>
               </div>
@@ -8328,7 +8858,7 @@
               </div>
               <div className="nx-card-secondary p-3 sm:col-span-2">
                 <div className="text-[10px] font-semibold uppercase text-neutral-500">LTV (índice)</div>
-                <div className={`text-sm font-semibold ${ltv != null && ltv > 0.85 ? 'text-rose-600' : 'text-neutral-800'}`}>
+                <div className={`text-sm font-semibold ${ltv != null && ltv > 0.85 ? 'nx-text-danger' : 'text-neutral-800'}`}>
                   {ltv != null ? formatPercent(ltv, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}
                 </div>
               </div>
@@ -8342,7 +8872,7 @@
     }
 
     function BinanceAssetCard({ item, currency, formatUsd, formatLoan, chosenAPR }) {
-      const toneBadge = { ok: 'bg-emerald-50 text-emerald-700', warn: 'bg-amber-50 text-amber-700', danger: 'bg-rose-50 text-rose-700' };
+      const toneBadge = { ok: 'nx-badge-positive', warn: 'nx-badge-warning', danger: 'nx-badge-danger' };
       const toneBar = { ok: '#10b981', warn: '#f97316', danger: '#ef4444' };
       const tickerUpper = (item.ticker || '').toUpperCase();
       const highlightEtbDetails = tickerUpper === 'ADA' || tickerUpper === 'ALGO';
@@ -8351,11 +8881,11 @@
       const vipApr = Number.isFinite(item.vipAnnual) ? item.vipAnnual : (Number.isFinite(item.vipAnnualRate) ? item.vipAnnualRate : null);
       const netAprValue = Number.isFinite(item.netApr) ? item.netApr : null;
       const netTone = netAprValue != null && netAprValue < 0
-        ? 'text-emerald-600'
+        ? 'nx-text-positive'
         : netAprValue != null && annualAprValue != null && netAprValue <= annualAprValue
           ? 'text-neutral-900'
           : netAprValue != null
-            ? 'text-amber-600'
+            ? 'nx-text-warning'
             : 'text-neutral-400';
       const ledger = item.ledger || {};
       const interestAccrued = Number.isFinite(item.interestAccrued) ? Math.max(0, item.interestAccrued) : 0;
@@ -8417,7 +8947,7 @@
                   <div className="text-[10px] text-neutral-500">LTV API {formatPercent(ltvApi, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</div>
                 )}
                 {showLtvDrift && (
-                  <div className={`text-[10px] ${ltvDrift > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                  <div className={`text-[10px] ${ltvDrift > 0 ? 'nx-text-warning' : 'nx-text-positive'}`}>
                     Δ vs API {ltvDrift > 0 ? '+' : ''}{formatPercent(Math.abs(ltvDrift), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                 )}
@@ -8550,14 +9080,8 @@
 
       if (shapes.length === 0) {
         return (
-          <div
-            className="relative flex h-36 w-36 items-center justify-center rounded-full shadow-lg"
-            style={{ background: ACCENT_SURFACES.halo }}
-          >
-            <div
-              className="h-20 w-20 rounded-full shadow-inner"
-              style={{ background: ACCENT_SURFACES.soft, border: '1px solid rgba(59,130,246,0.18)' }}
-            />
+          <div className="relative flex h-36 w-36 items-center justify-center rounded-full shadow-lg nx-surface-halo">
+            <div className="h-20 w-20 rounded-full shadow-inner border nx-surface-soft" />
           </div>
         );
       }
@@ -8688,8 +9212,8 @@
       const auto = Number.isFinite(autoRepayThreshold) ? autoRepayThreshold : 1;
       const overallTone = overallLTV <= healthy ? 'ok' : overallLTV <= warn ? 'warn' : 'danger';
       const overallLabel = overallTone === 'ok' ? 'Sano' : overallTone === 'warn' ? 'Vigilar' : 'Crítico';
-      const toneBadge = { ok: 'bg-emerald-50 text-emerald-700', warn: 'bg-amber-50 text-amber-700', danger: 'bg-rose-50 text-rose-700' };
-      const toneText = { ok: 'text-emerald-600', warn: 'text-amber-600', danger: 'text-rose-600' };
+      const toneBadge = { ok: 'nx-badge-positive', warn: 'nx-badge-warning', danger: 'nx-badge-danger' };
+      const toneText = { ok: 'nx-text-positive', warn: 'nx-text-warning', danger: 'nx-text-danger' };
       const consideredLoanLabel = formatLoan(consideredLoan);
       const overallLtvLabel = formatPercent(overallLTV, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
