@@ -3543,20 +3543,38 @@
         next.USD = 1;
         return next;
       }, [baseExchangeRates]);
+      const normalizeLoanTicker = useCallback((rawTicker) => {
+        const ticker = sanitizeTicker(rawTicker || '');
+        if (!isBinance) {
+          return ticker;
+        }
+        if (borrowTickerList.includes(ticker)) {
+          return ticker;
+        }
+        return borrowTickerList[0] || '';
+      }, [borrowTickerList, isBinance, sanitizeTicker]);
+
       const sanitizeLoanRequests = useCallback((rawRequests) => {
         if (!Array.isArray(rawRequests)) return [];
-        return rawRequests
-          .map((item, idx) => {
-            const amount = Math.max(0, Number(item?.amount) || 0);
-            if (!(amount > 0)) return null;
-            const ticker = sanitizeTicker(item?.ticker || '');
-            const id = typeof item?.id === 'string' && item.id
-              ? item.id
-              : `loan-${idx + 1}-${ticker || 'GEN'}`;
-            return { id, amount, ticker };
-          })
-          .filter(Boolean);
-      }, []);
+        const merged = new Map();
+        rawRequests.forEach((item, idx) => {
+          const amount = Math.max(0, Number(item?.amount) || 0);
+          if (!(amount > 0)) return;
+          const ticker = normalizeLoanTicker(item?.ticker);
+          if (isBinance && borrowTickerList.length > 0 && !ticker) return;
+          const key = ticker || '__GEN__';
+          const id = typeof item?.id === 'string' && item.id
+            ? item.id
+            : `loan-${idx + 1}-${key}`;
+          if (merged.has(key)) {
+            const prev = merged.get(key);
+            merged.set(key, { ...prev, amount: prev.amount + amount });
+          } else {
+            merged.set(key, { id, amount, ticker });
+          }
+        });
+        return Array.from(merged.values());
+      }, [borrowTickerList, isBinance, normalizeLoanTicker]);
 
       const sanitizeLoanLedger = useCallback((rawLedger) => {
         if (!isBinance || !rawLedger || typeof rawLedger !== 'object') return {};
@@ -4609,18 +4627,19 @@
       const buildLoanRequest = useCallback((amount, ticker) => ({
         id: `loan-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         amount: Math.max(0, Number(amount) || 0),
-        ticker: sanitizeTicker(ticker || ''),
-      }), []);
+        ticker: normalizeLoanTicker(ticker),
+      }), [normalizeLoanTicker]);
       const handleAddLoanRequest = useCallback(() => {
         if (!(loanDraftAmount > 0)) return;
-        const resolvedTicker = isBinance ? (binanceBorrowTicker || borrowTickerList[0] || '') : '';
+        const resolvedTicker = normalizeLoanTicker(isBinance ? (binanceBorrowTicker || borrowTickerList[0] || '') : '');
+        if (isBinance && borrowTickerList.length > 0 && !resolvedTicker) return;
         const entry = buildLoanRequest(loanDraftAmount, resolvedTicker);
         setParams((prev) => ({
           ...prev,
           loanRequests: sanitizeLoanRequests([...(prev.loanRequests || []), entry]),
         }));
         setLoanDraftAmount(0);
-      }, [loanDraftAmount, isBinance, binanceBorrowTicker, borrowTickerList, buildLoanRequest, setParams, sanitizeLoanRequests, setLoanDraftAmount]);
+      }, [loanDraftAmount, isBinance, binanceBorrowTicker, borrowTickerList, buildLoanRequest, setParams, sanitizeLoanRequests, setLoanDraftAmount, normalizeLoanTicker]);
       const handleRemoveLoanRequest = useCallback((id) => {
         setParams((prev) => ({
           ...prev,
