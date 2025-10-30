@@ -799,8 +799,9 @@
     html,body{height:100%}
     body{
       font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
-      background:var(--theme-surface-soft, linear-gradient(180deg,#eef3ff 0%, #f6f9ff 100%));
-      transition:background .3s ease;
+      background:var(--theme-page-bg,var(--theme-surface-soft,linear-gradient(180deg,#eef3ff 0%, #f6f9ff 100%)));
+      color:var(--theme-page-text,#111827);
+      transition:background .3s ease,color .3s ease;
     }
     /* Paleta y estilos base */
     .nx-gradient{background:linear-gradient(135deg,#0b1e4b 0%,#1b44a6 50%,#2052c1 100%)}
@@ -921,6 +922,42 @@
       transform:translateY(1px);
       box-shadow:inset 0 1px 0 rgba(255,255,255,0.35),var(--theme-btn-active-shadow);
     }
+    .nx-header{
+      position:sticky;
+      top:0;
+      z-index:40;
+      backdrop-filter:blur(14px);
+      background:var(--theme-header-bg,rgba(15,23,42,0.78));
+      border-bottom:1px solid var(--theme-header-border,rgba(255,255,255,0.08));
+      box-shadow:var(--theme-header-shadow,0 10px 30px rgba(15,23,42,0.18));
+    }
+    .nx-spinner{
+      width:1rem;
+      height:1rem;
+      border-radius:9999px;
+      border:2px solid transparent;
+      border-top-color:currentColor;
+      animation:nx-spin 1s linear infinite;
+    }
+    @keyframes nx-spin{to{transform:rotate(360deg);}}
+    .nx-chip{
+      display:inline-flex;
+      align-items:center;
+      gap:.35rem;
+      padding:.2rem .65rem;
+      border-radius:9999px;
+      font-size:.72rem;
+      font-weight:600;
+      letter-spacing:.01em;
+    }
+    body[data-theme="dark"] .text-neutral-900,
+    body[data-theme="dark"] .text-neutral-800,
+    body[data-theme="dark"] .text-neutral-700{color:#e2e8f0 !important;}
+    body[data-theme="dark"] .text-neutral-600{color:#cbd5f5 !important;}
+    body[data-theme="dark"] .text-neutral-500{color:#94a3b8 !important;}
+    body[data-theme="dark"] .bg-neutral-50,
+    body[data-theme="dark"] .bg-white{background-color:rgba(15,23,42,0.6) !important;}
+    body[data-theme="dark"] .border-neutral-200{border-color:rgba(148,163,184,0.35) !important;}
     .nx-btn-ghost{
       background:var(--theme-ghost-bg);
       color:var(--theme-ghost-text);
@@ -1018,6 +1055,21 @@
         '--theme-tab-shadow': '0 10px 20px rgba(32,82,193,0.12)',
         '--theme-tab-hover-shadow': '0 16px 30px rgba(32,82,193,0.16)',
         '--theme-tab-active-shadow': '0 6px 14px rgba(32,82,193,0.14)',
+        '--theme-page-text': '#0f172a',
+        '--theme-page-muted': '#475569',
+        '--theme-page-bg': 'linear-gradient(180deg,#eef3ff 0%,#f6f9ff 100%)',
+        '--theme-table-header-bg': 'rgba(15,23,42,0.92)',
+        '--theme-table-header-text': '#f8fafc',
+        '--theme-table-sticky-bg': 'rgba(248,250,252,0.92)',
+        '--theme-header-bg': 'linear-gradient(135deg,rgba(15,28,71,0.92) 0%,rgba(23,43,112,0.88) 45%,rgba(33,62,155,0.85) 100%)',
+        '--theme-header-border': 'rgba(191,219,254,0.25)',
+        '--theme-header-shadow': '0 18px 40px rgba(17,24,39,0.28)',
+        '--theme-select-bg': 'rgba(255,255,255,0.18)',
+        '--theme-select-border': 'rgba(255,255,255,0.35)',
+        '--theme-chip-auto-bg': 'rgba(16,185,129,0.16)',
+        '--theme-chip-auto-text': '#047857',
+        '--theme-chip-off-bg': 'rgba(148,163,184,0.18)',
+        '--theme-chip-off-text': '#475569',
       },
       binance: {
         '--theme-surface-soft': 'linear-gradient(180deg,#fff6e6 0%,#ffedcc 100%)',
@@ -1049,6 +1101,21 @@
         '--theme-tab-shadow': '0 10px 20px rgba(217,119,6,0.14)',
         '--theme-tab-hover-shadow': '0 16px 30px rgba(217,119,6,0.20)',
         '--theme-tab-active-shadow': '0 6px 14px rgba(217,119,6,0.15)',
+        '--theme-page-text': '#1f2937',
+        '--theme-page-muted': '#6b7280',
+        '--theme-page-bg': 'linear-gradient(180deg,#fff6e6 0%,#ffedcc 100%)',
+        '--theme-table-header-bg': 'rgba(30,64,175,0.88)',
+        '--theme-table-header-text': '#fef3c7',
+        '--theme-table-sticky-bg': 'rgba(255,247,230,0.95)',
+        '--theme-header-bg': 'linear-gradient(135deg,rgba(30,41,59,0.92) 0%,rgba(180,83,9,0.9) 55%,rgba(245,158,11,0.88) 100%)',
+        '--theme-header-border': 'rgba(253,224,71,0.35)',
+        '--theme-header-shadow': '0 18px 40px rgba(146,64,14,0.25)',
+        '--theme-select-bg': 'rgba(255,255,255,0.2)',
+        '--theme-select-border': 'rgba(254,243,199,0.45)',
+        '--theme-chip-auto-bg': 'rgba(16,185,129,0.15)',
+        '--theme-chip-auto-text': '#047857',
+        '--theme-chip-off-bg': 'rgba(254,215,170,0.35)',
+        '--theme-chip-off-text': '#9a3412',
       },
       youhodler: {
         '--theme-surface-soft': 'linear-gradient(180deg,#e0f2ff 0%,#f5fbff 100%)',
@@ -1080,6 +1147,21 @@
         '--theme-tab-shadow': '0 10px 20px rgba(37,99,235,0.14)',
         '--theme-tab-hover-shadow': '0 16px 30px rgba(37,99,235,0.18)',
         '--theme-tab-active-shadow': '0 6px 14px rgba(37,99,235,0.14)',
+        '--theme-page-text': '#0f172a',
+        '--theme-page-muted': '#475569',
+        '--theme-page-bg': 'linear-gradient(180deg,#e0f2ff 0%,#f5fbff 100%)',
+        '--theme-table-header-bg': 'rgba(30,64,175,0.88)',
+        '--theme-table-header-text': '#e0f2fe',
+        '--theme-table-sticky-bg': 'rgba(224,242,255,0.95)',
+        '--theme-header-bg': 'linear-gradient(135deg,rgba(8,47,107,0.92) 0%,rgba(30,64,175,0.9) 50%,rgba(14,165,233,0.85) 100%)',
+        '--theme-header-border': 'rgba(191,219,254,0.45)',
+        '--theme-header-shadow': '0 18px 40px rgba(30,64,175,0.25)',
+        '--theme-select-bg': 'rgba(255,255,255,0.22)',
+        '--theme-select-border': 'rgba(191,219,254,0.4)',
+        '--theme-chip-auto-bg': 'rgba(14,165,233,0.2)',
+        '--theme-chip-auto-text': '#0369a1',
+        '--theme-chip-off-bg': 'rgba(148,163,184,0.2)',
+        '--theme-chip-off-text': '#475569',
       },
       ledn: {
         '--theme-surface-soft': 'linear-gradient(180deg,#f3f4f6 0%,#ffffff 100%)',
@@ -1111,6 +1193,67 @@
         '--theme-tab-shadow': '0 10px 20px rgba(14,148,136,0.14)',
         '--theme-tab-hover-shadow': '0 16px 30px rgba(14,148,136,0.18)',
         '--theme-tab-active-shadow': '0 6px 14px rgba(14,148,136,0.14)',
+        '--theme-page-text': '#0f172a',
+        '--theme-page-muted': '#475569',
+        '--theme-page-bg': 'linear-gradient(180deg,#f3f4f6 0%,#ffffff 100%)',
+        '--theme-table-header-bg': 'rgba(15,118,110,0.85)',
+        '--theme-table-header-text': '#ecfdf5',
+        '--theme-table-sticky-bg': 'rgba(236,253,245,0.95)',
+        '--theme-header-bg': 'linear-gradient(135deg,rgba(4,47,46,0.9) 0%,rgba(13,148,136,0.88) 55%,rgba(45,212,191,0.85) 100%)',
+        '--theme-header-border': 'rgba(45,212,191,0.35)',
+        '--theme-header-shadow': '0 18px 40px rgba(13,148,136,0.25)',
+        '--theme-select-bg': 'rgba(255,255,255,0.25)',
+        '--theme-select-border': 'rgba(16,185,129,0.35)',
+        '--theme-chip-auto-bg': 'rgba(16,185,129,0.18)',
+        '--theme-chip-auto-text': '#047857',
+        '--theme-chip-off-bg': 'rgba(148,163,184,0.22)',
+        '--theme-chip-off-text': '#475569',
+      },
+      dark: {
+        '--theme-surface-soft': 'linear-gradient(180deg,#0f172a 0%,#111827 45%,#020617 100%)',
+        '--theme-card-border': 'rgba(148,163,184,0.14)',
+        '--theme-card-shadow': '0 18px 40px rgba(2,6,23,0.55)',
+        '--theme-card-bg': 'linear-gradient(160deg,rgba(15,23,42,0.92) 0%,rgba(12,20,38,0.94) 100%)',
+        '--theme-card-border-secondary': 'rgba(59,130,246,0.25)',
+        '--theme-card-bg-secondary': 'linear-gradient(160deg,rgba(30,41,59,0.92) 0%,rgba(12,74,110,0.9) 100%)',
+        '--theme-card-shadow-secondary': '0 20px 38px rgba(8,47,73,0.45)',
+        '--theme-kpi-border': 'rgba(148,163,184,0.22)',
+        '--theme-kpi-bg': 'linear-gradient(155deg,#1f2937 0%,#0f172a 45%,#111827 100%)',
+        '--theme-kpi-shadow': '0 18px 40px rgba(2,6,23,0.55)',
+        '--theme-kpi-hover-shadow': '0 24px 46px rgba(8,47,73,0.5)',
+        '--theme-kpi-active-shadow': '0 12px 24px rgba(8,47,73,0.4)',
+        '--theme-btn-bg': 'linear-gradient(155deg,#1d4ed8 0%,#3b82f6 45%,#22d3ee 100%)',
+        '--theme-btn-text': '#e0f2fe',
+        '--theme-btn-border': 'rgba(148,163,184,0.4)',
+        '--theme-btn-shadow': '0 18px 38px rgba(37,99,235,0.45)',
+        '--theme-btn-hover-shadow': '0 24px 44px rgba(37,99,235,0.55)',
+        '--theme-btn-active-shadow': '0 12px 24px rgba(37,99,235,0.4)',
+        '--theme-ghost-bg': 'linear-gradient(150deg,#1e293b 0%,#0f172a 100%)',
+        '--theme-ghost-text': '#f1f5f9',
+        '--theme-ghost-border': 'rgba(148,163,184,0.28)',
+        '--theme-ghost-shadow': '0 16px 34px rgba(15,23,42,0.45)',
+        '--theme-ghost-hover-shadow': '0 22px 40px rgba(15,23,42,0.55)',
+        '--theme-tab-bg': 'linear-gradient(150deg,#1f2937 0%,#0f172a 100%)',
+        '--theme-tab-border': 'rgba(148,163,184,0.32)',
+        '--theme-tab-border-hover': 'rgba(148,197,255,0.45)',
+        '--theme-tab-shadow': '0 18px 36px rgba(15,23,42,0.55)',
+        '--theme-tab-hover-shadow': '0 22px 42px rgba(37,99,235,0.45)',
+        '--theme-tab-active-shadow': '0 12px 24px rgba(15,23,42,0.4)',
+        '--theme-page-text': '#f8fafc',
+        '--theme-page-muted': '#94a3b8',
+        '--theme-page-bg': 'linear-gradient(180deg,#020617 0%,#0f172a 50%,#111827 100%)',
+        '--theme-table-header-bg': 'rgba(15,23,42,0.95)',
+        '--theme-table-header-text': '#f8fafc',
+        '--theme-table-sticky-bg': 'rgba(15,23,42,0.88)',
+        '--theme-header-bg': 'linear-gradient(135deg,rgba(2,6,23,0.92) 0%,rgba(30,64,175,0.75) 55%,rgba(59,130,246,0.72) 100%)',
+        '--theme-header-border': 'rgba(148,163,184,0.35)',
+        '--theme-header-shadow': '0 24px 50px rgba(2,6,23,0.65)',
+        '--theme-select-bg': 'rgba(15,23,42,0.75)',
+        '--theme-select-border': 'rgba(148,197,255,0.35)',
+        '--theme-chip-auto-bg': 'rgba(16,185,129,0.35)',
+        '--theme-chip-auto-text': '#bbf7d0',
+        '--theme-chip-off-bg': 'rgba(148,163,184,0.28)',
+        '--theme-chip-off-text': '#e2e8f0',
       },
     });
 
@@ -2746,6 +2889,21 @@
       },
     };
 
+    const IDEA_STATUS_METADATA = Object.freeze({
+      "scenario-engine": { status: "En curso", tone: "progress", icon: "🛠️" },
+      "alerting": { status: "Pendiente", tone: "pending", icon: "📣" },
+      "benchmarking": { status: "En curso", tone: "progress", icon: "📊" },
+      "cashflow-planning": { status: "En curso", tone: "progress", icon: "🗓️" },
+      "nexo-booster": { status: "Pendiente", tone: "pending", icon: "⚡" },
+      "nexo-insurance": { status: "Pendiente", tone: "pending", icon: "🛡️" },
+      "binance-vip": { status: "En curso", tone: "progress", icon: "🎯" },
+      "binance-crossmargin": { status: "Pendiente", tone: "pending", icon: "🔗" },
+      "yh-turbo": { status: "Pendiente", tone: "pending", icon: "🚀" },
+      "yh-stable-buckets": { status: "Pendiente", tone: "pending", icon: "🪣" },
+      "ledn-b2b": { status: "Pendiente", tone: "pending", icon: "🏢" },
+      "ledn-proof": { status: "En curso", tone: "progress", icon: "🧾" },
+    });
+
     const PLATFORM_IDS = Object.keys(PLATFORM_BASE_CONFIGS);
     const BASE_GLOBAL_COINGECKO_IDS = Object.values(PLATFORM_BASE_CONFIGS).reduce((acc, cfg) => ({ ...acc, ...(cfg.coingeckoIds || {}) }), {});
 
@@ -2837,6 +2995,16 @@
       });
 
       const [platformConfigs, setPlatformConfigs] = useState(PLATFORM_BASE_CONFIGS);
+      const [themeOverride, setThemeOverride] = useState(() => {
+        if (typeof window === 'undefined') return null;
+        try {
+          const stored = localStorage.getItem('spm_theme_override');
+          return stored && THEME_TOKENS[stored] ? stored : null;
+        } catch (err) {
+          console.warn('No se pudo leer el theme override almacenado:', err);
+          return null;
+        }
+      });
       const globalCoingeckoIds = useMemo(() => {
         return Object.values(platformConfigs || {}).reduce((acc, cfg) => ({
           ...acc,
@@ -2870,7 +3038,12 @@
 
       const [simModelConfig, setSimModelConfig] = useState(() => readSimModelConfigFromDom());
 
-      const themeName = THEME_TOKENS[platformTheme] ? platformTheme : DEFAULT_THEME;
+      const effectiveTheme = themeOverride || platformTheme;
+      const themeName = THEME_TOKENS[effectiveTheme] ? effectiveTheme : DEFAULT_THEME;
+      const isDarkTheme = themeName === 'dark';
+      const handleThemeToggle = () => {
+        setThemeOverride((prev) => (prev === 'dark' ? null : 'dark'));
+      };
       const focusRingClass = classes.focusRing || "focus:ring-blue-700";
       const headerClass = classes.header || "nx-gradient";
       const accentClass = classes.accent || "text-blue-100/90";
@@ -2884,8 +3057,25 @@
         const base = FEATURE_IMPROVEMENT_TASKS.common || [];
         const extras = (FEATURE_IMPROVEMENT_TASKS.byPlatform || {})[platformId] || [];
         const implementedIds = new Set(["benchmarking", "cashflow-planning"]);
-        return [...base, ...extras].filter((idea) => !implementedIds.has(idea.id));
+        return [...base, ...extras]
+          .filter((idea) => !implementedIds.has(idea.id))
+          .map((idea) => ({
+            ...idea,
+            status: IDEA_STATUS_METADATA[idea.id]?.status || 'Pendiente',
+            tone: IDEA_STATUS_METADATA[idea.id]?.tone || 'pending',
+            icon: IDEA_STATUS_METADATA[idea.id]?.icon || '💡',
+          }));
       }, [platformId]);
+      const [expandedIdea, setExpandedIdea] = useState(null);
+      const toggleIdea = useCallback((id) => {
+        setExpandedIdea((prev) => (prev === id ? null : id));
+      }, []);
+      const handleIdeaKey = useCallback((event, id) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          toggleIdea(id);
+        }
+      }, [toggleIdea]);
       const runtimeFlags = useMemo(() => {
         if (typeof window === 'undefined') {
           return { forceOn: false, simMode: false };
@@ -5798,6 +5988,7 @@
       const renderNow = Date.now();
       const binanceLastUpdatedMs = binanceLiveMeta?.lastUpdated ?? null;
       const binanceSecondsAgo = binanceLastUpdatedMs != null ? Math.max(0, Math.floor((renderNow - binanceLastUpdatedMs) / 1000)) : null;
+      const binanceSyncLabel = binanceSecondsAgo != null ? `Hace ${binanceSecondsAgo}s` : 'Sin datos';
       const binanceUpdatedLabel = binanceSecondsAgo != null ? ` · actualizado hace ${binanceSecondsAgo}s` : '';
       const binanceNetAprSubtle = isBinance
         ? ((binanceOutstandingRatio < 0.999
@@ -5806,6 +5997,8 @@
             ? `Préstamo ${toPct(binanceBaseAnnualRate, 2)} − ajuste ${toPct(binanceNetAprOffset, 2)}`
             : `Préstamo ${toPct(binanceBaseAnnualRate, 2)}`)) + binanceUpdatedLabel)
         : undefined;
+      const fxSecondsAgo = fxMeta.lastUpdated != null ? Math.max(0, Math.floor((Date.now() - fxMeta.lastUpdated) / 1000)) : null;
+      const fxSyncLabel = fxSecondsAgo != null ? `Hace ${fxSecondsAgo}s` : 'Sin actualizar';
 
       const extraCollateralForTarget = useMemo(() => {
         if (targetLtv <= 0) return 0;
@@ -5849,84 +6042,147 @@
       }, [displayPlatformName]);
 
       useEffect(() => {
+        if (typeof window === 'undefined') return;
+        try {
+          if (themeOverride) {
+            localStorage.setItem('spm_theme_override', themeOverride);
+          } else {
+            localStorage.removeItem('spm_theme_override');
+          }
+        } catch (err) {
+          console.warn('No se pudo persistir el theme override:', err);
+        }
+      }, [themeOverride]);
+
+      useEffect(() => {
         applyTheme(themeName);
       }, [themeName]);
 
       return (
-        <div className="min-h-screen w-full text-neutral-900">
-          <div className={`${headerClass} text-white`}>
-            <div className="mx-auto max-w-7xl px-4 py-6">
-              <header className="flex flex-wrap items-end justify-between gap-4">
-                <div>
-                  <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{`Simulador de Préstamos / ${displayPlatformName}`}</h1>
-                  <p className={`${accentClass}`}>{platformTagline}</p>
-                </div>
-                <div className="flex flex-col items-end gap-3 sm:flex-row sm:items-center">
-                  <div ref={exportMenuRef} className="relative">
-                    <input
-                      ref={importInputRef}
-                      type="file"
-                      accept="application/json"
-                      className="hidden"
-                      onChange={handleImportFile}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setExportMenuOpen((open) => !open)}
-                      className="nx-btn text-sm"
-                      aria-haspopup="true"
-                      aria-expanded={exportMenuOpen}
-                    >
-                      Plantillas &amp; datos
-                    </button>
-                    {exportMenuOpen && (
-                      <div className="absolute right-0 z-20 mt-3 w-60 rounded-2xl border border-neutral-200 bg-white p-2 text-neutral-700 shadow-2xl">
-                        <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold hover:bg-neutral-100" onClick={handleExportJSON}>Exportar JSON</button>
-                        <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold hover:bg-neutral-100" onClick={handleImportRequest}>Importar JSON</button>
-                        <div className="my-1 border-t border-neutral-200" />
-                        <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-neutral-100" onClick={handleResetParams}>Reset parámetros</button>
-                        <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-neutral-100" onClick={handleResetAssets}>Reset activos</button>
-                        <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-neutral-100" onClick={handleResetPlanners}>Reset planners</button>
+        <div className="min-h-screen w-full">
+          <div className="nx-header text-white relative overflow-hidden">
+            <div className={`absolute inset-0 opacity-90 ${headerClass}`} aria-hidden="true" />
+            <div className="relative mx-auto max-w-7xl px-4 py-6">
+              <header className="flex flex-col gap-6">
+                <div className="flex flex-col gap-2">
+                  <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-wide text-white/70">
+                    <span className="opacity-80">Dashboard</span>
+                    <span className="opacity-40">/</span>
+                    <span className="opacity-80">Simulador</span>
+                    <span className="opacity-40">/</span>
+                    <span className="font-semibold text-white">{displayPlatformName}</span>
+                  </nav>
+                  <div className="flex flex-wrap items-end justify-between gap-4">
+                    <div className="space-y-2">
+                      <h1 className="text-2xl md:text-3xl font-bold tracking-tight drop-shadow-lg">{`Simulador de Préstamos / ${displayPlatformName}`}</h1>
+                      <p className={`text-sm md:text-base font-medium text-white/80 ${accentClass}`}>{platformTagline}</p>
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-white/75">
+                        <span className="flex items-center gap-1 rounded-full border border-white/20 px-3 py-1">
+                          <span className="h-2 w-2 rounded-full bg-emerald-300" />
+                          {forceOn ? 'Simulación forzada' : 'Datos en vivo'}
+                        </span>
+                        {simMode && <span className="rounded-full border border-white/20 px-3 py-1">Modo dinámico</span>}
                       </div>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap items-center justify-end gap-4">
-                    <div className="flex items-center gap-2">
-                      <label className="text-sm font-medium">Plataforma</label>
-                      <select value={platformId} onChange={(e) => setPlatformId(PLATFORM_IDS.includes(e.target.value) ? e.target.value : initialPlatformId)} className="rounded-xl border border-white/40 bg-white/15 px-3 py-1.5 text-sm font-semibold text-white shadow-sm backdrop-blur focus:outline-none focus:ring-2 focus:ring-white/80">
-                        {PLATFORM_IDS.map((pid) => (
-                          <option key={pid} value={pid} className="text-neutral-900">{platformConfigs[pid]?.name ?? pid}</option>
-                        ))}
-                      </select>
                     </div>
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      <label htmlFor="currency-select">Mostrar en</label>
-                      <select
-                        id="currency-select"
-                        value={currency}
-                        onChange={(e) => setSelectedCurrency(e.target.value)}
-                        className="rounded-xl border border-white/40 bg-white/15 px-3 py-1.5 text-sm font-semibold text-white shadow-sm backdrop-blur focus:outline-none focus:ring-2 focus:ring-white/80"
+                    <div className="flex flex-col items-end gap-3 sm:flex-row sm:items-center">
+                      <button
+                        type="button"
+                        onClick={handleThemeToggle}
+                        className="nx-btn nx-btn-ghost text-xs sm:text-sm"
                       >
-                        {SUPPORTED_CURRENCIES.map((option) => (
-                          <option
-                            key={option.code}
-                            value={option.code}
-                            className="text-neutral-900"
-                            title={option.label}
+                        {isDarkTheme ? 'Modo claro' : 'Modo oscuro'}
+                      </button>
+                      <div ref={exportMenuRef} className="relative">
+                        <input
+                          ref={importInputRef}
+                          type="file"
+                          accept="application/json"
+                          className="hidden"
+                          onChange={handleImportFile}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setExportMenuOpen((open) => !open)}
+                          className="nx-btn text-sm"
+                          aria-haspopup="true"
+                          aria-expanded={exportMenuOpen}
+                        >
+                          Plantillas &amp; datos
+                        </button>
+                        {exportMenuOpen && (
+                          <div className="absolute right-0 z-20 mt-3 w-60 rounded-2xl border border-neutral-200 bg-white p-2 text-neutral-700 shadow-2xl">
+                            <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold hover:bg-neutral-100" onClick={handleExportJSON}>Exportar JSON</button>
+                            <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold hover:bg-neutral-100" onClick={handleImportRequest}>Importar JSON</button>
+                            <div className="my-1 border-t border-neutral-200" />
+                            <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-neutral-100" onClick={handleResetParams}>Reset parámetros</button>
+                            <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-neutral-100" onClick={handleResetAssets}>Reset activos</button>
+                            <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-neutral-100" onClick={handleResetPlanners}>Reset planners</button>
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center justify-end gap-4">
+                        <div className="flex items-center gap-2">
+                          <label className="text-sm font-medium text-white/80">Plataforma</label>
+                          <select
+                            value={platformId}
+                            onChange={(e) => setPlatformId(PLATFORM_IDS.includes(e.target.value) ? e.target.value : initialPlatformId)}
+                            className="rounded-full px-3 py-1.5 text-sm font-semibold text-white/90 shadow-sm backdrop-blur border"
+                            style={{
+                              background: 'var(--theme-select-bg, rgba(255,255,255,0.18))',
+                              borderColor: 'var(--theme-select-border, rgba(255,255,255,0.35))',
+                            }}
                           >
-                            {option.code}
-                          </option>
-                        ))}
-                      </select>
+                            {PLATFORM_IDS.map((pid) => (
+                              <option key={pid} value={pid} className="text-neutral-900">{platformConfigs[pid]?.name ?? pid}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm font-medium text-white/80">
+                          <label htmlFor="currency-select">Mostrar en</label>
+                          <select
+                            id="currency-select"
+                            value={currency}
+                            onChange={(e) => setSelectedCurrency(e.target.value)}
+                            className="rounded-full px-3 py-1.5 text-sm font-semibold text-white/90 shadow-sm backdrop-blur border"
+                            style={{
+                              background: 'var(--theme-select-bg, rgba(255,255,255,0.18))',
+                              borderColor: 'var(--theme-select-border, rgba(255,255,255,0.35))',
+                            }}
+                          >
+                            {SUPPORTED_CURRENCIES.map((option) => (
+                              <option
+                                key={option.code}
+                                value={option.code}
+                                className="text-neutral-900"
+                                title={option.label}
+                              >
+                                {option.code}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
                     </div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-4 text-xs text-white/80">
+                  {isBinance && (
+                    <div className="flex items-center gap-2 rounded-full border border-white/20 px-3 py-1">
+                      {binanceLiveMeta?.loading ? <span className="nx-spinner" /> : <span className="h-2 w-2 rounded-full bg-emerald-300" />}
+                      <span>{binanceLiveMeta?.loading ? 'Sincronizando Binance…' : `Último sync: ${binanceSyncLabel}`}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 rounded-full border border-white/20 px-3 py-1">
+                    {fxMeta.loading ? <span className="nx-spinner" /> : <span className="h-2 w-2 rounded-full bg-sky-200" />}
+                    <span>{fxMeta.loading ? 'Actualizando FX…' : `FX: ${fxSyncLabel}`}</span>
                   </div>
                 </div>
               </header>
             </div>
           </div>
 
-          <div className="mx-auto max-w-7xl px-4 py-6">
-            <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+          <div className="mx-auto max-w-7xl px-4 py-8 space-y-12">
+            <section className="flex gap-4 overflow-x-auto pb-2 md:grid md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 md:gap-4 md:overflow-visible snap-x snap-mandatory">
               {(isBinance ? [
                 { key: 'loan-current', title: 'Préstamo original', value: formatLoan(binanceOriginalPrincipalTotal), subtle: binanceOriginalPrincipalTotal > 0 ? 'Capital original' : '—' },
                 { key: 'repay-total', title: 'Total a devolver', value: formatLoan(binanceTotalToRepay), subtle: binanceRepaySubtle },
@@ -5961,13 +6217,19 @@
                 { key: 'interest-total', title: 'Interés hasta repago', value: formatLoan(interestCalc.total), subtle: `${daysUntilRepay} días` },
                 { key: 'repay-total', title: 'Total a devolver', value: formatLoan(totalProjectedOutflows), subtle: repayTotalSubtle },
                 { key: 'earn-monthly', title: 'Earn mensual (hasta)', value: formatUsd(earnMonthly), subtle: earnEligible ? (minBalancePerks > 0 ? `Savings ≥ US$${formatDecimal(minBalancePerks, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : undefined) : (forceOn ? 'forzado (sim)' : 'no elegible') },
-              ]).map((item) => (
-                <KPI key={item.key} title={item.title} value={item.value} subtle={item.subtle} tone={item.tone} variant={item.variant || 'button'} />
-              ))}
+              ]).map((item) => {
+                const highlightKeys = ['apr-net', 'ltv-current', 'ltv-plan'];
+                const variant = highlightKeys.includes(item.key) ? 'highlight' : (item.variant || 'button');
+                return (
+                  <div key={item.key} className="min-w-[240px] snap-start">
+                    <KPI title={item.title} value={item.value} subtle={item.subtle} tone={item.tone} variant={variant} />
+                  </div>
+                );
+              })}
             </section>
 
             {isBinance && collateralBreakdown.items.length > 0 && (
-              <section className="mb-8">
+              <section>
                 <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <h3 className="text-lg font-semibold text-neutral-800">Detalle por cripto (Binance Loans)</h3>
                   <p className="text-sm text-neutral-500">LTV, préstamo asignado y APR neta por cada colateral.</p>
@@ -5999,136 +6261,180 @@
               </section>
             )}
 
-            <section className="mb-10 grid grid-cols-1 gap-6 items-start xl:grid-cols-2">
+            <section className="grid grid-cols-1 gap-6 items-start xl:grid-cols-2">
               <div className="space-y-6">
                 <Card title="Préstamo & Repago">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 justify-items-center">
-                    <Field label={`Monto a pedir (${currency})`} align="center" className="w-full max-w-xs">
-                      <LocaleNumberInput
-                        value={loanDraftAmount * loanRate}
-                        onChange={(v) => setLoanDraftAmount(Math.max(0, v / loanRate))}
-                        decimals={2}
-                        min={0}
-                        className={`w-full rounded-full border border-neutral-300 px-5 py-3 text-center text-lg font-semibold shadow-sm focus:outline-none focus:ring-2 ${focusRingClass}`}
-                      />
-                    </Field>
-                    <Field label="Fecha de repago" align="center" className="w-full max-w-xs">
-                      <input
-                        type="date"
-                        className={`w-full rounded-full border border-neutral-300 px-5 py-3 text-center text-lg font-semibold shadow-sm focus:outline-none focus:ring-2 ${focusRingClass}`}
-                        value={repayDate}
-                        min={todayISO()}
-                        onChange={(e)=> setRepayDate(e.target.value)}
-                      />
-                    </Field>
-                    {isBinance && borrowTickerList.length > 0 && (
-                      <Field label="Cripto del préstamo" align="center" className="w-full max-w-xs md:col-span-2">
-                        <select
-                          value={binanceBorrowTicker || ''}
-                          onChange={(e) => setParams({ ...params, binanceBorrowTicker: sanitizeTicker(e.target.value) })}
-                          className={`w-full rounded-full border border-neutral-300 px-5 py-3 text-center text-lg font-semibold shadow-sm focus:outline-none focus:ring-2 ${focusRingClass}`}
-                        >
-                          {borrowTickerList.map((ticker) => (
-                            <option key={`borrow-${ticker}`} value={ticker}>
-                              {borrowRatesByTicker[ticker]?.label || ticker} · {toPct(borrowRatesByTicker[ticker]?.annual ?? 0, 2)} APR
-                            </option>
-                          ))}
-                        </select>
-                      </Field>
-                    )}
-                  </div>
-                  <div className="mt-4 flex flex-col items-center justify-center gap-3 md:flex-row">
-                    <button
-                      type="button"
-                      onClick={handleAddLoanRequest}
-                      disabled={!(loanDraftAmount > 0)}
-                      className="nx-btn text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                  <div className="space-y-6">
+                    <div
+                      className="rounded-2xl border p-4 shadow-sm"
+                      style={{
+                        background: 'var(--theme-table-sticky-bg, rgba(255,255,255,0.92))',
+                        borderColor: 'var(--theme-card-border-secondary, var(--theme-card-border, rgba(148,163,184,0.3)))',
+                      }}
                     >
-                      Agregar préstamo
-                    </button>
-                    {loanRequests.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={handleClearLoanRequests}
-                        className="nx-btn nx-btn-ghost text-sm"
+                      <div className="mb-4 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                        <span>Paso 1 · Parámetros básicos</span>
+                        <abbr title="Define el importe a solicitar y la fecha objetivo de repago para estimar intereses." className="cursor-help text-neutral-400 no-underline">ℹ︎</abbr>
+                      </div>
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <Field label={`Monto a pedir (${currency})`} align="center" className="w-full">
+                          <LocaleNumberInput
+                            value={loanDraftAmount * loanRate}
+                            onChange={(v) => setLoanDraftAmount(Math.max(0, v / loanRate))}
+                            decimals={2}
+                            min={0}
+                            className={`w-full rounded-full border border-neutral-300 px-5 py-3 text-center text-lg font-semibold shadow-sm focus:outline-none focus:ring-2 ${focusRingClass}`}
+                          />
+                        </Field>
+                        <Field label="Fecha de repago" align="center" className="w-full">
+                          <input
+                            type="date"
+                            className={`w-full rounded-full border border-neutral-300 px-5 py-3 text-center text-lg font-semibold shadow-sm focus:outline-none focus:ring-2 ${focusRingClass}`}
+                            value={repayDate}
+                            min={todayISO()}
+                            onChange={(e)=> setRepayDate(e.target.value)}
+                          />
+                        </Field>
+                      </div>
+                      <p className="mt-3 text-center text-xs text-neutral-500">Estos valores alimentan los cálculos de interés mensual y el plan de cashflow.</p>
+                    </div>
+
+                    {isBinance && borrowTickerList.length > 0 && (
+                      <div
+                        className="rounded-2xl border p-4 shadow-sm"
+                        style={{
+                          background: 'var(--theme-table-sticky-bg, rgba(255,255,255,0.9))',
+                          borderColor: 'var(--theme-card-border-secondary, var(--theme-card-border, rgba(148,163,184,0.3)))',
+                        }}
                       >
-                        Limpiar préstamos
-                      </button>
+                        <div className="mb-4 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                          <span>Paso 2 · Configurá el préstamo</span>
+                          <abbr title="Seleccioná la cripto del préstamo para ver APRs y netear Earn automáticamente." className="cursor-help text-neutral-400 no-underline">ℹ︎</abbr>
+                        </div>
+                        <Field label="Cripto del préstamo" align="center" className="w-full">
+                          <select
+                            value={binanceBorrowTicker || ''}
+                            onChange={(e) => setParams({ ...params, binanceBorrowTicker: sanitizeTicker(e.target.value) })}
+                            className={`w-full rounded-full border border-neutral-300 px-5 py-3 text-center text-lg font-semibold shadow-sm focus:outline-none focus:ring-2 ${focusRingClass}`}
+                          >
+                            {borrowTickerList.map((ticker) => (
+                              <option key={`borrow-${ticker}`} value={ticker}>
+                                {borrowRatesByTicker[ticker]?.label || ticker} · {toPct(borrowRatesByTicker[ticker]?.annual ?? 0, 2)} APR
+                              </option>
+                            ))}
+                          </select>
+                        </Field>
+                        <p className="mt-3 text-center text-xs text-neutral-500">
+                          Distribución actual: <span className="font-semibold text-neutral-700">{binanceBorrowLabel || '—'}</span>.{' '}
+                          {params.manualLoanAllocation
+                            ? 'Asignación manual activa: cada colateral usa el monto que definas.'
+                            : (binanceActiveLoanEntries.length > 0
+                              ? 'Se respeta la asignación por cripto que agregaste.'
+                              : 'La herramienta reparte proporcionalmente al valor del colateral.')}
+                        </p>
+                      </div>
                     )}
-                    <span className="text-sm font-medium text-neutral-600">
-                      Total cargado: {formatLoan(loanAmount)}
-                    </span>
-                  </div>
-                  {isBinance && (
-                    <p className="mt-6 text-sm text-neutral-500 text-center">
-                      Distribución actual: <span className="font-semibold text-neutral-700">{binanceBorrowLabel || '—'}</span>.{' '}
-                      {params.manualLoanAllocation
-                        ? 'Estás distribuyendo el préstamo manualmente entre los colaterales activos.'
-                        : (binanceActiveLoanEntries.length > 0
-                          ? 'Se respeta la asignación por cripto que agregaste en la lista.'
-                          : 'La herramienta reparte el préstamo de forma proporcional al valor del colateral.')}
-                    </p>
-                  )}
-                  <div className="mt-4 w-full">
-                    {loanRequests.length > 0 ? (
-                      <div className="nx-card-secondary p-3">
-                        <div className="flex flex-col gap-2">
-                          {loanRequests.map((request) => {
-                            const ticker = sanitizeTicker(request.ticker || '');
-                            const info = isBinance && ticker ? borrowRatesByTicker[ticker] : null;
-                            const label = info?.label || (ticker || 'General');
-                            const share = loanAmount > 0 ? request.amount / loanAmount : 0;
-                            const aprText = info?.annual != null ? toPct(info.annual, 2) : '—';
-                            return (
-                              <div
-                                key={request.id}
-                                className="grid grid-cols-1 gap-2 px-3 py-2 text-sm text-neutral-700 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center nx-card-tertiary"
-                              >
-                                <div>
-                                  <div className="font-semibold text-neutral-900">{label}</div>
-                                  <div className="text-xs text-neutral-500">
-                                    {share > 0 ? `${toPct(share, 1)} del total` : 'Sin distribución'}{info ? ` · ${aprText} APR` : ''}
+
+                    <div
+                      className="rounded-2xl border p-4 shadow-sm"
+                      style={{
+                        background: 'var(--theme-table-sticky-bg, rgba(255,255,255,0.9))',
+                        borderColor: 'var(--theme-card-border-secondary, var(--theme-card-border, rgba(148,163,184,0.3)))',
+                      }}
+                    >
+                      <div className="mb-4 flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                        <span>{isBinance ? 'Paso 3 · Carga y seguimiento' : 'Paso 2 · Carga y seguimiento'}</span>
+                        <abbr title="Agregá solicitudes de préstamo y llevá control del total cargado." className="cursor-help text-neutral-400 no-underline">ℹ︎</abbr>
+                      </div>
+                      <div className="flex flex-col items-center justify-center gap-3 md:flex-row">
+                        <button
+                          type="button"
+                          onClick={handleAddLoanRequest}
+                          disabled={!(loanDraftAmount > 0)}
+                          className="nx-btn text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Agregar préstamo
+                        </button>
+                        {loanRequests.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleClearLoanRequests}
+                            className="nx-btn nx-btn-ghost text-sm"
+                          >
+                            Limpiar préstamos
+                          </button>
+                        )}
+                        <span className="text-sm font-medium text-neutral-600">
+                          Total cargado: {formatLoan(loanAmount)}
+                        </span>
+                      </div>
+                      {!(loanDraftAmount > 0) && (
+                        <p className="mt-2 text-center text-xs text-amber-600">Ingresá un monto mayor a cero para habilitar la carga del préstamo.</p>
+                      )}
+
+                      <div className="mt-4 w-full">
+                        {loanRequests.length > 0 ? (
+                          <div className="flex flex-col gap-3">
+                            {loanRequests.map((request) => {
+                              const ticker = sanitizeTicker(request.ticker || '');
+                              const info = isBinance && ticker ? borrowRatesByTicker[ticker] : null;
+                              const label = info?.label || (ticker || 'General');
+                              const share = loanAmount > 0 ? request.amount / loanAmount : 0;
+                              const aprText = info?.annual != null ? toPct(info.annual, 2) : '—';
+                              const colorHue = ticker ? (ticker.charCodeAt(0) * 37) % 360 : 210;
+                              const badgeColor = `hsl(${colorHue}, 70%, 55%)`;
+                              return (
+                                <div
+                                  key={request.id}
+                                  className="flex flex-col gap-3 rounded-2xl border p-4 shadow-sm"
+                                  style={{
+                                    background: 'var(--theme-table-sticky-bg, rgba(255,255,255,0.86))',
+                                    borderColor: 'var(--theme-card-border-secondary, var(--theme-card-border, rgba(148,163,184,0.25)))',
+                                  }}
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-center gap-3">
+                                      <span className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold text-white shadow" style={{ background: badgeColor }}>
+                                        {ticker ? ticker[0] : '∑'}
+                                      </span>
+                                      <div>
+                                        <div className="text-sm font-semibold text-neutral-900">{label}</div>
+                                        <div className="text-xs text-neutral-500">{share > 0 ? `${toPct(share, 1)} del total` : 'Sin distribución'}{info ? ` · ${aprText} APR` : ''}</div>
+                                      </div>
+                                    </div>
+                                    <div className="text-right text-sm font-semibold text-neutral-800">{formatLoan(request.amount)}</div>
+                                  </div>
+                                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-200">
+                                    <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, share * 100))}%`, background: badgeColor }} />
+                                  </div>
+                                  <div className="flex items-center justify-between text-xs text-neutral-500">
+                                    <span>Identificador #{request.id.slice(-4)}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRemoveLoanRequest(request.id)}
+                                      className="text-rose-600 hover:underline"
+                                    >
+                                      Quitar
+                                    </button>
                                   </div>
                                 </div>
-                                <div className="text-right font-semibold text-neutral-800">
-                                  {formatLoan(request.amount)}
-                                </div>
-                                <div className="text-right">
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveLoanRequest(request.id)}
-                                    className="nx-btn nx-btn-ghost nx-btn-sm"
-                                  >
-                                    Quitar
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="mt-3 text-center text-sm text-neutral-500">No agregaste préstamos todavía.</p>
+                        )}
                       </div>
-                    ) : (
-                      <p className="text-center text-sm text-neutral-500">No agregaste préstamos todavía.</p>
-                    )}
-                  </div>
-                  <div className="mt-6 space-y-3">
-                    {isBinance ? (
-                      <p className="text-sm text-neutral-500 text-center">
-                        Distribución actual: <span className="font-semibold text-neutral-700">{binanceBorrowLabel || '—'}</span>.{' '}
-                        {params.manualLoanAllocation
-                          ? 'Estás distribuyendo el préstamo manualmente entre los colaterales activos.'
-                          : (binanceActiveLoanEntries.length > 0
-                            ? 'Se respeta la asignación por cripto que agregaste en la lista.'
-                            : 'La herramienta reparte el préstamo de forma proporcional al valor del colateral.')}
-                      </p>
-                    ) : (
-                      <>
-                        <Pill label="LTV si pides esto" value={toPct(plannedOverallLTV, 2)} tone={ltvPlannedTone} />
-                        <Pill label="≤20% LTV (fijo)" value={loanAmountUsd <= recommendedLoanAtTarget ? "Sí" : "No"} tone={loanAmountUsd <= recommendedLoanAtTarget ? "ok" : "warn"} />
-                        <Pill label="¿Califica Low-Cost?" value={meetsLowCost ? "Sí" : "No"} tone={meetsLowCost ? "ok" : "warn"} />
-                        <Pill label="Margen Low-Cost" value={formatUsd(lowCostHeadroom)} tone={lowCostHeadroom > 0 ? "ok" : "danger"} />
-                      </>
-                    )}
+
+                      {!isBinance && (
+                        <div className="mt-4 grid grid-cols-1 gap-3 text-sm">
+                          <Pill label="LTV si pides esto" value={toPct(plannedOverallLTV, 2)} tone={ltvPlannedTone} />
+                          <Pill label="≤20% LTV (fijo)" value={loanAmountUsd <= recommendedLoanAtTarget ? 'Sí' : 'No'} tone={loanAmountUsd <= recommendedLoanAtTarget ? 'ok' : 'warn'} />
+                          <Pill label="¿Califica Low-Cost?" value={meetsLowCost ? 'Sí' : 'No'} tone={meetsLowCost ? 'ok' : 'warn'} />
+                          <Pill label="Margen Low-Cost" value={formatUsd(lowCostHeadroom)} tone={lowCostHeadroom > 0 ? 'ok' : 'danger'} />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </Card>
 
@@ -6260,7 +6566,7 @@
               </div>
             </section>
 
-            <section className="mb-10">
+            <section>
               <div className="flex flex-col items-center gap-4 md:flex-row md:items-center md:justify-between mb-4">
                 <h2 className="text-xl font-semibold text-center md:text-left">Activos y colateral</h2>
                 <div className="flex flex-wrap items-center justify-center gap-2">
@@ -6291,10 +6597,23 @@
 
               <div className="overflow-x-auto rounded-2xl nx-card">
                 <table className="min-w-full text-sm">
-                  <thead className="bg-neutral-900 text-white sticky top-0 z-10">
+                  <thead
+                    className="sticky top-0 z-10"
+                    style={{ background: 'var(--theme-table-header-bg, #0f172a)', color: 'var(--theme-table-header-text, #f8fafc)' }}
+                  >
                     <tr>
-                      <Th>Activo</Th>
-                      <Th>Ticker</Th>
+                      <Th
+                        className="sticky left-0 z-20"
+                        style={{ background: 'var(--theme-table-header-bg, #0f172a)', minWidth: '12rem' }}
+                      >
+                        Activo
+                      </Th>
+                      <Th
+                        className="sticky z-20"
+                        style={{ background: 'var(--theme-table-header-bg, #0f172a)', minWidth: '7rem', left: '12rem' }}
+                      >
+                        Ticker
+                      </Th>
                       <Th>Cantidad</Th>
                       <Th>Precio (USD)</Th>
                       <Th>Auto</Th>
@@ -6307,14 +6626,31 @@
                     </tr>
                   </thead>
                   <tbody>
-                    {totals.withValue.map((a) => (
-                      <tr key={a.id} className="border-t border-neutral-100 even:bg-neutral-50 hover:bg-neutral-100/50 transition-colors">
-                        <Td align="center">
-                          <input value={a.name} onChange={(e) => handleAssetChange(a.id, { name: e.target.value })} className="w-full rounded-xl border border-neutral-300 px-2 py-1 text-center" />
-                        </Td>
-                        <Td align="center">
-                          <input value={a.ticker} onChange={(e) => { const newT = sanitizeTicker(e.target.value); const newL = ltvByTicker[newT] ?? defaultLtv; handleAssetChange(a.id, { ticker: newT, ltv: newL }); if (a.priceAuto !== false) { fetchPricesForTickers([newT]); } }} className="w-24 rounded-xl border border-neutral-300 px-2 py-1 text-center" />
-                        </Td>
+                    {totals.withValue.map((a) => {
+                      const autoActive = a.priceAuto !== false;
+                      const collateralActive = a.useAsCollateral;
+                      const autoChipStyle = autoActive
+                        ? { background: 'var(--theme-chip-auto-bg, rgba(16,185,129,0.16))', color: 'var(--theme-chip-auto-text, #047857)' }
+                        : { background: 'var(--theme-chip-off-bg, rgba(148,163,184,0.16))', color: 'var(--theme-chip-off-text, #475569)' };
+                      const collateralChipStyle = collateralActive
+                        ? { background: 'var(--theme-chip-auto-bg, rgba(16,185,129,0.16))', color: 'var(--theme-chip-auto-text, #047857)' }
+                        : { background: 'var(--theme-chip-off-bg, rgba(148,163,184,0.16))', color: 'var(--theme-chip-off-text, #475569)' };
+                      return (
+                        <tr key={a.id} className="border-t border-neutral-100 even:bg-neutral-50/60 hover:bg-neutral-100/50 transition-colors">
+                          <Td
+                            align="center"
+                            className="sticky left-0 z-10"
+                            style={{ background: 'var(--theme-table-sticky-bg, rgba(255,255,255,0.95))', minWidth: '12rem' }}
+                          >
+                            <input value={a.name} onChange={(e) => handleAssetChange(a.id, { name: e.target.value })} className="w-full rounded-xl border border-neutral-300 px-2 py-1 text-center" />
+                          </Td>
+                          <Td
+                            align="center"
+                            className="sticky z-10"
+                            style={{ background: 'var(--theme-table-sticky-bg, rgba(255,255,255,0.95))', minWidth: '7rem', left: '12rem' }}
+                          >
+                            <input value={a.ticker} onChange={(e) => { const newT = sanitizeTicker(e.target.value); const newL = ltvByTicker[newT] ?? defaultLtv; handleAssetChange(a.id, { ticker: newT, ltv: newL }); if (a.priceAuto !== false) { fetchPricesForTickers([newT]); } }} className="w-full rounded-xl border border-neutral-300 px-2 py-1 text-center" />
+                          </Td>
                         <Td align="center">
                           <LocaleNumberInput
                             value={a.qty}
@@ -6333,7 +6669,10 @@
                           />
                         </Td>
                         <Td align="center">
-                          <input type="checkbox" checked={a.priceAuto !== false} onChange={(e) => { handleAssetChange(a.id, { priceAuto: e.target.checked }); if (e.target.checked) { fetchPricesForTickers([a.ticker]); } }} className="h-5 w-5" />
+                          <div className="flex flex-col items-center gap-2">
+                            <span className="nx-chip" style={autoChipStyle}>{autoActive ? 'Auto' : 'Manual'}</span>
+                            <input type="checkbox" checked={autoActive} onChange={(e) => { handleAssetChange(a.id, { priceAuto: e.target.checked }); if (e.target.checked) { fetchPricesForTickers([a.ticker]); } }} className="h-5 w-5" />
+                          </div>
                         </Td>
                         <Td align="center" className="font-medium">{formatUsd(a.value)}</Td>
                         <Td align="center">
@@ -6346,7 +6685,10 @@
                           />
                         </Td>
                         <Td align="center">
-                          <input type="checkbox" title="Si está activo, este activo cuenta como colateral para LTV y Tope por LTVs" checked={a.useAsCollateral} onChange={(e) => handleAssetChange(a.id, { useAsCollateral: e.target.checked })} className="h-5 w-5" />
+                          <div className="flex flex-col items-center gap-2">
+                            <span className="nx-chip" style={collateralChipStyle}>{collateralActive ? 'Colateral' : 'Fuera'}</span>
+                            <input type="checkbox" title="Si está activo, este activo cuenta como colateral para LTV y Tope por LTVs" checked={collateralActive} onChange={(e) => handleAssetChange(a.id, { useAsCollateral: e.target.checked })} className="h-5 w-5" />
+                          </div>
                         </Td>
                         <Td align="center" title="Política de LTV fija por plataforma">
                           <span className="inline-block rounded-xl bg-neutral-100 px-3 py-1 font-semibold">{pct(ltvByTicker[sanitizeTicker(a.ticker)] ?? a.ltv ?? 0)}</span>
@@ -6357,24 +6699,120 @@
                         <Td align="center">
                           <button onClick={() => removeRow(a.id)} className="nx-btn nx-btn-ghost nx-btn-sm">Borrar</button>
                         </Td>
-                      </tr>
-                    ))}
+                        </tr>
+                      );
+                    })}
+                    <tr
+                      className="text-sm font-semibold"
+                      style={{ background: 'var(--theme-table-sticky-bg, rgba(255,255,255,0.9))', color: 'var(--theme-page-text, #0f172a)' }}
+                    >
+                      <Td
+                        align="left"
+                        className="sticky left-0 z-10"
+                        style={{ background: 'var(--theme-table-sticky-bg, rgba(255,255,255,0.95))', minWidth: '12rem' }}
+                      >
+                        Total colateral activo
+                      </Td>
+                      <Td
+                        align="center"
+                        className="sticky z-10"
+                        style={{ background: 'var(--theme-table-sticky-bg, rgba(255,255,255,0.95))', minWidth: '7rem', left: '12rem' }}
+                      >
+                        —
+                      </Td>
+                      <Td align="center">—</Td>
+                      <Td align="center">—</Td>
+                      <Td align="center">—</Td>
+                      <Td align="center">{formatUsd(totals.totalCollateralValue)}</Td>
+                      <Td align="center">{formatUsd(totals.withValue.filter((item) => item.useAsCollateral).reduce((acc, item) => acc + Math.max(0, item.loanAssigned || 0), 0))}</Td>
+                      <Td align="center">{totals.withValue.filter((item) => item.useAsCollateral).length}</Td>
+                      <Td align="center">—</Td>
+                      <Td align="center">—</Td>
+                      <Td align="center">—</Td>
+                    </tr>
+                    <tr
+                      className="text-sm font-semibold"
+                      style={{ background: 'var(--theme-table-sticky-bg, rgba(255,255,255,0.85))', color: 'var(--theme-page-text, #0f172a)' }}
+                    >
+                      <Td
+                        align="left"
+                        className="sticky left-0 z-10"
+                        style={{ background: 'var(--theme-table-sticky-bg, rgba(255,255,255,0.9))', minWidth: '12rem' }}
+                      >
+                        Total general
+                      </Td>
+                      <Td
+                        align="center"
+                        className="sticky z-10"
+                        style={{ background: 'var(--theme-table-sticky-bg, rgba(255,255,255,0.9))', minWidth: '7rem', left: '12rem' }}
+                      >
+                        —
+                      </Td>
+                      <Td align="center">—</Td>
+                      <Td align="center">—</Td>
+                      <Td align="center">—</Td>
+                      <Td align="center">{formatUsd(totals.total)}</Td>
+                      <Td align="center">{formatUsd(totals.withValue.reduce((acc, item) => acc + Math.max(0, item.loanAssigned || 0), 0))}</Td>
+                      <Td align="center">{totals.withValue.length}</Td>
+                      <Td align="center">—</Td>
+                      <Td align="center">—</Td>
+                      <Td align="center">—</Td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
             </section>
 
-            <section className="mb-10">
+            <section>
               <Card title="Ideas para un simulador único">
                 <p className="text-sm text-neutral-600">Backlog sugerido para diferenciar la herramienta y hacerla monetizable.</p>
-                <ol className="mt-3 list-decimal space-y-3 pl-5 text-sm text-neutral-700">
-                  {improvementIdeas.map((idea) => (
-                    <li key={idea.id}>
-                      <div className="font-semibold text-neutral-900">{idea.title}</div>
-                      <p className="text-xs text-neutral-500 mt-1">{idea.description}</p>
-                    </li>
-                  ))}
-                </ol>
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {improvementIdeas.map((idea) => {
+                    const active = expandedIdea === idea.id;
+                    const toneBorder = idea.tone === 'progress'
+                      ? 'rgba(56,189,248,0.45)'
+                      : idea.tone === 'success'
+                        ? 'rgba(16,185,129,0.45)'
+                        : 'var(--theme-card-border-secondary, var(--theme-card-border, rgba(148,163,184,0.3)))';
+                    const toneBackground = idea.tone === 'progress'
+                      ? 'rgba(240,249,255,0.92)'
+                      : idea.tone === 'success'
+                        ? 'rgba(236,253,245,0.92)'
+                        : 'var(--theme-table-sticky-bg, rgba(255,255,255,0.9))';
+                    return (
+                      <div
+                        key={idea.id}
+                        className="flex flex-col rounded-2xl border p-4 shadow-sm transition-shadow hover:shadow-md"
+                        style={{ borderColor: toneBorder, background: toneBackground }}
+                      >
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => toggleIdea(idea.id)}
+                          onKeyDown={(event) => handleIdeaKey(event, idea.id)}
+                          className="flex items-center justify-between gap-3"
+                        >
+                          <div className="flex items-center gap-3">
+                            <span className="text-xl" aria-hidden="true">{idea.icon}</span>
+                            <div>
+                              <div className="text-sm font-semibold text-neutral-800">{idea.title}</div>
+                              <div className="text-xs text-neutral-500">{idea.status}</div>
+                            </div>
+                          </div>
+                          <span className={`text-xs font-semibold ${active ? 'text-emerald-600' : 'text-neutral-400'}`}>
+                            {active ? 'Cerrar' : 'Ver más'}
+                          </span>
+                        </div>
+                        {active && (
+                          <div className="mt-3 space-y-3 text-sm text-neutral-600">
+                            <p>{idea.description}</p>
+                            <button type="button" className="nx-btn nx-btn-ghost nx-btn-sm self-start">Seguir progreso</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </Card>
             </section>
 
@@ -7315,12 +7753,26 @@
     // UI helpers (pocas funciones y tono visual)
     function KPI({ title, value, subtle, tone, variant }) {
       const toneCls = tone === 'ok' ? 'text-emerald-200' : tone === 'danger' ? 'text-rose-200' : '';
-      const baseCls = variant === 'button' ? 'nx-kpi-btn' : 'bg-white nx-kpi';
+      const highlightGradients = {
+        ok: { background: 'linear-gradient(140deg,rgba(16,185,129,0.95) 0%,rgba(59,130,246,0.88) 100%)', color: '#ecfdf5' },
+        warn: { background: 'linear-gradient(140deg,rgba(251,191,36,0.95) 0%,rgba(245,158,11,0.9) 100%)', color: '#fef3c7' },
+        danger: { background: 'linear-gradient(140deg,rgba(248,113,113,0.95) 0%,rgba(239,68,68,0.92) 100%)', color: '#fee2e2' },
+      };
+      const highlightStyle = variant === 'highlight' ? highlightGradients[tone] || highlightGradients.ok : {};
+      const baseCls = variant === 'button' || variant === 'highlight' ? 'nx-kpi-btn' : 'bg-white nx-kpi';
+      const valueClass = variant === 'highlight' ? 'text-white drop-shadow-sm' : toneCls;
+      const titleClass = variant === 'highlight' ? 'text-white/80' : (variant === 'button' ? 'text-white/80' : 'text-neutral-500');
+      const subtleClass = variant === 'highlight' ? 'text-white/80' : (variant === 'button' ? 'text-white/70' : 'text-neutral-500');
       return (
-        <div className={`relative overflow-hidden rounded-2xl p-4 shadow-sm transition-transform duration-200 ${baseCls} cursor-pointer`} role="button" aria-label={title}>
-          <div className={`text-xs uppercase tracking-wide text-center ${variant==='button' ? 'text-white/80' : 'text-neutral-500'}`}>{title}</div>
-          <div className={`mt-1 text-xl font-bold text-center ${toneCls}`}>{value}</div>
-          {subtle && <div className={`text-xs mt-1 text-center ${variant==='button' ? 'text-white/70' : 'text-neutral-500'}`}>{subtle}</div>}
+        <div
+          className={`relative overflow-hidden rounded-2xl p-4 shadow-sm transition-transform duration-200 ${baseCls} cursor-pointer`}
+          role="button"
+          aria-label={title}
+          style={highlightStyle}
+        >
+          <div className={`text-xs uppercase tracking-wide text-center ${titleClass}`}>{title}</div>
+          <div className={`mt-1 text-xl font-bold text-center ${valueClass}`}>{value}</div>
+          {subtle && <div className={`text-xs mt-1 text-center ${subtleClass}`}>{subtle}</div>}
         </div>
       );
     }
@@ -7456,10 +7908,12 @@
         </Field>
       );
     }
-    function Th({ children }) { return (<th className="px-3 py-2 text-center align-middle text-xs font-semibold">{children}</th>); }
-    function Td({ children, align = "left", ...rest }) {
+    function Th({ children, className = "", style = {} }) {
+      return (<th className={`px-3 py-2 text-center align-middle text-xs font-semibold ${className}`} style={style}>{children}</th>);
+    }
+    function Td({ children, align = "left", className = "", style = {}, ...rest }) {
       const alignClass = align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left";
-      return (<td {...rest} className={`px-3 py-2 align-middle ${alignClass}`}>{children}</td>);
+      return (<td {...rest} className={`px-3 py-2 align-middle ${alignClass} ${className}`} style={style}>{children}</td>);
     }
     function Pill({ label, value, tone = "neutral" }) {
       const tones = {
