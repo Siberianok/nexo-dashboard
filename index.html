@@ -3379,7 +3379,6 @@
             priceAuto: item.priceAuto === false ? false : true,
             useAsCollateral: item.useAsCollateral === false ? false : true,
             ltv: ltvByTicker[ticker] ?? item.ltv ?? defaultLtv,
-            loanAssigned: Math.max(0, toNumber(item.loanAssigned)),
           };
         });
       };
@@ -5310,8 +5309,7 @@
           const price = toNumber(a.price);
           const value = qty * price;
           const ltv = ltvByTicker[ticker] ?? a.ltv ?? defaultLtv;
-          const loanAssigned = Math.max(0, toNumber(a.loanAssigned));
-          return { ...a, ticker, qty, price, value, ltv, loanAssigned, useAsCollateral: a.useAsCollateral !== false };
+          return { ...a, ticker, qty, price, value, ltv, useAsCollateral: a.useAsCollateral !== false };
         });
         const total = withValue.reduce((acc, a) => acc + a.value, 0);
         const totalLoyalty = loyaltyTicker ? withValue.filter(a => a.ticker === loyaltyTicker).reduce((acc, a) => acc + a.value, 0) : 0;
@@ -5680,28 +5678,20 @@
         return buffer >= 0 ? "ok" : "danger";
       };
 
-      const manualLoanAllocationEnabled = !!params.manualLoanAllocation;
-
       const collateralBreakdown = useMemo(() => {
         const totalCollateral = totals.totalCollateralValue || 0;
         if (!(totalCollateral > 0)) {
           return {
             items: [],
-            manualActive: false,
-            manualEnabled: manualLoanAllocationEnabled,
-            manualTotal: 0,
             loanAllocated: 0,
+            loanShareDenom: 0,
+            netOutstandingTotal: 0,
             weightedAprOffset: isBinance ? binanceBorrowAdjustment : 0,
             weightedNetApr: isBinance ? binanceBorrowNetAnnualRate : chosenAPR,
           };
         }
         const outstandingMap = cashflowDerived?.outstandingByTicker || null;
         const hasOutstandingMap = !!(outstandingMap && Object.keys(outstandingMap).length > 0);
-        const manualTotal = totals.withValue
-          .filter((asset) => asset.useAsCollateral && asset.loanAssigned > 0)
-          .reduce((acc, asset) => acc + asset.loanAssigned, 0);
-        const manualEnabled = manualLoanAllocationEnabled;
-        const manualActive = manualEnabled && manualTotal > 0;
         const directLoanActive = isBinance ? Object.keys(loanRequestsTotals).length > 0 : loanAmount > 0;
         const directLoanSum = Object.values(loanRequestsTotals).reduce((acc, value) => acc + value, 0);
         const outstandingDirectTotal = hasOutstandingMap
@@ -5729,9 +5719,7 @@
               ? (hasPlannedOutstanding ? plannedOutstanding : mappedLoanRaw)
               : 0;
             const ledgerEntry = isBinance ? binanceLoanLedger[ticker] : null;
-            const manualAllocationBaseline = manualActive
-              ? Math.max(0, asset.loanAssigned || 0)
-              : (directLoanActive ? mappedLoan : loanBase * share);
+            const allocationBaseline = directLoanActive ? mappedLoan : loanBase * share;
             const ledgerOutstandingRaw = Number(ledgerEntry?.outstanding);
             const ledgerOutstanding = Number.isFinite(ledgerOutstandingRaw) && ledgerOutstandingRaw >= 0
               ? ledgerOutstandingRaw
@@ -5740,7 +5728,7 @@
             const interestAccrued = Math.max(0, Number(ledgerEntry?.interestAccrued) || 0);
             const originalPrincipal = Number.isFinite(ledgerEntry?.originalPrincipal) && ledgerEntry.originalPrincipal > 0
               ? ledgerEntry.originalPrincipal
-              : Math.max(0, manualAllocationBaseline + paidTotal - interestAccrued);
+              : Math.max(0, allocationBaseline + paidTotal - interestAccrued);
             const ledgerPrincipalOutstandingRaw = Number(ledgerEntry?.principalOutstanding);
             const ledgerPrincipalOutstanding = Number.isFinite(ledgerPrincipalOutstandingRaw) && ledgerPrincipalOutstandingRaw >= 0
               ? ledgerPrincipalOutstandingRaw
@@ -5748,7 +5736,7 @@
             const derivedOutstanding = Math.max(0, ledgerPrincipalOutstanding + interestAccrued);
             const fallbackOutstanding = ledgerOutstanding != null
               ? ledgerOutstanding
-              : (derivedOutstanding > 0 ? derivedOutstanding : manualAllocationBaseline);
+              : (derivedOutstanding > 0 ? derivedOutstanding : allocationBaseline);
             const loanNetOutstanding = hasPlannedOutstanding
               ? Math.max(0, plannedOutstanding)
               : Math.max(0, fallbackOutstanding);
@@ -5924,13 +5912,11 @@
           .sort((a, b) => b.value - a.value);
         const netOutstandingTotal = items.reduce((acc, item) => acc + Math.max(0, item.loanNetOutstanding || 0), 0);
         const fallbackAllocatedTotal = items.reduce((acc, item) => acc + Math.max(0, item.allocatedLoan || 0), 0);
-        const fallbackLoanBase = manualActive
-          ? manualTotal
-          : directLoanActive
-            ? (hasOutstandingMap
-              ? (outstandingDirectTotal > 0 ? outstandingDirectTotal : loanBase)
-              : (directLoanSum > 0 ? directLoanSum : loanBase))
-            : fallbackAllocatedTotal;
+        const fallbackLoanBase = directLoanActive
+          ? (hasOutstandingMap
+            ? (outstandingDirectTotal > 0 ? outstandingDirectTotal : loanBase)
+            : (directLoanSum > 0 ? directLoanSum : loanBase))
+          : fallbackAllocatedTotal;
         const loanShareDenom = netOutstandingTotal > 0
           ? netOutstandingTotal
           : (fallbackLoanBase > 0 ? fallbackLoanBase : loanBase);
@@ -5989,16 +5975,13 @@
           : (isBinance ? binanceBorrowNetAnnualRate : Math.max(0, chosenAPR - weightedAprOffset));
         return {
           items: itemsWithShare.map(({ loanShareAmount, ...rest }) => rest),
-          manualActive,
-          manualEnabled,
-          manualTotal,
           loanAllocated: totalAllocated || loanBase,
           loanShareDenom: effectiveLoanShareDenom,
           netOutstandingTotal: calibratedOutstandingTotal,
           weightedAprOffset,
           weightedNetApr,
         };
-      }, [autoRepayLtv, binanceBorrowAdjustment, binanceBorrowNetAnnualRate, binanceOutstandingRatio, binanceLoanLedger, binanceLedgerOutstandingTotal, borrowRatesByTicker, cashflowDerived?.outstandingByTicker, defaultLtv, earnAprTop, isBinance, loanAmount, loanRequestsTotals, manualLoanAllocationEnabled, marginCallLtv, plannedOverallLTV, plannedOutstanding, plannedOutstandingPrincipal, totals.totalCollateralValue, totals.withValue, ltvByTicker, ltvHealthyThreshold, ltvWarnThreshold, params.binanceBorrowTicker]);
+      }, [autoRepayLtv, binanceBorrowAdjustment, binanceBorrowNetAnnualRate, binanceOutstandingRatio, binanceLoanLedger, binanceLedgerOutstandingTotal, borrowRatesByTicker, cashflowDerived?.outstandingByTicker, defaultLtv, earnAprTop, isBinance, loanAmount, loanRequestsTotals, marginCallLtv, plannedOverallLTV, plannedOutstanding, plannedOutstandingPrincipal, totals.totalCollateralValue, totals.withValue, ltvByTicker, ltvHealthyThreshold, ltvWarnThreshold, params.binanceBorrowTicker]);
 
       const binanceNetAprOffset = isBinance ? Math.max(0, collateralBreakdown.weightedAprOffset || 0) : 0;
       const binanceBaseAnnualRate = isBinance ? binanceBorrowAnnualRate : chosenAPR;
@@ -6049,7 +6032,7 @@
 
       const addRow = () => {
         const nextId = Math.max(0, ...assets.map(a => a.id)) + 1;
-        setAssets(prev => ([...prev, { id: nextId, name: "Nuevo", ticker: "TKN", qty: 0, price: 0, priceAuto: true, useAsCollateral: false, ltv: defaultLtv, loanAssigned: 0 }]));
+        setAssets(prev => ([...prev, { id: nextId, name: "Nuevo", ticker: "TKN", qty: 0, price: 0, priceAuto: true, useAsCollateral: false, ltv: defaultLtv }]));
       };
       const removeRow = (id) => setAssets(prev => prev.filter(a => a.id !== id));
 
@@ -6345,11 +6328,9 @@
                         </Field>
                         <p className="mt-3 text-center text-xs text-neutral-500">
                           Distribución actual: <span className="font-semibold text-neutral-700">{binanceBorrowLabel || '—'}</span>.{' '}
-                          {params.manualLoanAllocation
-                            ? 'Asignación manual activa: cada colateral usa el monto que definas.'
-                            : (binanceActiveLoanEntries.length > 0
-                              ? 'Se respeta la asignación por cripto que agregaste.'
-                              : 'La herramienta reparte proporcionalmente al valor del colateral.')}
+                          {binanceActiveLoanEntries.length > 0
+                            ? 'Se respeta la asignación por cripto que agregaste.'
+                            : 'La herramienta reparte proporcionalmente al valor del colateral.'}
                         </p>
                       </div>
                     )}
@@ -6599,19 +6580,7 @@
                     <input type="checkbox" ref={collateralMasterRef} className="h-4 w-4" checked={allCollateral} onChange={(e) => handleToggleAllCollateral(e.target.checked)} />
                     Colateral (todos)
                   </label>
-                  <label className="flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 shadow-sm">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 accent-amber-500"
-                      checked={!!params.manualLoanAllocation}
-                      onChange={(e) => setParams({ ...params, manualLoanAllocation: e.target.checked })}
-                    />
-                    Asignar préstamo manualmente
-                  </label>
                 </div>
-                {params.manualLoanAllocation && (
-                  <p className="mt-2 text-center text-xs text-neutral-500">Distribuí el préstamo por activo en la columna "Préstamo asignado" para reflejar cómo Binance exige definir el colateral.</p>
-                )}
               </div>
 
               <div className="overflow-x-auto rounded-2xl nx-card">
@@ -6637,7 +6606,6 @@
                       <Th>Precio (USD)</Th>
                       <Th>Auto</Th>
                       <Th>Valor</Th>
-                      <Th>Préstamo asignado (USD)</Th>
                       <Th>Colateral</Th>
                       <Th>LTV (fijo)</Th>
                       <Th>APR Earn (flex máx)</Th>
@@ -6695,15 +6663,6 @@
                         </Td>
                         <Td align="center" className="font-medium">{formatUsd(a.value)}</Td>
                         <Td align="center">
-                          <LocaleNumberInput
-                            value={a.loanAssigned}
-                            onChange={(v) => handleAssetChange(a.id, { loanAssigned: Math.max(0, v) })}
-                            decimals={2}
-                            disabled={!params.manualLoanAllocation}
-                            className={`w-full rounded-xl border border-neutral-300 px-2 py-1 text-center focus:outline-none focus:ring-2 ${focusRingClass} ${!params.manualLoanAllocation ? 'bg-neutral-50 text-neutral-400' : ''}`}
-                          />
-                        </Td>
-                        <Td align="center">
                           <div className="flex flex-col items-center gap-2">
                             <span className="nx-chip" style={collateralChipStyle}>{collateralActive ? 'Colateral' : 'Fuera'}</span>
                             <input type="checkbox" title="Si está activo, este activo cuenta como colateral para LTV y Tope por LTVs" checked={collateralActive} onChange={(e) => handleAssetChange(a.id, { useAsCollateral: e.target.checked })} className="h-5 w-5" />
@@ -6743,7 +6702,6 @@
                       <Td align="center">—</Td>
                       <Td align="center">—</Td>
                       <Td align="center">{formatUsd(totals.totalCollateralValue)}</Td>
-                      <Td align="center">{formatUsd(totals.withValue.filter((item) => item.useAsCollateral).reduce((acc, item) => acc + Math.max(0, item.loanAssigned || 0), 0))}</Td>
                       <Td align="center">{totals.withValue.filter((item) => item.useAsCollateral).length}</Td>
                       <Td align="center">—</Td>
                       <Td align="center">—</Td>
@@ -6771,7 +6729,6 @@
                       <Td align="center">—</Td>
                       <Td align="center">—</Td>
                       <Td align="center">{formatUsd(totals.total)}</Td>
-                      <Td align="center">{formatUsd(totals.withValue.reduce((acc, item) => acc + Math.max(0, item.loanAssigned || 0), 0))}</Td>
                       <Td align="center">{totals.withValue.length}</Td>
                       <Td align="center">—</Td>
                       <Td align="center">—</Td>
