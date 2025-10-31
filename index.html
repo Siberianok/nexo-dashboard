@@ -1031,6 +1031,25 @@
     .nx-dropdown button:hover{
       background:var(--theme-dropdown-hover,rgba(226,232,240,0.6));
     }
+    .nx-control-pill{
+      display:inline-flex;
+      align-items:center;
+      gap:.5rem;
+      padding:.35rem .75rem;
+      border-radius:9999px;
+      border:1px solid var(--theme-input-border,rgba(148,163,184,0.3));
+      background:var(--theme-input-bg,rgba(255,255,255,0.9));
+      color:var(--theme-text-strong,var(--theme-page-text,#0f172a));
+      box-shadow:var(--theme-shadow-sm,0 10px 20px rgba(15,23,42,0.08));
+      cursor:pointer;
+      transition:background .2s ease,color .2s ease,border-color .2s ease,box-shadow .2s ease;
+    }
+    .nx-notice{
+      background:var(--theme-surface-subtle,rgba(248,250,252,0.9));
+      border:1px solid var(--theme-border-subtle,rgba(148,163,184,0.28));
+      color:var(--theme-text-soft,rgba(100,116,139,0.92));
+      box-shadow:var(--theme-shadow-sm,0 10px 20px rgba(15,23,42,0.08));
+    }
     body[data-theme] .text-neutral-900,
     body[data-theme] .text-neutral-800,
     body[data-theme] .text-neutral-700{
@@ -1834,6 +1853,12 @@
         '--theme-kpi-shadow': '0 24px 56px rgba(217,119,6,0.5)',
         '--theme-kpi-hover-shadow': '0 28px 60px rgba(234,179,8,0.55)',
         '--theme-kpi-active-shadow': '0 18px 40px rgba(217,119,6,0.48)',
+        '--theme-kpi-highlight-ok-bg': 'linear-gradient(150deg,rgba(98,72,10,0.92) 0%,rgba(41,27,4,0.95) 55%,rgba(18,11,2,0.98) 100%)',
+        '--theme-kpi-highlight-ok-text': '#fef3c7',
+        '--theme-kpi-highlight-warn-bg': 'linear-gradient(150deg,rgba(122,83,7,0.92) 0%,rgba(52,35,5,0.96) 55%,rgba(20,12,2,0.98) 100%)',
+        '--theme-kpi-highlight-warn-text': '#fde68a',
+        '--theme-kpi-highlight-danger-bg': 'linear-gradient(150deg,rgba(124,37,37,0.9) 0%,rgba(74,16,16,0.96) 55%,rgba(28,6,6,0.98) 100%)',
+        '--theme-kpi-highlight-danger-text': '#fee2e2',
         '--theme-btn-bg': 'linear-gradient(160deg,#2a1f08 0%,#110901 55%,#030200 100%)',
         '--theme-btn-border': 'rgba(234,179,8,0.5)',
         '--theme-btn-shadow': '0 24px 56px rgba(245,158,11,0.45)',
@@ -3769,6 +3794,38 @@
           toggleIdea(id);
         }
       }, [toggleIdea]);
+      const ideaToneStyles = useMemo(() => {
+        if (isDarkTheme) {
+          return {
+            progress: {
+              border: 'rgba(125,211,252,0.45)',
+              background: 'linear-gradient(160deg, rgba(17,25,40,0.92) 0%, rgba(8,14,26,0.95) 100%)',
+            },
+            success: {
+              border: 'rgba(74,222,128,0.42)',
+              background: 'linear-gradient(160deg, rgba(12,31,22,0.9) 0%, rgba(6,18,12,0.95) 100%)',
+            },
+            pending: {
+              border: 'var(--theme-border-strong, rgba(148,163,184,0.42))',
+              background: 'linear-gradient(160deg, rgba(15,23,42,0.88) 0%, rgba(7,12,24,0.94) 100%)',
+            },
+          };
+        }
+        return {
+          progress: {
+            border: 'rgba(56,189,248,0.45)',
+            background: 'rgba(240,249,255,0.92)',
+          },
+          success: {
+            border: 'rgba(16,185,129,0.45)',
+            background: 'rgba(236,253,245,0.92)',
+          },
+          pending: {
+            border: 'var(--theme-card-border-secondary, var(--theme-card-border, rgba(148,163,184,0.3)))',
+            background: 'var(--theme-table-sticky-bg, rgba(255,255,255,0.9))',
+          },
+        };
+      }, [isDarkTheme]);
       const runtimeFlags = useMemo(() => {
         if (typeof window === 'undefined') {
           return { forceOn: false, simMode: false };
@@ -7251,11 +7308,11 @@
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   <button onClick={addRow} className="nx-btn text-sm">Añadir activo</button>
                   <button onClick={() => { localStorage.removeItem(storageKeys.assets); setAssets(sanitizeAssets(platformDefaultAssets)); }} className="nx-btn nx-btn-ghost text-sm">Reset</button>
-                  <label className="flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium shadow-sm">
+                  <label className="nx-control-pill text-xs font-medium">
                     <input type="checkbox" ref={autoMasterRef} className="h-4 w-4" checked={allAuto} onChange={(e) => handleToggleAllAuto(e.target.checked)} />
                     Auto (todos)
                   </label>
-                  <label className="flex items-center gap-2 rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium shadow-sm">
+                  <label className="nx-control-pill text-xs font-medium">
                     <input type="checkbox" ref={collateralMasterRef} className="h-4 w-4" checked={allCollateral} onChange={(e) => handleToggleAllCollateral(e.target.checked)} />
                     Colateral (todos)
                   </label>
@@ -7440,21 +7497,13 @@
                 <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {improvementIdeas.map((idea) => {
                     const active = expandedIdea === idea.id;
-                    const toneBorder = idea.tone === 'progress'
-                      ? 'rgba(56,189,248,0.45)'
-                      : idea.tone === 'success'
-                        ? 'rgba(16,185,129,0.45)'
-                        : 'var(--theme-card-border-secondary, var(--theme-card-border, rgba(148,163,184,0.3)))';
-                    const toneBackground = idea.tone === 'progress'
-                      ? 'rgba(240,249,255,0.92)'
-                      : idea.tone === 'success'
-                        ? 'rgba(236,253,245,0.92)'
-                        : 'var(--theme-table-sticky-bg, rgba(255,255,255,0.9))';
+                    const toneKey = idea.tone && ideaToneStyles[idea.tone] ? idea.tone : 'pending';
+                    const toneStyle = ideaToneStyles[toneKey] || ideaToneStyles.pending;
                     return (
                       <div
                         key={idea.id}
                         className="flex flex-col rounded-2xl border p-4 shadow-sm transition-shadow hover:shadow-md"
-                        style={{ borderColor: toneBorder, background: toneBackground }}
+                        style={{ borderColor: toneStyle.border, background: toneStyle.background }}
                       >
                         <div
                           role="button"
@@ -7746,7 +7795,7 @@
                 </div>
                 <div className="space-y-3">
                   {(safePlan.payments || []).length === 0 && (
-                    <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-500">No hay pagos definidos. Añade uno para proyectar obligaciones.</div>
+                    <div className="nx-notice rounded-xl px-4 py-3 text-xs">No hay pagos definidos. Añade uno para proyectar obligaciones.</div>
                   )}
                   {(safePlan.payments || []).map((item) => (
                     <div
@@ -7800,7 +7849,7 @@
                 </div>
                 <div className="space-y-3">
                   {(safePlan.earns || []).length === 0 && (
-                    <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-500">Suma tus estrategias de rendimiento para cubrir el costo del préstamo.</div>
+                    <div className="nx-notice rounded-xl px-4 py-3 text-xs">Suma tus estrategias de rendimiento para cubrir el costo del préstamo.</div>
                   )}
                   {(safePlan.earns || []).map((item) => (
                     <div
@@ -7853,7 +7902,7 @@
                 </div>
                 <div className="space-y-3">
                   {(safePlan.manual || []).length === 0 && (
-                    <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-xs text-neutral-500">Registra recargas de colateral o retiros planificados.</div>
+                    <div className="nx-notice rounded-xl px-4 py-3 text-xs">Registra recargas de colateral o retiros planificados.</div>
                   )}
                   {(safePlan.manual || []).map((item) => (
                     <div
