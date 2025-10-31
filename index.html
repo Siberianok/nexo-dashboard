@@ -6522,7 +6522,6 @@
       const renderNow = Date.now();
       const binanceLastUpdatedMs = binanceLiveMeta?.lastUpdated ?? null;
       const binanceSecondsAgo = binanceLastUpdatedMs != null ? Math.max(0, Math.floor((renderNow - binanceLastUpdatedMs) / 1000)) : null;
-      const binanceSyncLabel = binanceSecondsAgo != null ? `Hace ${binanceSecondsAgo}s` : 'Sin datos';
       const binanceUpdatedLabel = binanceSecondsAgo != null ? ` · actualizado hace ${binanceSecondsAgo}s` : '';
       const binanceNetAprSubtle = isBinance
         ? ((binanceOutstandingRatio < 0.999
@@ -6531,8 +6530,6 @@
             ? `Préstamo ${toPct(binanceBaseAnnualRate, 2)} − ajuste ${toPct(binanceNetAprOffset, 2)}`
             : `Préstamo ${toPct(binanceBaseAnnualRate, 2)}`)) + binanceUpdatedLabel)
         : undefined;
-      const fxSecondsAgo = fxMeta.lastUpdated != null ? Math.max(0, Math.floor((Date.now() - fxMeta.lastUpdated) / 1000)) : null;
-      const fxSyncLabel = fxSecondsAgo != null ? `Hace ${fxSecondsAgo}s` : 'Sin actualizar';
 
       const extraCollateralForTarget = useMemo(() => {
         if (targetLtv <= 0) return 0;
@@ -6699,18 +6696,7 @@
                     </div>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-4 text-xs text-white/80">
-                  {isBinance && (
-                    <div className="flex items-center gap-2 rounded-full border border-white/20 px-3 py-1">
-                      {binanceLiveMeta?.loading ? <span className="nx-spinner" /> : <span className="h-2 w-2 rounded-full" style={{ backgroundColor: 'var(--theme-tone-positive,#22c55e)' }} />}
-                      <span>{binanceLiveMeta?.loading ? 'Sincronizando Binance…' : `Último sync: ${binanceSyncLabel}`}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 rounded-full border border-white/20 px-3 py-1">
-                    {fxMeta.loading ? <span className="nx-spinner" /> : <span className="h-2 w-2 rounded-full bg-sky-200" />}
-                    <span>{fxMeta.loading ? 'Actualizando FX…' : `FX: ${fxSyncLabel}`}</span>
-                  </div>
-                </div>
+                
               </header>
             </div>
           </div>
