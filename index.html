@@ -5800,6 +5800,8 @@
             original: 0,
             outstanding: loanAmount,
             interest: 0,
+            interestBase: 0,
+            interestRealtime: 0,
             interestPaid: 0,
             interestGenerated: 0,
             paid: 0,
@@ -5810,6 +5812,8 @@
           const original = Math.max(0, Number(entry?.originalPrincipal) || 0);
           const outstanding = Math.max(0, Number(entry?.outstanding) || 0);
           const interest = Math.max(0, Number(entry?.interestAccrued) || 0);
+          const interestBase = Math.max(0, Number(entry?.interestAccruedBase) || 0);
+          const interestRealtime = Math.max(0, Number(entry?.interestAccruedRealtime) || 0);
           const paid = Math.max(0, Number(entry?.paidTotal) || 0);
           const principalOutstanding = Math.max(0, Number(entry?.principalOutstanding) || 0);
           const principalPaid = Math.max(0, original - principalOutstanding);
@@ -5853,6 +5857,8 @@
           acc.original += original;
           acc.outstanding += outstanding;
           acc.interest += interest;
+          acc.interestBase += interestBase;
+          acc.interestRealtime += interestRealtime;
           acc.interestPaid += interestPaid;
           acc.interestGenerated += interestGenerated;
           acc.paid += paid;
@@ -5866,6 +5872,8 @@
           original: 0,
           outstanding: 0,
           interest: 0,
+          interestBase: 0,
+          interestRealtime: 0,
           interestPaid: 0,
           interestGenerated: 0,
           paid: 0,
@@ -5875,11 +5883,14 @@
         });
       }, [isBinance, binanceLoanLedger, loanAmount, ltvByTicker, defaultLtv]);
       const binanceOriginalPrincipalTotal = isBinance ? binanceLedgerTotals.original : totalLoanPairsDebt;
+      const binanceInterestAccruedBaseTotal = isBinance ? binanceLedgerTotals.interestBase : totalLoanPairsAccrued;
+      const binanceInterestRealtimeTotal = isBinance ? binanceLedgerTotals.interestRealtime : 0;
       const binanceInterestAccruedTotal = isBinance ? binanceLedgerTotals.interest : totalLoanPairsAccrued;
       const binanceInterestPaidTotal = isBinance ? binanceLedgerTotals.interestPaid : 0;
-      const binanceInterestTotal = isBinance
-        ? Math.max(0, binanceInterestAccruedTotal + binanceInterestPaidTotal)
-        : 0;
+      const binanceInterestGeneratedTotal = isBinance
+        ? Math.max(0, binanceLedgerTotals.interestGenerated)
+        : binanceInterestAccruedTotal;
+      const binanceTotalToRepay = Math.max(0, binanceOriginalPrincipalTotal + binanceInterestAccruedTotal);
       const binanceInitialCollateralTotal = binanceLedgerTotals.initialCollateral;
       const binanceInitialLtvAverage = binanceLedgerTotals.initialLtvCount > 0
         ? binanceLedgerTotals.initialLtvSum / binanceLedgerTotals.initialLtvCount
@@ -5887,7 +5898,6 @@
       const binanceInitialLtvFromCollateral = binanceInitialCollateralTotal > 0
         ? binanceOriginalPrincipalTotal / binanceInitialCollateralTotal
         : null;
-      const binanceTotalToRepay = Math.max(0, binanceOriginalPrincipalTotal + binanceInterestTotal);
       const binanceInitialLtv = Number.isFinite(binanceInitialLtvAverage)
         ? binanceInitialLtvAverage
         : (Number.isFinite(binanceInitialLtvFromCollateral) ? binanceInitialLtvFromCollateral : 0);
@@ -6553,14 +6563,34 @@
         }
         return parts.join(' · ');
       }, [earnEligible, topEarnAprEntry, minBalancePerks, formatUsd, forceOn]);
+      const binanceInterestDetail = (() => {
+        if (!(binanceInterestAccruedTotal > 0) && !(binanceInterestPaidTotal > 0)) return null;
+        const pieces = [];
+        if (binanceInterestAccruedTotal > 0) {
+          const breakdown = [];
+          if (binanceInterestAccruedBaseTotal > 0) {
+            breakdown.push(`devengado ${formatLoan(binanceInterestAccruedBaseTotal)}`);
+          }
+          if (binanceInterestRealtimeTotal > 0) {
+            breakdown.push(`diario ${formatLoan(binanceInterestRealtimeTotal)}`);
+          }
+          const pendingLabel = breakdown.length > 0
+            ? `${breakdown.join(' + ')} = ${formatLoan(binanceInterestAccruedTotal)}`
+            : formatLoan(binanceInterestAccruedTotal);
+          pieces.push(`Interés pendiente ${pendingLabel}`);
+        }
+        if (binanceInterestPaidTotal > 0) {
+          pieces.push(`Interés pagado ${formatLoan(binanceInterestPaidTotal)}`);
+        }
+        if (binanceInterestGeneratedTotal > binanceInterestAccruedTotal + binanceInterestPaidTotal) {
+          pieces.push(`Generado ${formatLoan(binanceInterestGeneratedTotal)}`);
+        }
+        return pieces.join(' · ');
+      })();
       const binanceRepaySubtle = binanceTotalToRepay > 0
         ? [
             `Capital ${formatLoan(binanceOriginalPrincipalTotal)}`,
-            binanceInterestTotal > 0
-              ? `Interés ${formatLoan(binanceInterestTotal)}${binanceInterestPaidTotal > 0
-                ? ` (pagado ${formatLoan(binanceInterestPaidTotal)}, pendiente ${formatLoan(binanceInterestAccruedTotal)})`
-                : ''}`
-              : null,
+            binanceInterestDetail,
           ].filter(Boolean).join(' · ')
         : '—';
       const binanceExtraCollateralNeeded = ltvHealthyThreshold > 0 ? Math.max(0, binanceLoanAfterPlan / ltvHealthyThreshold - binanceCollateralAfterPlan) : 0;
