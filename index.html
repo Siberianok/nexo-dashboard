@@ -5877,7 +5877,9 @@
       const binanceOriginalPrincipalTotal = isBinance ? binanceLedgerTotals.original : totalLoanPairsDebt;
       const binanceInterestAccruedTotal = isBinance ? binanceLedgerTotals.interest : totalLoanPairsAccrued;
       const binanceInterestPaidTotal = isBinance ? binanceLedgerTotals.interestPaid : 0;
-      const binanceInterestGeneratedTotal = isBinance ? binanceLedgerTotals.interestGenerated : 0;
+      const binanceInterestTotal = isBinance
+        ? Math.max(0, binanceInterestAccruedTotal + binanceInterestPaidTotal)
+        : 0;
       const binanceInitialCollateralTotal = binanceLedgerTotals.initialCollateral;
       const binanceInitialLtvAverage = binanceLedgerTotals.initialLtvCount > 0
         ? binanceLedgerTotals.initialLtvSum / binanceLedgerTotals.initialLtvCount
@@ -5885,7 +5887,7 @@
       const binanceInitialLtvFromCollateral = binanceInitialCollateralTotal > 0
         ? binanceOriginalPrincipalTotal / binanceInitialCollateralTotal
         : null;
-      const binanceTotalToRepay = Math.max(0, binanceOriginalPrincipalTotal + binanceInterestGeneratedTotal);
+      const binanceTotalToRepay = Math.max(0, binanceOriginalPrincipalTotal + binanceInterestTotal);
       const binanceInitialLtv = Number.isFinite(binanceInitialLtvAverage)
         ? binanceInitialLtvAverage
         : (Number.isFinite(binanceInitialLtvFromCollateral) ? binanceInitialLtvFromCollateral : 0);
@@ -6554,8 +6556,8 @@
       const binanceRepaySubtle = binanceTotalToRepay > 0
         ? [
             `Capital ${formatLoan(binanceOriginalPrincipalTotal)}`,
-            binanceInterestGeneratedTotal > 0
-              ? `Interés ${formatLoan(binanceInterestGeneratedTotal)}${binanceInterestPaidTotal > 0
+            binanceInterestTotal > 0
+              ? `Interés ${formatLoan(binanceInterestTotal)}${binanceInterestPaidTotal > 0
                 ? ` (pagado ${formatLoan(binanceInterestPaidTotal)}, pendiente ${formatLoan(binanceInterestAccruedTotal)})`
                 : ''}`
               : null,
