@@ -1141,6 +1141,25 @@
       box-shadow:var(--theme-tab-shadow,0 8px 18px rgba(32,82,193,0.1));
       transition:transform .22s ease,box-shadow .22s ease,border-color .22s ease;
     }
+    .nx-tab--contrast{
+      position:relative;
+    }
+    body[data-theme*="dark"] .nx-tab--contrast{
+      background:linear-gradient(150deg,rgba(248,250,252,0.96) 0%,rgba(226,232,240,0.9) 100%);
+      border-color:rgba(148,163,184,0.38);
+      box-shadow:0 14px 28px rgba(15,23,42,0.22);
+      color:#0f172a;
+    }
+    body[data-theme*="dark"] .nx-tab--contrast .text-neutral-900,
+    body[data-theme*="dark"] .nx-tab--contrast .text-neutral-800,
+    body[data-theme*="dark"] .nx-tab--contrast .text-neutral-700{
+      color:#0f172a !important;
+    }
+    body[data-theme*="dark"] .nx-tab--contrast .text-neutral-600,
+    body[data-theme*="dark"] .nx-tab--contrast .text-neutral-500,
+    body[data-theme*="dark"] .nx-tab--contrast .text-neutral-400{
+      color:#334155 !important;
+    }
     .nx-tab:hover{
       transform:translateY(-2px);
       box-shadow:var(--theme-tab-hover-shadow,0 12px 24px rgba(32,82,193,0.16));
@@ -6398,6 +6417,139 @@
           return parts.join(' ');
         }).join(' · ');
       }, [totals.withValue, totals.totalCollateralValue, formatUsd]);
+      const dominantAsset = useMemo(() => {
+        const entries = totals.withValue || [];
+        if (entries.length === 0) return null;
+        return entries.reduce((best, current) => {
+          const currentValue = Number(current?.value) || 0;
+          const bestValue = Number(best?.value) || 0;
+          return currentValue > bestValue ? current : best;
+        }, null);
+      }, [totals.withValue]);
+      const collateralActiveCount = useMemo(
+        () => (totals.withValue || []).filter((asset) => asset.useAsCollateral && Number(asset?.value) > 0).length,
+        [totals.withValue],
+      );
+      const balanceSubtle = useMemo(() => {
+        const parts = [];
+        const count = totals.withValue.length;
+        parts.push(count > 0 ? `${count} ${count === 1 ? 'activo' : 'activos'}` : 'Sin activos');
+        if (dominantAsset && Number(dominantAsset.value) > 0) {
+          const tickerLabel = (dominantAsset.ticker || '').trim();
+          const baseLabel = tickerLabel || (dominantAsset.name || '—');
+          parts.push(`Mayor ${baseLabel.toUpperCase ? baseLabel.toUpperCase() : baseLabel} ${formatUsd(dominantAsset.value)}`);
+        }
+        return parts.filter(Boolean).join(' · ');
+      }, [totals.withValue, dominantAsset, formatUsd]);
+      const collateralSummaryLabel = useMemo(() => {
+        if (!(totals.totalCollateralValue > 0)) {
+          return 'Sin colateral activo';
+        }
+        const noun = collateralActiveCount === 1 ? 'colateral activo' : 'colaterales activos';
+        return `${collateralActiveCount} ${noun}`;
+      }, [collateralActiveCount, totals.totalCollateralValue]);
+      const loyaltyDetail = useMemo(() => {
+        if (!loyalty) return 'Sin programa de loyalty';
+        const parts = [];
+        if (loyaltyTicker) {
+          const loyaltyBalance = Number.isFinite(totals.totalLoyalty) ? formatUsd(totals.totalLoyalty) : formatUsd(0);
+          parts.push(`${loyaltyTicker} ${loyaltyBalance}`);
+        }
+        const ratio = loyaltyModelActive === 'vsTotal' ? totals.ratioVsTotal : totals.ratioVsRest;
+        if (Number.isFinite(ratio) && ratio > 0) {
+          const digits = ratio >= 1 ? 0 : ratio >= 0.1 ? 1 : 2;
+          parts.push(`Ratio ${toPct(ratio, digits)}`);
+        }
+        if (totals.total < minBalancePerks) {
+          parts.push('Balance < mínimo');
+        }
+        if (parts.length === 0) {
+          parts.push('Sin balance loyalty');
+        }
+        return parts.join(' · ');
+      }, [loyalty, loyaltyTicker, totals.totalLoyalty, totals.ratioVsTotal, totals.ratioVsRest, totals.total, minBalancePerks, loyaltyModelActive]);
+      const aprSubtle = useMemo(() => {
+        const parts = [];
+        if (loanAmountUsd > 0) {
+          parts.push(`Monto ${formatUsd(loanAmountUsd)}`);
+        } else {
+          parts.push('Sin préstamo configurado');
+        }
+        if (loyalty && loyaltyTier && loyaltyTier !== '—') {
+          parts.push(`Tier ${loyaltyTier}`);
+        }
+        if (meetsLowCost) {
+          parts.push('Low-Cost activo');
+        } else if (recommendedLoanAtTarget > 0 && loanAmountUsd > recommendedLoanAtTarget) {
+          parts.push('Excede cap Low-Cost');
+        } else if (loyalty && lowCostEligibleTiers.length > 0 && loyaltyTier && !lowCostEligibleTiers.includes(loyaltyTier)) {
+          parts.push('Tier sin beneficio');
+        } else {
+          parts.push('Tasa base');
+        }
+        return parts.join(' · ');
+      }, [loanAmountUsd, formatUsd, loyalty, loyaltyTier, meetsLowCost, recommendedLoanAtTarget, lowCostEligibleTiers]);
+      const capLowCostSubtle = useMemo(() => {
+        const parts = [`Objetivo ${toPct(targetLtv, 0)}`];
+        parts.push(lowCostHeadroom > 0 ? `Margen ${formatUsd(lowCostHeadroom)}` : 'Sin margen');
+        return parts.join(' · ');
+      }, [targetLtv, lowCostHeadroom, formatUsd]);
+      const ltvTopSubtle = useMemo(() => {
+        if (!(totals.totalCollateralValue > 0)) {
+          return 'Agrega colateral para habilitar';
+        }
+        const parts = [collateralSummaryLabel, `LTV base ${toPct(defaultLtv, 0)}`];
+        return parts.filter(Boolean).join(' · ');
+      }, [collateralSummaryLabel, totals.totalCollateralValue, defaultLtv]);
+      const loanTargetSubtle = useMemo(() => {
+        const parts = [`≤ ${toPct(targetLtv, 0)} LTV`, `Cap ${formatUsd(recommendedLoanAtTarget)}`];
+        parts.push(extraCollateralForTarget > 0 ? `Faltan ${formatUsd(extraCollateralForTarget)}` : 'Colateral suficiente');
+        return parts.join(' · ');
+      }, [targetLtv, recommendedLoanAtTarget, extraCollateralForTarget, formatUsd]);
+      const interestSubtle = useMemo(() => {
+        const parts = [`${daysUntilRepay} ${daysUntilRepay === 1 ? 'día' : 'días'}`];
+        if (interestCalc.early > 0) {
+          parts.push('Incluye early rule');
+        }
+        return parts.join(' · ');
+      }, [daysUntilRepay, interestCalc.early]);
+      const topEarnAprEntry = useMemo(() => {
+        const entries = Object.entries(earnAprTop || {});
+        if (entries.length === 0) return null;
+        return entries.reduce((best, [ticker, raw]) => {
+          const apr = Number(raw);
+          if (!Number.isFinite(apr) || apr < 0) return best;
+          if (!best || apr > best.value) {
+            return { ticker, value: apr };
+          }
+          return best;
+        }, null);
+      }, [earnAprTop]);
+      const earnDetail = useMemo(() => {
+        if (earnEligible) {
+          const parts = [];
+          if (topEarnAprEntry && topEarnAprEntry.value > 0) {
+            const digits = topEarnAprEntry.value >= 0.1 ? 1 : 2;
+            parts.push(`Top ${topEarnAprEntry.ticker} ${toPct(topEarnAprEntry.value, digits)}`);
+          } else {
+            parts.push('Sin tasas registradas');
+          }
+          if (minBalancePerks > 0) {
+            parts.push(`Savings ≥ ${formatUsd(minBalancePerks)}`);
+          } else {
+            parts.push('Disponible');
+          }
+          return parts.join(' · ');
+        }
+        if (forceOn) {
+          return 'Forzado (sim)';
+        }
+        const parts = ['No elegible'];
+        if (minBalancePerks > 0) {
+          parts.push(`Requiere ${formatUsd(minBalancePerks)}`);
+        }
+        return parts.join(' · ');
+      }, [earnEligible, topEarnAprEntry, minBalancePerks, formatUsd, forceOn]);
       const binanceRepaySubtle = binanceTotalToRepay > 0
         ? [
             `Capital ${formatLoan(binanceOriginalPrincipalTotal)}`,
@@ -6946,15 +7098,15 @@
                   subtle: `${toPct(monthlyInterestRateValue, 2)} ${monthlyInterestRateLabel}`,
                 },
               ] : [
-                { key: 'balance', title: 'Balance total', value: formatUsd(totals.total) },
-                { key: 'loyalty', title: loyalty ? (loyalty.kpiLabel || 'Loyalty Tier') : 'Programa', value: loyalty ? loyaltyTier : '—', subtle: loyalty && totals.total < minBalancePerks ? '(balance < mínimo)' : undefined },
-                { key: 'apr', title: 'APR crédito', value: toPct(chosenAPR, 2), subtle: meetsLowCost ? 'Low-Cost activo' : undefined },
-                { key: 'cap-lowcost', title: 'Cap. Low-Cost (≤20% LTV)', value: formatUsd(capLowCost), subtle: 'potencial' },
-                { key: 'ltv-top', title: 'Tope por LTVs', value: formatUsd(totals.maxBorrow) },
-                { key: 'loan-target', title: 'Préstamo recomendado (≤20%)', value: formatUsd(recommendedLoanAtTarget) },
-                { key: 'interest-total', title: 'Interés hasta repago', value: formatLoan(interestCalc.total), subtle: `${daysUntilRepay} días` },
+                { key: 'balance', title: 'Balance total', value: formatUsd(totals.total), subtle: balanceSubtle },
+                { key: 'loyalty', title: loyalty ? (loyalty.kpiLabel || 'Loyalty Tier') : 'Programa', value: loyalty ? loyaltyTier : '—', subtle: loyaltyDetail },
+                { key: 'apr', title: 'APR crédito', value: toPct(chosenAPR, 2), subtle: aprSubtle },
+                { key: 'cap-lowcost', title: 'Cap. Low-Cost (≤20% LTV)', value: formatUsd(capLowCost), subtle: capLowCostSubtle },
+                { key: 'ltv-top', title: 'Tope por LTVs', value: formatUsd(totals.maxBorrow), subtle: ltvTopSubtle },
+                { key: 'loan-target', title: 'Préstamo recomendado (≤20%)', value: formatUsd(recommendedLoanAtTarget), subtle: loanTargetSubtle },
+                { key: 'interest-total', title: 'Interés hasta repago', value: formatLoan(interestCalc.total), subtle: interestSubtle },
                 { key: 'repay-total', title: 'Total a devolver', value: formatLoan(totalProjectedOutflows), subtle: repayTotalSubtle },
-                { key: 'earn-monthly', title: 'Earn mensual (hasta)', value: formatUsd(earnMonthly), subtle: earnEligible ? (minBalancePerks > 0 ? `Savings ≥ US$${formatDecimal(minBalancePerks, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : undefined) : (forceOn ? 'forzado (sim)' : 'no elegible') },
+                { key: 'earn-monthly', title: 'Earn mensual (hasta)', value: formatUsd(earnMonthly), subtle: earnDetail },
               ]).map((item) => {
                 const highlightKeys = ['apr-net', 'ltv-current', 'ltv-plan'];
                 const variant = highlightKeys.includes(item.key) ? 'highlight' : (item.variant || 'button');
@@ -7709,7 +7861,7 @@
             <div className="space-y-6">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
                 {summaryTiles.map((tile) => (
-                  <div key={tile.label} className="nx-tab px-4 py-3 text-neutral-700">
+                  <div key={tile.label} className="nx-tab nx-tab--contrast px-4 py-3 text-neutral-700">
                     <div className="text-xs font-semibold uppercase tracking-wide text-neutral-600">{tile.label}</div>
                     <div className={`text-lg font-semibold ${tile.tone}`}>{tile.value}</div>
                     {tile.hint && <div className="text-[11px] text-neutral-600/80">{tile.hint}</div>}
@@ -8450,7 +8602,7 @@
             {ranked.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
                 {ranked.slice(0, 3).map((item, idx) => (
-                  <div key={`rank-${item.strategy.id}`} className="nx-tab px-4 py-3 text-neutral-700">
+                  <div key={`rank-${item.strategy.id}`} className="nx-tab nx-tab--contrast px-4 py-3 text-neutral-700">
                     <div className="text-[11px] uppercase text-neutral-400">Top {idx + 1}</div>
                     <div className="text-sm font-semibold text-neutral-700">{item.strategy.label || item.strategy.id}</div>
                     <div className="text-[11px] text-neutral-500">Spread ajustado {formatPercent(item.metrics.adjustedAnnual, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
