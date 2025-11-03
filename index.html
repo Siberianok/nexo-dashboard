@@ -5962,7 +5962,7 @@
       const binanceInterestGeneratedTotal = isBinance
         ? Math.max(0, binanceLedgerTotals.interestGenerated)
         : binanceInterestAccruedTotal;
-      const binanceTotalToRepay = Math.max(0, binanceOriginalPrincipalTotal + binanceInterestAccruedTotal);
+      const binanceTotalToRepay = Math.max(0, binanceOriginalPrincipalTotal + binanceInterestGeneratedTotal);
       const binanceInitialCollateralTotal = binanceLedgerTotals.initialCollateral;
       const binanceInitialLtvAverage = binanceLedgerTotals.initialLtvCount > 0
         ? binanceLedgerTotals.initialLtvSum / binanceLedgerTotals.initialLtvCount
@@ -6388,7 +6388,7 @@
         ? plannedOutstanding
         : Math.max(0, binanceOriginalPrincipalTotal + binanceInterestAccruedTotal - binancePaidDisplayTotal);
       const projectedFinalPayoff = Math.max(0, cashflowDerived?.projectedFinalPayoff || 0);
-      const totalProjectedOutflows = Math.max(0, cashflowDerived?.totalCost || 0);
+      const totalProjectedOutflows = Math.max(0, totalRepayPrincipal + totalRepayInterest);
       const totalRepayPrincipal = Math.max(0, scheduledPrincipal + plannedOutstandingPrincipal);
       const totalRepayInterest = Math.max(0, scheduledInterest + plannedAccruedInterest);
       const repayTotalSubtle = totalProjectedOutflows > 0
