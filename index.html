@@ -917,6 +917,26 @@
       -webkit-line-clamp:2;
       overflow:hidden;
     }
+    .nx-kpi__title-wrapper{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:.45rem;
+      line-height:1.1;
+    }
+    .nx-kpi__title-text{
+      display:inline-flex;
+      align-items:center;
+      line-height:1.2;
+    }
+    .nx-emoji{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      line-height:1;
+    }
+    .nx-emoji--title{font-size:1.65rem;}
+    .nx-emoji--idea{font-size:1.85rem;}
     .nx-kpi-btn::after{
       content:"";
       position:absolute;
@@ -2106,6 +2126,58 @@
       { code: "MXN", label: "MXN — Peso mexicano" },
     ];
     const { useState, useEffect, useMemo, useRef, useCallback } = React;
+
+    const EMOJI_CODEPOINT_RANGES = Object.freeze([
+      [0x1f300, 0x1faff],
+      [0x2600, 0x26ff],
+      [0x2700, 0x27bf],
+    ]);
+
+    const isEmojiCodePoint = (codePoint) => (
+      Number.isInteger(codePoint)
+      && EMOJI_CODEPOINT_RANGES.some(([start, end]) => codePoint >= start && codePoint <= end)
+    );
+
+    const extractLeadingEmoji = (value) => {
+      if (typeof value !== 'string') return null;
+      const trimmed = value.trimStart();
+      if (!trimmed) return null;
+
+      let index = 0;
+      const firstCodePoint = trimmed.codePointAt(index);
+      if (!isEmojiCodePoint(firstCodePoint)) {
+        return null;
+      }
+
+      let emoji = String.fromCodePoint(firstCodePoint);
+      index += firstCodePoint > 0xFFFF ? 2 : 1;
+
+      while (trimmed[index] === '\uFE0F') {
+        emoji += '\uFE0F';
+        index += 1;
+      }
+
+      while (trimmed[index] === '\u200D') {
+        const nextCodePoint = trimmed.codePointAt(index + 1);
+        if (!isEmojiCodePoint(nextCodePoint)) {
+          break;
+        }
+        emoji += '\u200D' + String.fromCodePoint(nextCodePoint);
+        index += 1 + (nextCodePoint > 0xFFFF ? 2 : 1);
+        while (trimmed[index] === '\uFE0F') {
+          emoji += '\uFE0F';
+          index += 1;
+        }
+      }
+
+      const consumedFromOriginal = value.length - trimmed.length + index;
+      const remainder = value.slice(consumedFromOriginal).trimStart();
+
+      return {
+        emoji,
+        remainder,
+      };
+    };
 
     const ALERT_TONE_STYLES = Object.freeze({
       info: { border: 'border-sky-200', bg: 'bg-sky-50', text: 'text-sky-700' },
@@ -7708,7 +7780,7 @@
                           className="flex items-center justify-between gap-3"
                         >
                           <div className="flex items-center gap-3">
-                            <span className="text-xl" aria-hidden="true">{idea.icon}</span>
+                            <span className="nx-emoji nx-emoji--idea" aria-hidden="true">{idea.icon}</span>
                             <div>
                               <div className="text-sm font-semibold text-neutral-800">{idea.title}</div>
                               <div className="text-xs text-neutral-500">{idea.status}</div>
@@ -8697,14 +8769,31 @@
       if (variant === 'highlight') {
         containerClasses.push(highlightClass);
       }
+      const titleNode = useMemo(() => {
+        if (React.isValidElement(title)) {
+          return title;
+        }
+        if (typeof title === 'string') {
+          const parsed = extractLeadingEmoji(title);
+          if (parsed) {
+            return (
+              <span className="nx-kpi__title-wrapper">
+                <span className="nx-emoji nx-emoji--title" aria-hidden="true">{parsed.emoji}</span>
+                {parsed.remainder ? <span className="nx-kpi__title-text">{parsed.remainder}</span> : null}
+              </span>
+            );
+          }
+        }
+        return <span>{title}</span>;
+      }, [title]);
       return (
         <div
           className={containerClasses.join(' ')}
           role="button"
-          aria-label={title}
+          aria-label={typeof title === 'string' ? title : undefined}
         >
           <div className={`nx-kpi__title text-xs uppercase tracking-wide ${titleClass}`}>
-            <span>{title}</span>
+            {titleNode}
           </div>
           <div className={`nx-kpi__value mt-1 text-xl font-bold ${valueClass}`}>
             <span>{value}</span>
