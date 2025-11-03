@@ -8895,6 +8895,8 @@
       const valuePct = clamp(value);
       const pointerAngle = angleFor(valuePct);
       const pointerTip = polarPoint(valuePct, radius - ring * 0.25);
+      const clampUnit = (v) => Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0));
+      const lerp = (a, b, t) => a + (b - a) * t;
       const pointerBaseRadius = 22;
       const baseLeft = {
         x: center + pointerBaseRadius * Math.cos(pointerAngle + Math.PI / 2),
@@ -8914,8 +8916,12 @@
         danger: { text: 'nx-text-danger', bg: 'nx-bg-danger-soft nx-border-danger', dot: '#ef4444' },
       };
       const statusTone = toneStyles[toneKey] ?? toneStyles.warn;
-      const valueLabelY = center + radius * 0.44;
-      const statusLabelY = valueLabelY + 24;
+      const pointerRelative = ((pointerTip.y - center) / radius);
+      const downwardFactor = clampUnit((pointerRelative - 0.05) / 0.75);
+      const valueOffsetUp = 0.44;
+      const valueOffsetDown = -0.18;
+      const valueLabelY = center + radius * lerp(valueOffsetUp, valueOffsetDown, downwardFactor);
+      const statusLabelY = valueLabelY + lerp(24, 32, downwardFactor);
       return (
         <div className="flex flex-col items-center">
           <svg viewBox={`0 0 ${size} ${size}`} className="w-full max-w-[340px]">
