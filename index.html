@@ -1240,6 +1240,7 @@
       '--theme-table-header-bg': 'rgba(2,6,19,0.92)',
       '--theme-table-header-text': '#f8fafc',
       '--theme-table-sticky-bg': 'rgba(4,9,18,0.9)',
+      '--theme-table-sticky-input-text': '#0f172a',
       '--theme-header-bg': 'linear-gradient(135deg,rgba(1,5,15,0.92) 0%,rgba(12,21,38,0.88) 50%,rgba(28,37,54,0.82) 100%)',
       '--theme-header-border': 'rgba(148,163,184,0.32)',
       '--theme-header-shadow': '0 28px 60px rgba(1,6,20,0.72)',
@@ -7517,14 +7518,24 @@
                             className="sticky left-0 z-10"
                             style={{ background: 'var(--theme-table-sticky-bg, rgba(255,255,255,0.95))', minWidth: '12rem' }}
                           >
-                            <input value={a.name} onChange={(e) => handleAssetChange(a.id, { name: e.target.value })} className="w-full rounded-xl border border-neutral-300 px-2 py-1 text-center" />
+                            <input
+                              value={a.name}
+                              onChange={(e) => handleAssetChange(a.id, { name: e.target.value })}
+                              className="w-full rounded-xl border border-neutral-300 px-2 py-1 text-center"
+                              style={{ color: 'var(--theme-table-sticky-input-text, #0f172a)' }}
+                            />
                           </Td>
                           <Td
                             align="center"
                             className="sticky z-10"
                             style={{ background: 'var(--theme-table-sticky-bg, rgba(255,255,255,0.95))', minWidth: '7rem', left: '12rem' }}
                           >
-                            <input value={a.ticker} onChange={(e) => { const newT = sanitizeTicker(e.target.value); const newL = ltvByTicker[newT] ?? defaultLtv; handleAssetChange(a.id, { ticker: newT, ltv: newL }); if (a.priceAuto !== false) { fetchPricesForTickers([newT]); } }} className="w-full rounded-xl border border-neutral-300 px-2 py-1 text-center" />
+                            <input
+                              value={a.ticker}
+                              onChange={(e) => { const newT = sanitizeTicker(e.target.value); const newL = ltvByTicker[newT] ?? defaultLtv; handleAssetChange(a.id, { ticker: newT, ltv: newL }); if (a.priceAuto !== false) { fetchPricesForTickers([newT]); } }}
+                              className="w-full rounded-xl border border-neutral-300 px-2 py-1 text-center"
+                              style={{ color: 'var(--theme-table-sticky-input-text, #0f172a)' }}
+                            />
                           </Td>
                         <Td align="center">
                           <LocaleNumberInput
