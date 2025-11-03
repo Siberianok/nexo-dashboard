@@ -7077,17 +7077,17 @@
           <div className="mx-auto max-w-7xl px-4 py-8 space-y-12">
             <section className="flex gap-4 overflow-x-auto pb-2 md:grid md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 md:gap-4 md:overflow-visible md:[grid-auto-rows:minmax(0,1fr)] snap-x snap-mandatory">
               {(isBinance ? [
-                { key: 'loan-current', title: 'Préstamo original', value: formatLoan(binanceOriginalPrincipalTotal), subtle: binanceOriginalPrincipalTotal > 0 ? 'Capital original' : '—' },
-                { key: 'repay-total', title: 'Total a devolver', value: formatLoan(binanceTotalToRepay), subtle: binanceRepaySubtle },
-                { key: 'loan-paid', title: 'Pagos hechos', value: formatLoan(binancePaidDisplayTotal), subtle: binancePaidSubtle },
-                { key: 'loan-plan', title: 'Préstamo neto', value: formatLoan(binanceNetLoanValue), subtle: binanceLoanNetSubtle },
-                { key: 'collateral-current', title: 'Colateral actual', value: formatUsd(totals.totalCollateralValue), subtle: collateralCompositionSubtle },
-                { key: 'ltv-current', title: 'LTV inicial', value: toPct(binanceInitialLtv, 2), tone: binanceInitialLtvTone, subtle: binanceInitialCollateralSubtle },
-                { key: 'ltv-plan', title: 'LTV neto', value: toPct(currentOverallLTV, 2), tone: binanceCurrentLtvTone, subtle: binanceNetLtvSubtle },
-                { key: 'apr', title: 'Tasa anual (APR)', value: toPct(isBinance ? binanceBaseAnnualRate : chosenAPR, 2), subtle: binanceBorrowLabel || undefined },
+                { key: 'loan-current', title: '💰 Préstamo original', value: formatLoan(binanceOriginalPrincipalTotal), subtle: binanceOriginalPrincipalTotal > 0 ? 'Capital original' : '—' },
+                { key: 'repay-total', title: '💸 Total a devolver', value: formatLoan(binanceTotalToRepay), subtle: binanceRepaySubtle },
+                { key: 'loan-paid', title: '✅ Pagos hechos', value: formatLoan(binancePaidDisplayTotal), subtle: binancePaidSubtle },
+                { key: 'loan-plan', title: '📊 Préstamo neto', value: formatLoan(binanceNetLoanValue), subtle: binanceLoanNetSubtle },
+                { key: 'collateral-current', title: '🛡️ Colateral actual', value: formatUsd(totals.totalCollateralValue), subtle: collateralCompositionSubtle },
+                { key: 'ltv-current', title: '📈 LTV inicial', value: toPct(binanceInitialLtv, 2), tone: binanceInitialLtvTone, subtle: binanceInitialCollateralSubtle },
+                { key: 'ltv-plan', title: '📉 LTV neto', value: toPct(currentOverallLTV, 2), tone: binanceCurrentLtvTone, subtle: binanceNetLtvSubtle },
+                { key: 'apr', title: '📅 Tasa anual (APR)', value: toPct(isBinance ? binanceBaseAnnualRate : chosenAPR, 2), subtle: binanceBorrowLabel || undefined },
                 {
                   key: 'apr-net',
-                  title: 'Tasa anual neta',
+                  title: '⚖️ Tasa anual neta',
                   value: toPct(isBinance ? binanceNetAnnualRate : netAnnualRate, 2),
                   subtle: binanceNetAprSubtle,
                   tone: isBinance
@@ -7096,20 +7096,20 @@
                 },
                 {
                   key: 'interest-monthly',
-                  title: 'Interés mensual estimado',
+                  title: '🧾 Interés mensual estimado',
                   value: formatLoan(monthlyLoanCost),
                   subtle: `${toPct(monthlyInterestRateValue, 2)} ${monthlyInterestRateLabel}`,
                 },
               ] : [
-                { key: 'balance', title: 'Balance total', value: formatUsd(totals.total), subtle: balanceSubtle },
-                { key: 'loyalty', title: loyalty ? (loyalty.kpiLabel || 'Loyalty Tier') : 'Programa', value: loyalty ? loyaltyTier : '—', subtle: loyaltyDetail },
-                { key: 'apr', title: 'APR crédito', value: toPct(chosenAPR, 2), subtle: aprSubtle },
-                { key: 'cap-lowcost', title: 'Cap. Low-Cost (≤20% LTV)', value: formatUsd(capLowCost), subtle: capLowCostSubtle },
-                { key: 'ltv-top', title: 'Tope por LTVs', value: formatUsd(totals.maxBorrow), subtle: ltvTopSubtle },
-                { key: 'loan-target', title: 'Préstamo recomendado (≤20%)', value: formatUsd(recommendedLoanAtTarget), subtle: loanTargetSubtle },
-                { key: 'interest-total', title: 'Interés hasta repago', value: formatLoan(interestCalc.total), subtle: interestSubtle },
-                { key: 'repay-total', title: 'Total a devolver', value: formatLoan(totalProjectedOutflows), subtle: repayTotalSubtle },
-                { key: 'earn-monthly', title: 'Earn mensual (hasta)', value: formatUsd(earnMonthly), subtle: earnDetail },
+                { key: 'balance', title: '💼 Balance total', value: formatUsd(totals.total), subtle: balanceSubtle },
+                { key: 'loyalty', title: loyalty ? `🌟 ${loyalty.kpiLabel || 'Loyalty Tier'}` : '🌟 Programa', value: loyalty ? loyaltyTier : '—', subtle: loyaltyDetail },
+                { key: 'apr', title: '📊 APR crédito', value: toPct(chosenAPR, 2), subtle: aprSubtle },
+                { key: 'cap-lowcost', title: '🎯 Cap. Low-Cost (≤20% LTV)', value: formatUsd(capLowCost), subtle: capLowCostSubtle },
+                { key: 'ltv-top', title: '📏 Tope por LTVs', value: formatUsd(totals.maxBorrow), subtle: ltvTopSubtle },
+                { key: 'loan-target', title: '🤝 Préstamo recomendado (≤20%)', value: formatUsd(recommendedLoanAtTarget), subtle: loanTargetSubtle },
+                { key: 'interest-total', title: '⏳ Interés hasta repago', value: formatLoan(interestCalc.total), subtle: interestSubtle },
+                { key: 'repay-total', title: '💸 Total a devolver', value: formatLoan(totalProjectedOutflows), subtle: repayTotalSubtle },
+                { key: 'earn-monthly', title: '🌙 Earn mensual (hasta)', value: formatUsd(earnMonthly), subtle: earnDetail },
               ]).map((item) => {
                 const highlightKeys = ['apr-net', 'ltv-current', 'ltv-plan'];
                 const variant = highlightKeys.includes(item.key) ? 'highlight' : (item.variant || 'button');
