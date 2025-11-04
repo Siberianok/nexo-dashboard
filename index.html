@@ -138,6 +138,18 @@
   </script>
   <script>
   (function () {
+    const DEFAULT_STORAGE_RECOVERY_HINT = 'Sugerencia: revisá los permisos de almacenamiento del navegador o usá los botones "Reset" en Plantillas & datos.';
+    const buildStorageAlert = ({ key, title = 'Preferencias no disponibles', message, error, hint = DEFAULT_STORAGE_RECOVERY_HINT, tone = 'warn' }) => {
+      const detail = error ? ` Detalle: ${error?.message || error}.` : '';
+      return {
+        key,
+        title,
+        message: `${message}${detail}`,
+        hint,
+        tone,
+      };
+    };
+
     const LOG_PREFIX = '[nexo-sim]';
     const NAMESPACE = '__nexoSim';
     const DEFAULT_CONFIG = {
@@ -2242,6 +2254,7 @@
     const DEFAULT_THEME = 'nexo';
 
     const SIM_MODEL_CONFIG_DOM_ID = 'sim-model-config';
+    const SIM_MODEL_STORAGE_KEY = 'spm_sim_model_config';
     const createDefaultSimModelConfig = () => ({
       version: 1,
       updatedAt: null,
@@ -2256,7 +2269,88 @@
       return num;
     };
 
-    const readSimModelConfigFromDom = () => {
+    const sanitizeTickerList = (value) => {
+      if (!Array.isArray(value)) return null;
+      const seen = new Set();
+      return value
+        .map((item) => (typeof item === 'string' ? item.trim().toUpperCase() : ''))
+        .filter((item) => {
+          if (!item || seen.has(item)) return false;
+          seen.add(item);
+          return true;
+        });
+    };
+
+    const sanitizeSimModelConfig = (rawConfig, baseConfig = createDefaultSimModelConfig()) => {
+      const base = clone(baseConfig);
+      const source = rawConfig && typeof rawConfig === 'object' ? rawConfig : {};
+      mergeDeep(base, source);
+
+      const cleanLoanCoins = sanitizeTickerList(base.loanCoins);
+      if (cleanLoanCoins && cleanLoanCoins.length) {
+        base.loanCoins = cleanLoanCoins;
+      }
+
+      const cleanSkipAssets = sanitizeTickerList(base.skipAssets);
+      if (cleanSkipAssets) {
+        base.skipAssets = cleanSkipAssets;
+      }
+
+      const cleanFunding = sanitizeTickerList(base.fundingSymbols);
+      if (cleanFunding && cleanFunding.length) {
+        base.fundingSymbols = cleanFunding;
+      }
+
+      if (base.universe && typeof base.universe === 'object') {
+        base.universe = { ...base.universe };
+        const fallbackList = sanitizeTickerList(base.universe.fallback);
+        if (fallbackList) {
+          base.universe.fallback = fallbackList;
+        }
+        const maxAssets = Number(base.universe.maxAssets);
+        if (Number.isFinite(maxAssets) && maxAssets > 0) {
+          base.universe.maxAssets = Math.round(maxAssets);
+        } else if (base.universe.maxAssets != null) {
+          delete base.universe.maxAssets;
+        }
+      }
+
+      if (base.ltvModel && typeof base.ltvModel === 'object') {
+        base.ltvModel = { ...base.ltvModel };
+        if (base.ltvModel.initMin != null) base.ltvModel.initMin = clampValue(base.ltvModel.initMin, 0, 1);
+        if (base.ltvModel.initMax != null) base.ltvModel.initMax = clampValue(base.ltvModel.initMax, 0, 1);
+        if (base.ltvModel.liqCap != null) base.ltvModel.liqCap = clampValue(base.ltvModel.liqCap, 0, 1);
+        if (base.ltvModel.mcStep != null) base.ltvModel.mcStep = clampValue(base.ltvModel.mcStep, 0, 1);
+        if (base.ltvModel.liqStep != null) base.ltvModel.liqStep = clampValue(base.ltvModel.liqStep, 0, 1);
+      }
+
+      const biasSource = base.liquidationBias && typeof base.liquidationBias === 'object'
+        ? base.liquidationBias
+        : {};
+      base.liquidationBias = Object.entries(biasSource).reduce((acc, [key, value]) => {
+        const ticker = typeof key === 'string' ? key.trim().toUpperCase() : '';
+        if (!ticker) return acc;
+        const num = Number(value);
+        if (!Number.isFinite(num)) return acc;
+        acc[ticker] = clampValue(num, -0.5, 0.5);
+        return acc;
+      }, {});
+
+      const defaultVersion = createDefaultSimModelConfig().version;
+      base.version = Number.isFinite(Number(base.version)) ? Number(base.version) : defaultVersion;
+
+      if (base.updatedAt != null) {
+        base.updatedAt = typeof base.updatedAt === 'string'
+          ? base.updatedAt
+          : new Date().toISOString();
+      } else {
+        base.updatedAt = null;
+      }
+
+      return base;
+    };
+
+    const readSimModelConfigFromDom = (onError) => {
       const base = createDefaultSimModelConfig();
       if (typeof document === 'undefined') return base;
       const el = document.getElementById(SIM_MODEL_CONFIG_DOM_ID);
@@ -2265,18 +2359,73 @@
       if (!text) return base;
       try {
         const parsed = JSON.parse(text);
-        const bias = parsed && typeof parsed === 'object' && parsed.liquidationBias && typeof parsed.liquidationBias === 'object'
-          ? parsed.liquidationBias
-          : {};
-        return {
-          ...base,
-          ...parsed,
-          liquidationBias: { ...bias },
-        };
+        return sanitizeSimModelConfig(parsed, base);
       } catch (err) {
-        console.warn('[sim-model-config] JSON inválido, usando default', err);
+        if (typeof onError === 'function') {
+          onError(buildStorageAlert({
+            key: 'read-sim-config-dom',
+            title: 'Configuración dinámica inválida',
+            message: 'No se pudo interpretar el JSON embebido para el modelo dinámico. Se usará la configuración por defecto.',
+            error: err,
+          }));
+        } else {
+          console.warn('[sim-model-config] JSON inválido, usando default', err);
+        }
         return base;
       }
+    };
+
+    const readSimModelConfigFromStorage = (onError, baseConfig = createDefaultSimModelConfig()) => {
+      if (typeof window === 'undefined') return null;
+      try {
+        const raw = localStorage.getItem(SIM_MODEL_STORAGE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') {
+          if (typeof onError === 'function') {
+            onError(buildStorageAlert({
+              key: 'read-sim-config-storage-format',
+              title: 'Configuración dinámica inválida',
+              message: 'La configuración dinámica guardada no tiene un formato válido. Se ignorará el override.',
+            }));
+          }
+          return null;
+        }
+        const version = Number(parsed.version ?? 1);
+        if (version !== 1) {
+          if (typeof onError === 'function') {
+            onError(buildStorageAlert({
+              key: `read-sim-config-storage-version-${version}`,
+              title: 'Configuración desactualizada',
+              message: `La configuración dinámica guardada usa la versión ${parsed.version}, no compatible con esta build.`,
+            }));
+          }
+          return null;
+        }
+        return sanitizeSimModelConfig(parsed, baseConfig);
+      } catch (err) {
+        if (typeof onError === 'function') {
+          onError(buildStorageAlert({
+            key: 'read-sim-config-storage',
+            title: 'Sin acceso a configuración guardada',
+            message: 'No se pudo leer la configuración dinámica personalizada desde el navegador. Se usará el preset base.',
+            error: err,
+          }));
+        }
+        return null;
+      }
+    };
+
+    const readSimModelConfig = (onError) => {
+      const base = readSimModelConfigFromDom(onError);
+      const override = readSimModelConfigFromStorage(onError, base);
+      if (override) {
+        if (!override.updatedAt) {
+          override.updatedAt = new Date().toISOString();
+        }
+        return override;
+      }
+      return base;
     };
 
     const ensureSimModelConfigElement = () => {
@@ -2300,6 +2449,42 @@
         el.textContent = JSON.stringify(config, null, 2);
       } catch (err) {
         console.warn('[sim-model-config] no se pudo escribir en el DOM', err);
+      }
+    };
+
+    const writeSimModelConfigToStorage = (config, onError) => {
+      if (typeof window === 'undefined') return false;
+      try {
+        localStorage.setItem(SIM_MODEL_STORAGE_KEY, JSON.stringify(config, null, 2));
+        return true;
+      } catch (err) {
+        if (typeof onError === 'function') {
+          onError(buildStorageAlert({
+            key: 'write-sim-config-storage',
+            title: 'No se pudo guardar la configuración',
+            message: 'El navegador bloqueó el guardado de la configuración dinámica. Los cambios solo se aplicarán en esta sesión.',
+            error: err,
+          }));
+        }
+        return false;
+      }
+    };
+
+    const clearSimModelConfigStorage = (onError) => {
+      if (typeof window === 'undefined') return false;
+      try {
+        localStorage.removeItem(SIM_MODEL_STORAGE_KEY);
+        return true;
+      } catch (err) {
+        if (typeof onError === 'function') {
+          onError(buildStorageAlert({
+            key: 'clear-sim-config-storage',
+            title: 'No se pudo limpiar la configuración',
+            message: 'El navegador bloqueó la eliminación de la configuración dinámica guardada. Probá borrar el almacenamiento manualmente.',
+            error: err,
+          }));
+        }
+        return false;
       }
     };
 
@@ -4018,12 +4203,43 @@
 
     function SimuladorPrestamos() {
       const initialPlatformId = PLATFORM_IDS[0];
+      const storageAlertsRef = useRef([]);
+      const [storageAlerts, setStorageAlerts] = useState([]);
+      const registerInitialStorageAlert = (alert) => {
+        if (!alert || !alert.key) return;
+        if (!storageAlertsRef.current.some((item) => item.key === alert.key)) {
+          storageAlertsRef.current.push(alert);
+        }
+      };
+      const pushStorageAlert = useCallback((alert) => {
+        if (!alert || !alert.key) return;
+        setStorageAlerts((prev) => (prev.some((item) => item.key === alert.key) ? prev : [...prev, alert]));
+      }, []);
+      const dismissStorageAlert = useCallback((key) => {
+        setStorageAlerts((prev) => prev.filter((item) => item.key !== key));
+      }, []);
+      useEffect(() => {
+        if (storageAlertsRef.current.length === 0) return;
+        setStorageAlerts((prev) => {
+          const existing = new Set(prev.map((item) => item.key));
+          const additions = storageAlertsRef.current.filter((item) => !existing.has(item.key));
+          storageAlertsRef.current = [];
+          if (!additions.length) return prev;
+          return [...prev, ...additions];
+        });
+      }, []);
+
       const [platformId, setPlatformId] = useState(() => {
         if (typeof window === 'undefined') return initialPlatformId;
         try {
           const stored = localStorage.getItem('spm_platform');
           return PLATFORM_IDS.includes(stored) ? stored : initialPlatformId;
-        } catch {
+        } catch (err) {
+          registerInitialStorageAlert(buildStorageAlert({
+            key: 'read-spm_platform',
+            message: 'No se pudo leer la última plataforma seleccionada. Se usará la plataforma por defecto.',
+            error: err,
+          }));
           return initialPlatformId;
         }
       });
@@ -4036,6 +4252,11 @@
           return stored && THEME_TOKENS[stored] ? stored : null;
         } catch (err) {
           console.warn('No se pudo leer el theme override almacenado:', err);
+          registerInitialStorageAlert(buildStorageAlert({
+            key: 'read-spm_theme_override',
+            message: 'No se pudo leer la preferencia de tema guardada. Se usará el modo automático.',
+            error: err,
+          }));
           return null;
         }
       });
@@ -4070,7 +4291,16 @@
         diagnosticSources = {},
       } = platform;
 
-      const [simModelConfig, setSimModelConfig] = useState(() => readSimModelConfigFromDom());
+      const [simModelConfig, setSimModelConfig] = useState(() => readSimModelConfig(registerInitialStorageAlert));
+      const simConfigUpdatedLabel = useMemo(() => {
+        if (!simModelConfig || !simModelConfig.updatedAt) return 'Preset base';
+        const date = new Date(simModelConfig.updatedAt);
+        return Number.isFinite(date.getTime()) ? date.toLocaleString() : String(simModelConfig.updatedAt);
+      }, [simModelConfig]);
+      const [showSimConfigEditor, setShowSimConfigEditor] = useState(false);
+      const [simConfigDraft, setSimConfigDraft] = useState('');
+      const [simConfigDraftError, setSimConfigDraftError] = useState(null);
+      const simConfigFileInputRef = useRef(null);
 
       const platformThemeKey = THEME_TOKENS[platformTheme] ? platformTheme : DEFAULT_THEME;
       const effectiveTheme = (() => {
@@ -4087,6 +4317,76 @@
       const isDarkTheme = themeName === 'dark' || themeName.endsWith('-dark');
       const handleThemeToggle = () => {
         setThemeOverride((prev) => (prev === 'dark' ? null : 'dark'));
+      };
+      const openSimConfigEditor = () => {
+        try {
+          setSimConfigDraft(JSON.stringify(simModelConfig, null, 2));
+        } catch (err) {
+          setSimConfigDraft(JSON.stringify(sanitizeSimModelConfig(simModelConfig), null, 2));
+        }
+        setSimConfigDraftError(null);
+        setShowSimConfigEditor(true);
+      };
+      const closeSimConfigEditor = () => {
+        setShowSimConfigEditor(false);
+      };
+      const handleSimConfigDraftChange = (event) => {
+        setSimConfigDraft(event.target.value);
+        if (simConfigDraftError) {
+          setSimConfigDraftError(null);
+        }
+      };
+      const handleSimConfigFileSelect = (event) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        file.text()
+          .then((text) => {
+            try {
+              const parsed = JSON.parse(text);
+              const sanitized = sanitizeSimModelConfig(parsed, simModelConfig || readSimModelConfig());
+              setSimConfigDraft(JSON.stringify(sanitized, null, 2));
+              setSimConfigDraftError(null);
+            } catch (error) {
+              setSimConfigDraftError(error instanceof SyntaxError
+                ? 'El archivo no es un JSON válido. Revisá la sintaxis.'
+                : (error?.message || String(error)));
+            }
+          })
+          .finally(() => {
+            if (simConfigFileInputRef.current) {
+              simConfigFileInputRef.current.value = '';
+            }
+          });
+      };
+      const handleSimConfigSave = () => {
+        try {
+          const parsed = JSON.parse(simConfigDraft || '{}');
+          const sanitized = sanitizeSimModelConfig(parsed, readSimModelConfigFromDom());
+          sanitized.updatedAt = new Date().toISOString();
+          setSimModelConfig(sanitized);
+          const stored = writeSimModelConfigToStorage(sanitized, pushStorageAlert);
+          alert(stored
+            ? 'Configuración dinámica actualizada. Los cambios se guardaron en el navegador.'
+            : 'Configuración aplicada, pero no se pudo guardar en el navegador. Revisá los permisos de almacenamiento.');
+          setSimConfigDraftError(null);
+          setShowSimConfigEditor(false);
+        } catch (error) {
+          setSimConfigDraftError(error instanceof SyntaxError
+            ? 'JSON inválido. Revisá comas, comillas y llaves.'
+            : (error?.message || String(error)));
+        }
+      };
+      const handleSimConfigReset = () => {
+        if (!confirm('¿Restaurar la configuración dinámica predeterminada?')) return;
+        const base = readSimModelConfigFromDom();
+        setSimModelConfig(base);
+        const cleared = clearSimModelConfigStorage((alert) => pushStorageAlert(alert));
+        alert(cleared
+          ? 'Configuración dinámica restaurada a los valores originales.'
+          : 'Configuración aplicada, pero no se pudo limpiar el guardado local. Podés hacerlo manualmente desde la configuración del navegador.');
+        setSimConfigDraft(JSON.stringify(base, null, 2));
+        setSimConfigDraftError(null);
+        setShowSimConfigEditor(false);
       };
       const focusRingClass = classes.focusRing || "focus:ring-blue-700";
       const headerClass = classes.header || "nx-gradient";
@@ -5000,7 +5300,13 @@
           if (saved) {
             return sanitizeAssets(JSON.parse(saved));
           }
-        } catch {}
+        } catch (err) {
+          registerInitialStorageAlert(buildStorageAlert({
+            key: `read-${storageKeys.assets}`,
+            message: 'No se pudieron leer tus activos guardados. Se usaron los valores por defecto.',
+            error: err,
+          }));
+        }
         return baseAssets;
       });
       const [assetsOriginKey, setAssetsOriginKey] = useState(storageKeys.assets);
@@ -5012,7 +5318,13 @@
           if (saved) {
             return sanitizeParams(JSON.parse(saved));
           }
-        } catch {}
+        } catch (err) {
+          registerInitialStorageAlert(buildStorageAlert({
+            key: `read-${storageKeys.params}`,
+            message: 'No se pudieron leer tus parámetros guardados. Se aplicaron los valores iniciales.',
+            error: err,
+          }));
+        }
         return baseParams;
       });
       const [paramsOriginKey, setParamsOriginKey] = useState(storageKeys.params);
@@ -5650,7 +5962,13 @@
           if (saved) {
             return sanitizeCashflowPlan(JSON.parse(saved), previewSnapshot?.repayDate || todayISO());
           }
-        } catch {}
+        } catch (err) {
+          registerInitialStorageAlert(buildStorageAlert({
+            key: `read-${storageKeys.cashflow}`,
+            message: 'No se pudo recuperar tu plan de cashflow guardado. Se usará la plantilla inicial.',
+            error: err,
+          }));
+        }
         return baseCashflowPlan;
       });
       const [cashflowOriginKey, setCashflowOriginKey] = useState(storageKeys.cashflow);
@@ -5662,15 +5980,29 @@
           if (saved) {
             return sanitizeBenchmarkConfig(JSON.parse(saved));
           }
-        } catch {}
+        } catch (err) {
+          registerInitialStorageAlert(buildStorageAlert({
+            key: `read-${storageKeys.benchmark}`,
+            message: 'No se pudo recuperar la configuración de benchmark guardada. Se usará el esquema base.',
+            error: err,
+          }));
+        }
         return baseBenchmarkConfig;
       });
       const [benchmarkOriginKey, setBenchmarkOriginKey] = useState(storageKeys.benchmark);
 
       useEffect(() => {
         if (typeof window === 'undefined') return;
-        try { localStorage.setItem('spm_platform', platformId); } catch {}
-      }, [platformId]);
+        try {
+          localStorage.setItem('spm_platform', platformId);
+        } catch (err) {
+          pushStorageAlert(buildStorageAlert({
+            key: 'write-spm_platform',
+            message: 'No se pudo guardar la plataforma seleccionada en el navegador.',
+            error: err,
+          }));
+        }
+      }, [platformId, pushStorageAlert]);
 
       useEffect(() => {
         setAssets(() => {
@@ -5685,11 +6017,17 @@
               setAssetsOriginKey(storageKeys.assets);
               return parsed;
             }
-          } catch {}
+          } catch (err) {
+            pushStorageAlert(buildStorageAlert({
+              key: `read-${storageKeys.assets}`,
+              message: 'No se pudieron cargar tus activos guardados. Se restauraron los valores base.',
+              error: err,
+            }));
+          }
           setAssetsOriginKey(storageKeys.assets);
           return baseAssets;
         });
-      }, [storageKeys.assets, baseAssets]);
+      }, [storageKeys.assets, baseAssets, pushStorageAlert]);
 
       useEffect(() => {
         setParams(() => {
@@ -5704,11 +6042,17 @@
               setParamsOriginKey(storageKeys.params);
               return parsed;
             }
-          } catch {}
+          } catch (err) {
+            pushStorageAlert(buildStorageAlert({
+              key: `read-${storageKeys.params}`,
+              message: 'No se pudieron cargar los parámetros guardados. Se reestablecieron los valores iniciales.',
+              error: err,
+            }));
+          }
           setParamsOriginKey(storageKeys.params);
           return baseParams;
         });
-      }, [storageKeys.params, baseParams, platformId]);
+      }, [storageKeys.params, baseParams, platformId, pushStorageAlert]);
 
       useEffect(() => {
         fetchOfficialFxRates();
@@ -5717,14 +6061,30 @@
       useEffect(() => {
         if (typeof window === 'undefined') return;
         if (assetsOriginKey !== storageKeys.assets) return;
-        try { localStorage.setItem(storageKeys.assets, JSON.stringify(assets)); } catch {}
-      }, [assets, storageKeys.assets, assetsOriginKey]);
+        try {
+          localStorage.setItem(storageKeys.assets, JSON.stringify(assets));
+        } catch (err) {
+          pushStorageAlert(buildStorageAlert({
+            key: `write-${storageKeys.assets}`,
+            message: 'No se pudieron guardar tus activos personalizados en el navegador.',
+            error: err,
+          }));
+        }
+      }, [assets, storageKeys.assets, assetsOriginKey, pushStorageAlert]);
 
       useEffect(() => {
         if (typeof window === 'undefined') return;
         if (paramsOriginKey !== storageKeys.params) return;
-        try { localStorage.setItem(storageKeys.params, JSON.stringify(params)); } catch {}
-      }, [params, storageKeys.params, paramsOriginKey]);
+        try {
+          localStorage.setItem(storageKeys.params, JSON.stringify(params));
+        } catch (err) {
+          pushStorageAlert(buildStorageAlert({
+            key: `write-${storageKeys.params}`,
+            message: 'No se pudieron guardar tus parámetros personalizados en el navegador.',
+            error: err,
+          }));
+        }
+      }, [params, storageKeys.params, paramsOriginKey, pushStorageAlert]);
 
       const [loanDraftAmount, setLoanDraftAmount] = useState(0);
       const [repayDate, setRepayDate] = useState(() => {
@@ -5793,11 +6153,17 @@
               setCashflowOriginKey(storageKeys.cashflow);
               return parsed;
             }
-          } catch {}
+          } catch (err) {
+            pushStorageAlert(buildStorageAlert({
+              key: `read-${storageKeys.cashflow}`,
+              message: 'No se pudo cargar tu plan de cashflow guardado. Se aplicó el valor por defecto.',
+              error: err,
+            }));
+          }
           setCashflowOriginKey(storageKeys.cashflow);
           return baseCashflowPlan;
         });
-      }, [storageKeys.cashflow, baseCashflowPlan, repayDate]);
+      }, [storageKeys.cashflow, baseCashflowPlan, repayDate, pushStorageAlert]);
 
       useEffect(() => {
         setBenchmarkConfig(() => {
@@ -5812,23 +6178,45 @@
               setBenchmarkOriginKey(storageKeys.benchmark);
               return parsed;
             }
-          } catch {}
+          } catch (err) {
+            pushStorageAlert(buildStorageAlert({
+              key: `read-${storageKeys.benchmark}`,
+              message: 'No se pudo cargar la configuración de benchmark guardada. Se restableció la versión inicial.',
+              error: err,
+            }));
+          }
           setBenchmarkOriginKey(storageKeys.benchmark);
           return baseBenchmarkConfig;
         });
-      }, [storageKeys.benchmark, baseBenchmarkConfig]);
+      }, [storageKeys.benchmark, baseBenchmarkConfig, pushStorageAlert]);
 
       useEffect(() => {
         if (typeof window === 'undefined') return;
         if (cashflowOriginKey !== storageKeys.cashflow) return;
-        try { localStorage.setItem(storageKeys.cashflow, JSON.stringify(cashflowPlan)); } catch {}
-      }, [cashflowPlan, storageKeys.cashflow, cashflowOriginKey]);
+        try {
+          localStorage.setItem(storageKeys.cashflow, JSON.stringify(cashflowPlan));
+        } catch (err) {
+          pushStorageAlert(buildStorageAlert({
+            key: `write-${storageKeys.cashflow}`,
+            message: 'No se pudo guardar el plan de cashflow en el navegador.',
+            error: err,
+          }));
+        }
+      }, [cashflowPlan, storageKeys.cashflow, cashflowOriginKey, pushStorageAlert]);
 
       useEffect(() => {
         if (typeof window === 'undefined') return;
         if (benchmarkOriginKey !== storageKeys.benchmark) return;
-        try { localStorage.setItem(storageKeys.benchmark, JSON.stringify(benchmarkConfig)); } catch {}
-      }, [benchmarkConfig, storageKeys.benchmark, benchmarkOriginKey]);
+        try {
+          localStorage.setItem(storageKeys.benchmark, JSON.stringify(benchmarkConfig));
+        } catch (err) {
+          pushStorageAlert(buildStorageAlert({
+            key: `write-${storageKeys.benchmark}`,
+            message: 'No se pudo guardar la configuración de benchmark en el navegador.',
+            error: err,
+          }));
+        }
+      }, [benchmarkConfig, storageKeys.benchmark, benchmarkOriginKey, pushStorageAlert]);
 
       const currency = selectedCurrency;
       const usdRate = params.exchangeRates?.[currency] ?? 1;
@@ -6531,7 +6919,15 @@
 
       const handleResetParams = () => {
         if (confirm("¿Restablecer parámetros por defecto?")) {
-          localStorage.removeItem(storageKeys.params);
+          try {
+            localStorage.removeItem(storageKeys.params);
+          } catch (err) {
+            pushStorageAlert(buildStorageAlert({
+              key: `clear-${storageKeys.params}`,
+              message: 'No se pudo limpiar los parámetros guardados en el navegador.',
+              error: err,
+            }));
+          }
           setParams({ ...baseParams });
           setParamsOriginKey(storageKeys.params);
           setLoanDraftAmount(0);
@@ -6541,7 +6937,15 @@
 
       const handleResetAssets = () => {
         if (confirm("¿Restablecer activos por defecto?")) {
-          localStorage.removeItem(storageKeys.assets);
+          try {
+            localStorage.removeItem(storageKeys.assets);
+          } catch (err) {
+            pushStorageAlert(buildStorageAlert({
+              key: `clear-${storageKeys.assets}`,
+              message: 'No se pudieron limpiar los activos guardados en el navegador.',
+              error: err,
+            }));
+          }
           setAssets(sanitizeAssets(platformDefaultAssets));
           setAssetsOriginKey(storageKeys.assets);
         }
@@ -6564,8 +6968,24 @@
 
       const handleResetPlanners = () => {
         if (confirm("¿Limpiar plan de cashflow y benchmark?")) {
-          localStorage.removeItem(storageKeys.cashflow);
-          localStorage.removeItem(storageKeys.benchmark);
+          try {
+            localStorage.removeItem(storageKeys.cashflow);
+          } catch (err) {
+            pushStorageAlert(buildStorageAlert({
+              key: `clear-${storageKeys.cashflow}`,
+              message: 'No se pudo limpiar el plan de cashflow guardado.',
+              error: err,
+            }));
+          }
+          try {
+            localStorage.removeItem(storageKeys.benchmark);
+          } catch (err) {
+            pushStorageAlert(buildStorageAlert({
+              key: `clear-${storageKeys.benchmark}`,
+              message: 'No se pudo limpiar la configuración de benchmark guardada.',
+              error: err,
+            }));
+          }
           setCashflowPlan(baseCashflowPlan);
           setBenchmarkConfig(baseBenchmarkConfig);
           setCashflowOriginKey(storageKeys.cashflow);
@@ -6574,31 +6994,77 @@
         closeExportMenu();
       };
 
-      const handleImportFile = (e) => {
-        const file = e.target.files?.[0];
+      const IMPORT_SCHEMA_VERSION = 1;
+      const handleImportFile = (event) => {
+        const file = event.target.files?.[0];
         if (!file) return;
         file.text()
           .then((text) => {
             try {
               const parsed = JSON.parse(text);
-              if (parsed.assets) {
-                setAssets(sanitizeAssets(parsed.assets));
+              if (!parsed || typeof parsed !== 'object') {
+                throw new Error('El archivo debe contener un objeto JSON con las secciones esperadas.');
+              }
+              const version = Number(parsed.version ?? IMPORT_SCHEMA_VERSION);
+              if (!Number.isFinite(version) || version !== IMPORT_SCHEMA_VERSION) {
+                throw new Error(`Versión de esquema ${parsed.version} no soportada. Solo se admite v${IMPORT_SCHEMA_VERSION}.`);
+              }
+              const summary = [];
+              const nextState = {};
+              if ('assets' in parsed) {
+                if (!Array.isArray(parsed.assets)) throw new Error('El campo "assets" debe ser un arreglo.');
+                nextState.assets = sanitizeAssets(parsed.assets);
+                summary.push('activos');
+              }
+              if ('params' in parsed) {
+                if (parsed.params == null || typeof parsed.params !== 'object') throw new Error('El campo "params" debe ser un objeto.');
+                nextState.params = sanitizeParams(parsed.params);
+                summary.push('parámetros');
+              }
+              if ('cashflowPlan' in parsed) {
+                if (parsed.cashflowPlan == null || typeof parsed.cashflowPlan !== 'object') throw new Error('El campo "cashflowPlan" debe ser un objeto.');
+                nextState.cashflowPlan = sanitizeCashflowPlan(parsed.cashflowPlan, repayDate);
+                summary.push('plan de cashflow');
+              }
+              if ('benchmarkConfig' in parsed) {
+                if (parsed.benchmarkConfig == null || typeof parsed.benchmarkConfig !== 'object') throw new Error('El campo "benchmarkConfig" debe ser un objeto.');
+                nextState.benchmarkConfig = sanitizeBenchmarkConfig(parsed.benchmarkConfig);
+                summary.push('benchmark');
+              }
+              if ('simModelConfig' in parsed) {
+                if (parsed.simModelConfig == null || typeof parsed.simModelConfig !== 'object') throw new Error('El campo "simModelConfig" debe ser un objeto.');
+                const sanitizedModel = sanitizeSimModelConfig(parsed.simModelConfig, simModelConfig || readSimModelConfig());
+                sanitizedModel.updatedAt = new Date().toISOString();
+                nextState.simModelConfig = sanitizedModel;
+                summary.push('configuración dinámica');
+              }
+              if (summary.length === 0) {
+                alert(`El archivo v${version} no contiene secciones reconocidas. No se aplicaron cambios.`);
+                return;
+              }
+              if (nextState.assets) {
+                setAssets(nextState.assets);
                 setAssetsOriginKey(storageKeys.assets);
               }
-              if (parsed.params) {
-                setParams(sanitizeParams(parsed.params));
+              if (nextState.params) {
+                setParams(nextState.params);
                 setParamsOriginKey(storageKeys.params);
               }
-              if (parsed.cashflowPlan) {
-                setCashflowPlan(sanitizeCashflowPlan(parsed.cashflowPlan, repayDate));
+              if (nextState.cashflowPlan) {
+                setCashflowPlan(nextState.cashflowPlan);
                 setCashflowOriginKey(storageKeys.cashflow);
               }
-              if (parsed.benchmarkConfig) {
-                setBenchmarkConfig(sanitizeBenchmarkConfig(parsed.benchmarkConfig));
+              if (nextState.benchmarkConfig) {
+                setBenchmarkConfig(nextState.benchmarkConfig);
                 setBenchmarkOriginKey(storageKeys.benchmark);
               }
-            } catch (err) {
-              alert(`No se pudo importar el archivo: ${err?.message || err}`);
+              if (nextState.simModelConfig) {
+                setSimModelConfig(nextState.simModelConfig);
+                writeSimModelConfigToStorage(nextState.simModelConfig, pushStorageAlert);
+              }
+              alert(`Importación completada (v${version}). Se actualizaron: ${summary.join(', ')}.`);
+            } catch (error) {
+              alert(`No se pudo importar el archivo: ${error?.message || error}. Verificá que respete el esquema v${IMPORT_SCHEMA_VERSION}.`);
             }
           })
           .finally(() => {
@@ -7552,8 +8018,13 @@
           }
         } catch (err) {
           console.warn('No se pudo persistir el theme override:', err);
+          pushStorageAlert(buildStorageAlert({
+            key: 'write-spm_theme_override',
+            message: 'No se pudo guardar la preferencia de tema en el navegador.',
+            error: err,
+          }));
         }
-      }, [themeOverride]);
+      }, [themeOverride, pushStorageAlert]);
 
       useEffect(() => {
         applyTheme(themeName);
@@ -7614,6 +8085,13 @@
                           <div className="nx-dropdown absolute right-0 z-50 mt-3 w-60 rounded-2xl border p-2 text-sm shadow-2xl">
                             <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold transition-colors" onClick={handleExportJSON}>Exportar JSON</button>
                             <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold transition-colors" onClick={handleImportRequest}>Importar JSON</button>
+                            <button
+                              type="button"
+                              className="w-full rounded-xl px-3 py-2 text-left text-sm transition-colors"
+                              onClick={() => { closeExportMenu(); openSimConfigEditor(); }}
+                            >
+                              Configuración dinámica (JSON)
+                            </button>
                             <div className="my-1 border-t" style={{ borderColor: 'var(--theme-border-subtle, rgba(148,163,184,0.28))' }} />
                             <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm transition-colors" onClick={handleResetParams}>Reset parámetros</button>
                             <button type="button" className="w-full rounded-xl px-3 py-2 text-left text-sm transition-colors" onClick={handleResetAssets}>Reset activos</button>
@@ -7672,6 +8150,36 @@
           </div>
 
           <div className="mx-auto max-w-7xl px-4 py-8 space-y-12">
+            {storageAlerts.length > 0 && (
+              <div className="space-y-3">
+                {storageAlerts.map((alert) => {
+                  const toneStyle = ALERT_TONE_STYLES[alert.tone] || ALERT_TONE_STYLES.info;
+                  return (
+                    <div
+                      key={alert.key}
+                      className={`relative rounded-2xl border px-4 py-3 text-sm shadow-sm ${toneStyle.bg} ${toneStyle.text} ${toneStyle.border}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold">{alert.title || 'Preferencias deshabilitadas'}</p>
+                          <p className="mt-1 whitespace-pre-line leading-relaxed">{alert.message}</p>
+                          {alert.hint && (
+                            <p className="mt-2 text-xs opacity-80">{alert.hint}</p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => dismissStorageAlert(alert.key)}
+                          className="rounded-full border border-white/30 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white/80 transition hover:bg-white/10"
+                        >
+                          Cerrar
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
             <section className="flex gap-4 overflow-x-auto pb-2 md:grid md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 md:gap-4 md:overflow-visible md:[grid-auto-rows:minmax(0,1fr)] snap-x snap-mandatory">
               {(isBinance ? [
                 { key: 'loan-current', title: '💰 Préstamo original', value: formatLoan(binanceOriginalPrincipalTotal), subtle: binanceOriginalPrincipalTotal > 0 ? 'Capital original' : '—' },
@@ -8059,7 +8567,23 @@
                 <h2 className="text-xl font-semibold text-center md:text-left">Activos y colateral</h2>
                 <div className="flex flex-wrap items-center justify-center gap-2">
                   <button onClick={addRow} className="nx-btn text-sm">Añadir activo</button>
-                  <button onClick={() => { localStorage.removeItem(storageKeys.assets); setAssets(sanitizeAssets(platformDefaultAssets)); }} className="nx-btn nx-btn-ghost text-sm">Reset</button>
+                  <button
+                    onClick={() => {
+                      try {
+                        localStorage.removeItem(storageKeys.assets);
+                      } catch (err) {
+                        pushStorageAlert(buildStorageAlert({
+                          key: `clear-${storageKeys.assets}`,
+                          message: 'No se pudieron limpiar los activos guardados en el navegador.',
+                          error: err,
+                        }));
+                      }
+                      setAssets(sanitizeAssets(platformDefaultAssets));
+                    }}
+                    className="nx-btn nx-btn-ghost text-sm"
+                  >
+                    Reset
+                  </button>
                   <label className="nx-control-pill text-xs font-medium">
                     <input type="checkbox" ref={autoMasterRef} className="h-4 w-4" checked={allAuto} onChange={(e) => handleToggleAllAuto(e.target.checked)} />
                     Auto (todos)
@@ -8307,6 +8831,70 @@
               <p>Activos digitales: actualización automática cada {LIVE_REFRESH_SECONDS} segundos (fuente CoinGecko). Tipos de cambio oficiales: actualización cada {FX_REFRESH_MINUTES} minutos (exchangerate.host).</p>
             </footer>
       </div>
+      {showSimConfigEditor && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4 py-8">
+          <div className="relative w-full max-w-4xl rounded-3xl bg-white p-6 text-neutral-900 shadow-2xl dark:bg-slate-900 dark:text-slate-100">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <h2 className="text-xl font-semibold">Configuración dinámica</h2>
+                <p className="text-sm text-neutral-500 dark:text-slate-400">Editá el JSON para ajustar loanCoins, universo y límites de LTV sin modificar el archivo base.</p>
+                <p className="text-xs text-neutral-400 dark:text-slate-500">Última actualización registrada: {simConfigUpdatedLabel}</p>
+              </div>
+              <button
+                type="button"
+                onClick={closeSimConfigEditor}
+                className="rounded-full border border-neutral-300 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-neutral-600 transition hover:bg-neutral-100 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-800"
+              >
+                Cerrar
+              </button>
+            </div>
+            <input
+              ref={simConfigFileInputRef}
+              type="file"
+              accept="application/json"
+              className="hidden"
+              onChange={handleSimConfigFileSelect}
+            />
+            {simConfigDraftError && (
+              <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200">
+                {simConfigDraftError}
+              </div>
+            )}
+            <textarea
+              value={simConfigDraft}
+              onChange={handleSimConfigDraftChange}
+              spellCheck="false"
+              className="mt-4 h-80 w-full resize-none rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 font-mono text-xs leading-relaxed text-neutral-800 shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            />
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-neutral-500 dark:text-slate-400">
+              <span>Los cambios se guardan en localStorage y se aplican en la próxima solicitud a /api/binance/*.</span>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => simConfigFileInputRef.current?.click()}
+                  className="nx-btn nx-btn-ghost text-xs"
+                >
+                  Cargar desde archivo
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSimConfigReset}
+                  className="nx-btn nx-btn-ghost text-xs"
+                >
+                  Restaurar predeterminado
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSimConfigSave}
+                  className="nx-btn text-xs"
+                >
+                  Guardar cambios
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
