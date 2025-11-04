@@ -6356,12 +6356,6 @@
         [loanRequestsTotals]
       );
       const loanAmountUsd = loanAmount * usdPerUsdt;
-      const roundDecimals = (value, decimals = 8) => {
-        if (!Number.isFinite(value)) return 0;
-        const safe = Math.max(0, Math.min(8, Math.floor(decimals)));
-        const factor = 10 ** safe;
-        return Math.round(value * factor) / factor;
-      };
       const binanceLoanLedger = useMemo(() => {
         if (!isBinance) return {};
         const clone = Object.entries(baseLoanLedger).reduce((acc, [ticker, entry]) => {
@@ -6535,9 +6529,82 @@
         return Object.values(binanceLoanLedger).reduce((acc, entry) => acc + (Math.max(0, Number(entry?.outstanding) || 0)), 0);
       }, [isBinance, binanceLoanLedger]);
       const binanceLedgerTotals = useMemo(() => {
-        const fallbackTotals = {
-          original: Math.max(0, loanAmount),
-          outstanding: Math.max(0, loanAmount),
+        if (!isBinance) {
+          return {
+            original: 0,
+            outstanding: loanAmount,
+            interest: 0,
+            interestBase: 0,
+            interestRealtime: 0,
+            interestPaid: 0,
+            interestGenerated: 0,
+            paid: 0,
+            initialCollateral: 0,
+          };
+        }
+        return Object.entries(binanceLoanLedger).reduce((acc, [ticker, entry]) => {
+          const original = Math.max(0, Number(entry?.originalPrincipal) || 0);
+          const outstanding = Math.max(0, Number(entry?.outstanding) || 0);
+          const interest = Math.max(0, Number(entry?.interestAccrued) || 0);
+          const interestBase = Math.max(0, Number(entry?.interestAccruedBase) || 0);
+          const interestRealtime = Math.max(0, Number(entry?.interestAccruedRealtime) || 0);
+          const paid = Math.max(0, Number(entry?.paidTotal) || 0);
+          const principalOutstanding = Math.max(0, Number(entry?.principalOutstanding) || 0);
+          const principalPaid = Math.max(0, original - principalOutstanding);
+          const interestPaid = Math.max(0, paid - principalPaid);
+          const interestGenerated = Math.max(0, interestPaid + interest);
+          const initialCollateralValue = Number(entry?.initialCollateralValue);
+          const initialLtv = Number(entry?.initialLtv);
+          const collateralAmount = Number(entry?.collateralAmount);
+          const collateralIndexPrice = Number(entry?.collateralIndexPrice);
+          const collateralPriceAtOrigination = Number(entry?.collateralPriceAtOrigination);
+          let collateralBase = 0;
+          let collateralSource = null;
+          if (Number.isFinite(initialCollateralValue) && initialCollateralValue > 0) {
+            collateralBase = initialCollateralValue;
+            collateralSource = 'explicit';
+          } else if (Number.isFinite(collateralAmount) && collateralAmount > 0) {
+            const priceForAmount = Number.isFinite(collateralPriceAtOrigination) && collateralPriceAtOrigination > 0
+              ? collateralPriceAtOrigination
+              : (Number.isFinite(collateralIndexPrice) && collateralIndexPrice > 0 ? collateralIndexPrice : null);
+            if (priceForAmount != null) {
+              collateralBase = collateralAmount * priceForAmount;
+              collateralSource = 'amount';
+            }
+          }
+          if (!(collateralBase > 0) && Number.isFinite(initialLtv) && initialLtv > 0) {
+            collateralBase = original > 0 ? original / initialLtv : 0;
+            collateralSource = 'initialLtv';
+          }
+          if (!(collateralBase > 0)) {
+            const policy = ltvByTicker[ticker] ?? defaultLtv;
+            collateralBase = policy > 0 && original > 0 ? original / policy : 0;
+            collateralSource = 'policy';
+          }
+          const derivedInitialLtv = collateralBase > 0 && original > 0 ? original / collateralBase : null;
+          let resolvedInitialLtv = Number.isFinite(initialLtv) && initialLtv > 0 ? initialLtv : null;
+          if (collateralBase > 0 && original > 0 && (collateralSource === 'amount' || collateralSource === 'explicit')) {
+            resolvedInitialLtv = derivedInitialLtv;
+          } else if (resolvedInitialLtv == null && derivedInitialLtv != null) {
+            resolvedInitialLtv = derivedInitialLtv;
+          }
+          acc.original += original;
+          acc.outstanding += outstanding;
+          acc.interest += interest;
+          acc.interestBase += interestBase;
+          acc.interestRealtime += interestRealtime;
+          acc.interestPaid += interestPaid;
+          acc.interestGenerated += interestGenerated;
+          acc.paid += paid;
+          acc.initialCollateral += Number.isFinite(collateralBase) && collateralBase > 0 ? collateralBase : 0;
+          if (Number.isFinite(resolvedInitialLtv) && resolvedInitialLtv > 0 && original > 0) {
+            acc.initialLtvSum += resolvedInitialLtv;
+            acc.initialLtvCount += 1;
+          }
+          return acc;
+        }, {
+          original: 0,
+          outstanding: 0,
           interest: 0,
           interestBase: 0,
           interestRealtime: 0,
@@ -6545,239 +6612,10 @@
           interestGenerated: 0,
           paid: 0,
           initialCollateral: 0,
-          collateralNow: 0,
-          totalAccrued: Math.max(0, loanAmount),
           initialLtvSum: 0,
           initialLtvCount: 0,
-          ltvCombined: null,
-          ltvTile: null,
-          ltvDiff: 0,
-          initialLtvCalc: null,
-          initialLtvTile: null,
-          initialLtvDiff: 0,
-          validatorDrift: 0,
-          collateralSource: null,
-          loans: [],
-        };
-        if (!isBinance) {
-          return fallbackTotals;
-        }
-        const entries = Object.entries(binanceLoanLedger || {});
-        if (entries.length === 0) {
-          return fallbackTotals;
-        }
-        const rawLoans = entries.map(([ticker, entry]) => {
-          const key = ticker;
-          const principal = roundDecimals(Math.max(0, Number(entry?.originalPrincipal) || 0));
-          const debt = roundDecimals(Math.max(0, Number(entry?.outstanding) || 0));
-          const payments = roundDecimals(Math.max(0, Number(entry?.paidTotal) || 0));
-          const principalOutstanding = roundDecimals(Math.max(0, Number(entry?.principalOutstanding) || 0));
-          const principalPaid = roundDecimals(Math.max(0, principal - principalOutstanding));
-          const interestPaid = roundDecimals(Math.max(0, payments - principalPaid));
-          const interestBase = Math.max(0, Number(entry?.interestAccruedBase) || 0);
-          const interestRealtime = Math.max(0, Number(entry?.interestAccruedRealtime) || 0);
-          const priceNowRaw = Number(entry?.collateralIndexPrice);
-          const qtyNowRaw = Number(entry?.collateralAmount);
-          const qtyNow = Number.isFinite(qtyNowRaw) && qtyNowRaw > 0 ? roundDecimals(qtyNowRaw, 8) : 0;
-          const priceNow = Number.isFinite(priceNowRaw) && priceNowRaw > 0 ? priceNowRaw : null;
-          const price0Raw = Number(entry?.collateralPriceAtOrigination);
-          const price0 = Number.isFinite(price0Raw) && price0Raw > 0 ? price0Raw : null;
-          const initialCollateralValueRaw = Number(entry?.initialCollateralValue);
-          const initialCollateralValue = Number.isFinite(initialCollateralValueRaw) && initialCollateralValueRaw > 0
-            ? initialCollateralValueRaw
-            : null;
-          let qtyInit = Number(entry?.initialCollateralAmount);
-          if (!(Number.isFinite(qtyInit) && qtyInit > 0)) {
-            if (initialCollateralValue != null && price0 != null) {
-              qtyInit = initialCollateralValue / price0;
-            } else if (qtyNow > 0) {
-              qtyInit = qtyNow;
-            } else {
-              qtyInit = 0;
-            }
-          }
-          qtyInit = roundDecimals(Math.max(0, qtyInit), 8);
-          const inferredInitialCollateral = qtyInit > 0 && price0 != null ? qtyInit * price0 : null;
-          const initialCollateral = initialCollateralValue != null ? initialCollateralValue : (inferredInitialCollateral || 0);
-          const policy = ltvByTicker[key] ?? defaultLtv;
-          const initialLtvRaw = Number(entry?.initialLtv);
-          let ltvInitial = Number.isFinite(initialLtvRaw) && initialLtvRaw > 0 ? initialLtvRaw : null;
-          if (!(ltvInitial > 0) && initialCollateral > 0 && principal > 0) {
-            ltvInitial = principal / initialCollateral;
-          }
-          if (!(initialCollateral > 0) && ltvInitial > 0 && principal > 0) {
-            const inferred = principal / ltvInitial;
-            if (Number.isFinite(inferred) && inferred > 0) {
-              qtyInit = qtyInit > 0 ? qtyInit : inferred / (price0 || 1);
-            }
-          }
-          let collateralFromPolicy = 0;
-          if (!(initialCollateral > 0) && Number.isFinite(policy) && policy > 0 && principal > 0) {
-            collateralFromPolicy = principal / policy;
-          }
-          const currentLtvRaw = Number(entry?.currentLtv);
-          const ltvUi = Number.isFinite(currentLtvRaw) && currentLtvRaw > 0 ? roundDecimals(currentLtvRaw, 6) : null;
-          let collateralViaUi = null;
-          if (ltvUi != null) {
-            collateralViaUi = debt > 0 ? roundDecimals(debt / ltvUi, 6) : 0;
-          }
-          const collateralViaPrice = qtyNow > 0 && priceNow != null ? roundDecimals(qtyNow * priceNow, 6) : null;
-          const interestPending = roundDecimals(Math.max(0, debt - principalOutstanding));
-          const interestGenerated = roundDecimals(interestPaid + interestPending);
-          const totalAccrued = roundDecimals(principal + interestGenerated);
-          const tsOrigin = Number(entry?.originationTs);
-          const tsOriginIso = typeof entry?.originationAt === 'string' ? entry.originationAt : null;
-          return {
-            ticker: key,
-            principal,
-            debt,
-            payments,
-            principalOutstanding,
-            principalPaid,
-            interestPaid,
-            interestPending,
-            interestGenerated,
-            interestBase,
-            interestRealtime,
-            totalAccrued,
-            qtyNow,
-            qtyInit,
-            priceNow,
-            price0,
-            collateralViaUi,
-            collateralViaPrice,
-            collateralPolicy: collateralFromPolicy,
-            initialCollateral: initialCollateral > 0 ? initialCollateral : collateralFromPolicy,
-            ltvUi,
-            ltvInitial: Number.isFinite(ltvInitial) && ltvInitial > 0 ? roundDecimals(ltvInitial, 6) : null,
-            tsOrigin: Number.isFinite(tsOrigin) && tsOrigin > 0 ? tsOrigin : null,
-            tsOriginIso,
-          };
         });
-        const canUseUi = rawLoans.every((loan) => loan.ltvUi != null || loan.debt === 0);
-        const hasUi = rawLoans.some((loan) => loan.ltvUi != null);
-        const canUsePrice = rawLoans.every((loan) => loan.collateralViaPrice != null || loan.debt === 0);
-        const hasPrice = rawLoans.some((loan) => loan.collateralViaPrice != null);
-        let collateralSource = null;
-        if (canUseUi && hasUi) {
-          collateralSource = 'ui-ltv';
-        } else if (canUsePrice && hasPrice) {
-          collateralSource = 'qty-price';
-        } else {
-          collateralSource = 'mixed';
-        }
-        let totalPrincipal = 0;
-        let totalDebt = 0;
-        let totalPayments = 0;
-        let totalInterestPending = 0;
-        let totalInterestPaid = 0;
-        let totalInterestGenerated = 0;
-        let totalInterestBase = 0;
-        let totalInterestRealtime = 0;
-        let totalCollateralInitial = 0;
-        let totalCollateralNow = 0;
-        let totalAccrued = 0;
-        let initialLtvSum = 0;
-        let initialLtvCount = 0;
-        let ltvTileNumerator = 0;
-        let ltvTileDenominator = 0;
-        let ltv0TileNumerator = 0;
-        let ltv0TileDenominator = 0;
-        const loans = rawLoans.map((loan) => {
-          let collateralNow;
-          let ltvNow;
-          if (collateralSource === 'ui-ltv' && loan.ltvUi != null) {
-            collateralNow = loan.collateralViaUi != null ? loan.collateralViaUi : (loan.collateralViaPrice != null ? loan.collateralViaPrice : 0);
-            ltvNow = loan.ltvUi;
-          } else if (collateralSource === 'qty-price' && loan.collateralViaPrice != null) {
-            collateralNow = loan.collateralViaPrice;
-            ltvNow = collateralNow > 0 ? roundDecimals(loan.debt / collateralNow, 6) : (loan.ltvUi ?? null);
-          } else {
-            if (loan.collateralViaUi != null) {
-              collateralNow = loan.collateralViaUi;
-              ltvNow = loan.ltvUi;
-            } else if (loan.collateralViaPrice != null) {
-              collateralNow = loan.collateralViaPrice;
-              ltvNow = collateralNow > 0 ? roundDecimals(loan.debt / collateralNow, 6) : null;
-            } else {
-              collateralNow = loan.collateralPolicy;
-              ltvNow = collateralNow > 0 ? roundDecimals(loan.debt / collateralNow, 6) : null;
-            }
-          }
-          collateralNow = Number.isFinite(collateralNow) && collateralNow > 0 ? collateralNow : 0;
-          if (loan.ltvUi != null && loan.debt > 0) {
-            ltvTileNumerator += loan.ltvUi * loan.debt;
-            ltvTileDenominator += loan.debt;
-          }
-          if (loan.ltvInitial != null && loan.principal > 0) {
-            ltv0TileNumerator += loan.ltvInitial * loan.principal;
-            ltv0TileDenominator += loan.principal;
-          }
-          totalPrincipal += loan.principal;
-          totalDebt += loan.debt;
-          totalPayments += loan.payments;
-          totalInterestPending += loan.interestPending;
-          totalInterestPaid += loan.interestPaid;
-          totalInterestGenerated += loan.interestGenerated;
-          totalInterestBase += loan.interestBase;
-          totalInterestRealtime += loan.interestRealtime;
-          totalCollateralInitial += Number.isFinite(loan.initialCollateral) && loan.initialCollateral > 0 ? loan.initialCollateral : 0;
-          totalCollateralNow += collateralNow;
-          totalAccrued += loan.totalAccrued;
-          if (loan.ltvInitial != null) {
-            initialLtvSum += loan.ltvInitial;
-            initialLtvCount += 1;
-          }
-          return { ...loan, collateralNow, ltvNow };
-        });
-        totalPrincipal = roundDecimals(totalPrincipal);
-        totalDebt = roundDecimals(totalDebt);
-        totalPayments = roundDecimals(totalPayments);
-        totalInterestPending = roundDecimals(totalInterestPending);
-        totalInterestPaid = roundDecimals(totalInterestPaid);
-        totalInterestGenerated = roundDecimals(totalInterestGenerated);
-        totalCollateralInitial = roundDecimals(totalCollateralInitial);
-        totalCollateralNow = roundDecimals(totalCollateralNow);
-        totalAccrued = roundDecimals(totalAccrued);
-        const totalFromIdentity = roundDecimals(totalPayments + totalDebt);
-        const totalAccruedIdentity = roundDecimals(totalPrincipal + totalInterestGenerated);
-        const drift = Math.abs(totalFromIdentity - totalAccruedIdentity);
-        if (drift > 0.02) {
-          totalInterestGenerated = roundDecimals(totalFromIdentity - totalPrincipal);
-        }
-        const combinedCollateral = totalCollateralNow > 0 ? totalCollateralNow : null;
-        const ltvCombined = combinedCollateral && totalDebt > 0 ? roundDecimals(totalDebt / combinedCollateral, 6) : (totalDebt > 0 ? 1 : 0);
-        const ltvTile = ltvTileDenominator > 0 ? roundDecimals(ltvTileNumerator / ltvTileDenominator, 6) : null;
-        const ltvDiff = ltvCombined != null && ltvTile != null ? Math.abs(ltvCombined - ltvTile) : 0;
-        const col0 = totalCollateralInitial > 0 ? totalCollateralInitial : null;
-        const ltv0Calc = col0 && totalPrincipal > 0 ? roundDecimals(totalPrincipal / col0, 6) : (totalPrincipal > 0 ? 0 : null);
-        const ltv0Tile = ltv0TileDenominator > 0 ? roundDecimals(ltv0TileNumerator / ltv0TileDenominator, 6) : null;
-        const ltv0Diff = ltv0Calc != null && ltv0Tile != null ? Math.abs(ltv0Calc - ltv0Tile) : 0;
-        return {
-          original: totalPrincipal,
-          outstanding: totalDebt,
-          interest: totalInterestPending,
-          interestBase: roundDecimals(totalInterestBase),
-          interestRealtime: roundDecimals(totalInterestRealtime),
-          interestPaid: totalInterestPaid,
-          interestGenerated: roundDecimals(totalInterestGenerated),
-          paid: totalPayments,
-          initialCollateral: totalCollateralInitial,
-          collateralNow: totalCollateralNow,
-          totalAccrued: roundDecimals(totalPrincipal + totalInterestGenerated),
-          initialLtvSum,
-          initialLtvCount,
-          ltvCombined,
-          ltvTile,
-          ltvDiff,
-          initialLtvCalc: ltv0Calc,
-          initialLtvTile: ltv0Tile,
-          initialLtvDiff: ltv0Diff,
-          validatorDrift: drift,
-          collateralSource,
-          loans,
-        };
-      }, [isBinance, binanceLoanLedger, loanAmount, ltvByTicker, defaultLtv, roundDecimals]);
+      }, [isBinance, binanceLoanLedger, loanAmount, ltvByTicker, defaultLtv]);
       const binanceOriginalPrincipalTotal = isBinance ? binanceLedgerTotals.original : totalLoanPairsDebt;
       const binanceInterestAccruedBaseTotal = isBinance ? binanceLedgerTotals.interestBase : totalLoanPairsAccrued;
       const binanceInterestRealtimeTotal = isBinance ? binanceLedgerTotals.interestRealtime : 0;
@@ -6786,12 +6624,7 @@
       const binanceInterestGeneratedTotal = isBinance
         ? Math.max(0, binanceLedgerTotals.interestGenerated)
         : binanceInterestAccruedTotal;
-      const binanceTotalAccruedFromLedger = isBinance ? Math.max(0, binanceLedgerTotals.totalAccrued) : null;
-      const binanceTotalToRepay = isBinance
-        ? (binanceTotalAccruedFromLedger != null
-          ? binanceTotalAccruedFromLedger
-          : Math.max(0, binanceOriginalPrincipalTotal + binanceInterestGeneratedTotal))
-        : Math.max(0, binanceOriginalPrincipalTotal + binanceInterestGeneratedTotal);
+      const binanceTotalToRepay = Math.max(0, binanceOriginalPrincipalTotal + binanceInterestGeneratedTotal);
       const binanceInitialCollateralTotal = binanceLedgerTotals.initialCollateral;
       const binanceInitialLtvAverage = binanceLedgerTotals.initialLtvCount > 0
         ? binanceLedgerTotals.initialLtvSum / binanceLedgerTotals.initialLtvCount
@@ -6799,24 +6632,9 @@
       const binanceInitialLtvFromCollateral = binanceInitialCollateralTotal > 0
         ? binanceOriginalPrincipalTotal / binanceInitialCollateralTotal
         : null;
-      const binanceInitialLtvCalc = isBinance && Number.isFinite(binanceLedgerTotals.initialLtvCalc)
-        ? binanceLedgerTotals.initialLtvCalc
-        : null;
-      const binanceInitialLtv = isBinance
-        ? (Number.isFinite(binanceInitialLtvCalc)
-          ? binanceInitialLtvCalc
-          : (Number.isFinite(binanceInitialLtvAverage)
-            ? binanceInitialLtvAverage
-            : (Number.isFinite(binanceInitialLtvFromCollateral) ? binanceInitialLtvFromCollateral : 0)))
-        : (Number.isFinite(binanceInitialLtvAverage)
-          ? binanceInitialLtvAverage
-          : (Number.isFinite(binanceInitialLtvFromCollateral) ? binanceInitialLtvFromCollateral : 0));
-      const binanceCollateralNowTotal = isBinance ? Math.max(0, binanceLedgerTotals.collateralNow) : totals.totalCollateralValue;
-      const binanceCombinedLtv = isBinance && Number.isFinite(binanceLedgerTotals.ltvCombined)
-        ? binanceLedgerTotals.ltvCombined
-        : null;
-      const binanceLtvValidatorDiff = isBinance ? binanceLedgerTotals.ltvDiff : 0;
-      const binanceInterestDrift = isBinance ? binanceLedgerTotals.validatorDrift : 0;
+      const binanceInitialLtv = Number.isFinite(binanceInitialLtvAverage)
+        ? binanceInitialLtvAverage
+        : (Number.isFinite(binanceInitialLtvFromCollateral) ? binanceInitialLtvFromCollateral : 0);
       const pct = (value, digits = 1) => formatPercent(Number(value), {
         minimumFractionDigits: digits,
         maximumFractionDigits: digits,
@@ -7319,9 +7137,8 @@
         });
       }, [cashflowPlan]);
       const binancePlanPaidTotal = totalPaid;
-      const binanceActualPaidTotal = isBinance ? binanceLedgerTotals.paid : 0;
-      const binancePaidDisplayTotal = isBinance ? binanceActualPaidTotal : binancePlanPaidTotal;
-      const binancePaidLabel = isBinance ? 'Pagos hechos' : 'Pagos planificados';
+      const binancePaidDisplayTotal = binancePlanPaidTotal;
+      const binancePaidLabel = 'Pagos planificados';
       const derivedNetOutstanding = Number.isFinite(cashflowDerived?.netOutstandingAfterPlan)
         ? Math.max(0, cashflowDerived.netOutstandingAfterPlan)
         : null;
@@ -7330,11 +7147,9 @@
       const plannedOutstanding = derivedNetOutstanding != null
         ? derivedNetOutstanding
         : Math.max(0, plannedOutstandingPrincipal + plannedAccruedInterest);
-      const binanceNetLoanValue = isBinance
-        ? Math.max(0, binanceLedgerTotals.outstanding)
-        : (derivedNetOutstanding != null
-          ? plannedOutstanding
-          : Math.max(0, plannedOutstandingPrincipal + plannedAccruedInterest));
+      const binanceNetLoanValue = derivedNetOutstanding != null
+        ? plannedOutstanding
+        : Math.max(0, binanceOriginalPrincipalTotal + binanceInterestAccruedTotal - binancePaidDisplayTotal);
       const projectedFinalPayoff = Math.max(0, cashflowDerived?.projectedFinalPayoff || 0);
       const totalProjectedOutflows = Math.max(0, totalRepayPrincipal + totalRepayInterest);
       const totalRepayPrincipal = Math.max(0, scheduledPrincipal + plannedOutstandingPrincipal);
@@ -7366,9 +7181,6 @@
       );
       const currentOverallLTV = useMemo(() => {
         if (isBinance) {
-          if (Number.isFinite(binanceCombinedLtv)) {
-            return Math.max(0, binanceCombinedLtv);
-          }
           const items = Array.isArray(collateralBreakdown?.items) ? collateralBreakdown.items : [];
           let sum = 0;
           let count = 0;
@@ -7384,15 +7196,12 @@
           if (count > 0) {
             return sum / count;
           }
-          if (!(binanceCollateralNowTotal > 0)) return 0;
-          return Math.max(0, (binanceNetLoanValue * usdPerUsdt) / binanceCollateralNowTotal);
         }
-        const collateralBase = totals.totalCollateralValue;
-        if (!(collateralBase > 0)) return 0;
-        const netLoanBase = plannedOutstanding;
+        if (!(totals.totalCollateralValue > 0)) return 0;
+        const netLoanBase = isBinance ? binanceNetLoanValue : plannedOutstanding;
         const netLoanUsd = netLoanBase * usdPerUsdt;
-        return netLoanUsd / collateralBase;
-      }, [isBinance, binanceCombinedLtv, collateralBreakdown, binanceCollateralNowTotal, binanceNetLoanValue, plannedOutstanding, totals.totalCollateralValue, usdPerUsdt]);
+        return netLoanUsd / totals.totalCollateralValue;
+      }, [isBinance, collateralBreakdown, binanceNetLoanValue, plannedOutstanding, totals.totalCollateralValue, usdPerUsdt]);
       const plannedOverallLTV = collateralAfterPlan > 0 && Number.isFinite(plannedOutstanding)
         ? (plannedOutstanding * usdPerUsdt) / collateralAfterPlan
         : (plannedOutstanding > 0 ? 1 : 0);
@@ -7423,26 +7232,19 @@
       const binanceInitialLtvTone = toneForLtvValue(binanceInitialLtv);
       const binanceCurrentLtvTone = toneForLtvValue(currentOverallLTV);
       const interestDisplayValue = plannedAccruedInterest > 0 ? plannedAccruedInterest : binanceInterestAccruedTotal;
-      const binanceLoanNetPieces = [
+      const binanceLoanNetSubtle = [
         interestDisplayValue > 0 ? `Interés ${formatLoan(interestDisplayValue)}` : null,
         binancePaidDisplayTotal > 0 ? `${binancePaidLabel} ${formatLoan(binancePaidDisplayTotal)}` : null,
-      ];
-      if (isBinance && binanceInterestDrift > 0.02) {
-        binanceLoanNetPieces.push('⚠️ Recalc interés (auto)');
-      }
-      if (isBinance && binanceLtvValidatorDiff > 0.002) {
-        binanceLoanNetPieces.push('⚠️ Unificar fuente de colateral');
-      }
-      const binanceLoanNetSubtle = binanceLoanNetPieces.filter(Boolean).join(' · ') || 'Sin movimientos registrados';
-      const binancePaidSubtle = isBinance
-        ? (binancePlanPaidTotal > 0 ? `Pagos planificados ${formatLoan(binancePlanPaidTotal)}` : 'Sin pagos planificados')
-        : (hasCashflowPlanPayments ? 'Pagos planificados desde Cashflow' : 'Sin pagos planificados');
+      ].filter(Boolean).join(' · ') || 'Sin movimientos registrados';
+      const binancePaidSubtle = hasCashflowPlanPayments
+        ? 'Pagos planificados desde Cashflow'
+        : 'Sin pagos planificados';
       const binanceInitialCollateralSubtle = binanceInitialCollateralTotal > 0
         ? `Colateral inicial ${formatUsd(binanceInitialCollateralTotal)}`
         : '—';
-      const binanceNetLtvSubtle = isBinance
-        ? (binanceCollateralNowTotal > 0 ? `Colateral actual ${formatUsd(binanceCollateralNowTotal)}` : 'Sin colateral')
-        : (totals.totalCollateralValue > 0 ? `Colateral actual ${formatUsd(totals.totalCollateralValue)}` : 'Sin colateral');
+      const binanceNetLtvSubtle = totals.totalCollateralValue > 0
+        ? `Colateral actual ${formatUsd(totals.totalCollateralValue)}`
+        : 'Sin colateral';
       const collateralCompositionSubtle = useMemo(() => {
         const collaterals = (totals.withValue || [])
           .filter((asset) => asset.useAsCollateral && asset.value > 0);
@@ -8186,7 +7988,7 @@
                 { key: 'repay-total', title: '💸 Total a devolver', value: formatLoan(binanceTotalToRepay), subtle: binanceRepaySubtle },
                 { key: 'loan-paid', title: '✅ Pagos hechos', value: formatLoan(binancePaidDisplayTotal), subtle: binancePaidSubtle },
                 { key: 'loan-plan', title: '📊 Préstamo neto', value: formatLoan(binanceNetLoanValue), subtle: binanceLoanNetSubtle },
-                { key: 'collateral-current', title: '🛡️ Colateral actual', value: formatUsd(isBinance ? binanceCollateralNowTotal : totals.totalCollateralValue), subtle: collateralCompositionSubtle },
+                { key: 'collateral-current', title: '🛡️ Colateral actual', value: formatUsd(totals.totalCollateralValue), subtle: collateralCompositionSubtle },
                 { key: 'ltv-current', title: '📈 LTV inicial', value: toPct(binanceInitialLtv, 2), tone: binanceInitialLtvTone, subtle: binanceInitialCollateralSubtle },
                 { key: 'ltv-plan', title: '📉 LTV neto', value: toPct(currentOverallLTV, 2), tone: binanceCurrentLtvTone, subtle: binanceNetLtvSubtle },
                 { key: 'apr', title: '📅 Tasa anual (APR)', value: toPct(isBinance ? binanceBaseAnnualRate : chosenAPR, 2), subtle: binanceBorrowLabel || undefined },
