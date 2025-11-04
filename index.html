@@ -68,7 +68,11 @@
 
     console.info('[shim] Binance baseline shim activo → modo estático forzado. Endpoint base:', BASELINE_ENDPOINT);
 
-    const _fetch = window.fetch.bind(window);
+    const _fetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
+    if (!_fetch) {
+      console.warn('[shim] fetch no está disponible, no se pudo inicializar el cliente shim.');
+      return;
+    }
 
     const toRequestUrl = (input) => {
       if (typeof input === 'string') {
@@ -112,7 +116,7 @@
       };
     };
 
-    window.fetch = (input, init) => {
+    const shimFetch = (input, init) => {
       try {
         const requestUrl = toRequestUrl(input);
         if (requestUrl && requestUrl.pathname.startsWith(API_PREFIX)) {
@@ -124,6 +128,12 @@
       } catch (_) {}
       return _fetch(input, init);
     };
+
+    window.__nexoShimClient = Object.freeze({
+      fetch: shimFetch,
+      mapToStatic,
+      API_PREFIX,
+    });
   })();
   </script>
   <script>
@@ -205,6 +215,224 @@
       },
     };
 
+    const baseFetch = (() => {
+      if (window.__nexoShimClient && typeof window.__nexoShimClient.fetch === 'function') {
+        return window.__nexoShimClient.fetch;
+      }
+      if (typeof window.fetch === 'function') {
+        return window.fetch.bind(window);
+      }
+      return null;
+    })();
+
+    const safeStorage = (() => {
+      try {
+        if (typeof window === 'undefined' || !window.localStorage) return null;
+        const storage = window.localStorage;
+        const probeKey = '__nexoSimStorageProbe__';
+        storage.setItem(probeKey, '1');
+        storage.removeItem(probeKey);
+        return storage;
+      } catch (_) {
+        return null;
+      }
+    })();
+
+    const createResilientApiClient = ({ fetchFn, logger = console, namespace = 'nexoSimApi' }) => {
+      if (typeof fetchFn !== 'function') {
+        throw new Error('fetchFn es requerido para crear el cliente resiliente.');
+      }
+      const storage = safeStorage;
+      const storagePrefix = `${namespace}:`;
+      const readCache = (key) => {
+        if (!storage) return null;
+        try {
+          const raw = storage.getItem(`${storagePrefix}${String(key)}`);
+          if (!raw) return null;
+          return JSON.parse(raw);
+        } catch (error) {
+          logger?.warn?.(LOG_PREFIX, 'No se pudo leer la cache local.', error);
+          return null;
+        }
+      };
+      const writeCache = (key, entry) => {
+        if (!storage) return;
+        try {
+          storage.setItem(`${storagePrefix}${String(key)}`, JSON.stringify(entry));
+        } catch (error) {
+          logger?.warn?.(LOG_PREFIX, 'No se pudo persistir la cache local.', error);
+        }
+      };
+      const removeCache = (key) => {
+        if (!storage) return;
+        try {
+          storage.removeItem(`${storagePrefix}${String(key)}`);
+        } catch (_) {}
+      };
+      const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const attachMeta = (payload, meta) => {
+        if (payload && typeof payload === 'object') {
+          Object.defineProperty(payload, '__cacheMeta', {
+            value: Object.freeze(meta),
+            enumerable: false,
+            configurable: true,
+          });
+        }
+        return payload;
+      };
+      const defaultRetryDecider = ({ error, response }) => {
+        if (response) {
+          if (response.status === 429 || response.status === 408 || response.status === 425) return true;
+          if (response.status >= 500) return true;
+        }
+        if (error) {
+          if (error.code === 'ETIMEDOUT' || error.name === 'AbortError') return true;
+          if (!response) return true;
+        }
+        return false;
+      };
+      const requestJson = async (url, options = {}, config = {}) => {
+        const {
+          cacheKey: providedCacheKey,
+          cacheTtlMs = 0,
+          staleTtlMs = cacheTtlMs,
+          retries = 2,
+          retryDelayMs = 500,
+          backoffFactor = 2,
+          timeoutMs = null,
+          forceRefresh = false,
+          retryDecider,
+          onCacheHit,
+        } = config || {};
+        const method = options && options.method ? String(options.method).toUpperCase() : 'GET';
+        const effectiveCacheKey = providedCacheKey || ((cacheTtlMs || staleTtlMs) ? `${method}:${url}` : null);
+        const cacheEntry = effectiveCacheKey ? readCache(effectiveCacheKey) : null;
+        const useCacheEntry = (entry, stale) => {
+          if (!entry) return null;
+          const ageMs = Date.now() - entry.timestamp;
+          const meta = {
+            cacheKey: effectiveCacheKey,
+            fetchedAt: entry.fetchedAt,
+            fromCache: true,
+            stale,
+            ageMs,
+          };
+          return attachMeta(entry.payload, meta);
+        };
+        if (!forceRefresh && cacheEntry && cacheTtlMs > 0) {
+          const age = Date.now() - cacheEntry.timestamp;
+          if (age <= cacheTtlMs) {
+            if (typeof onCacheHit === 'function') {
+              try { onCacheHit({ cacheKey: effectiveCacheKey, ageMs: age, stale: false }); }
+              catch (_) {}
+            }
+            return useCacheEntry(cacheEntry, false);
+          }
+        }
+        let attempt = 0;
+        let delayMs = Math.max(0, retryDelayMs);
+        let lastError = null;
+        while (attempt <= retries) {
+          if (attempt > 0 && delayMs > 0) {
+            await wait(delayMs);
+          }
+          attempt += 1;
+          const { signal, ...rest } = options || {};
+          const controller = timeoutMs ? new AbortController() : null;
+          if (controller && signal) {
+            if (signal.aborted) {
+              controller.abort();
+            } else {
+              signal.addEventListener('abort', () => controller.abort(), { once: true });
+            }
+          }
+          let timedOut = false;
+          const timeoutId = timeoutMs ? setTimeout(() => {
+            timedOut = true;
+            controller?.abort();
+          }, timeoutMs) : null;
+          try {
+            const response = await fetchFn(url, { ...rest, signal: controller ? controller.signal : signal });
+            if (!response || typeof response.status !== 'number') {
+              throw new Error('Respuesta inválida del fetch.');
+            }
+            if (!response.ok) {
+              let bodyText = '';
+              try { bodyText = await response.text(); }
+              catch (_) {}
+              const error = new Error(bodyText ? `HTTP ${response.status} ${bodyText}` : `HTTP ${response.status}`);
+              error.status = response.status;
+              error.response = response;
+              throw error;
+            }
+            const payload = await response.json();
+            if (effectiveCacheKey && cacheTtlMs > 0) {
+              const entry = {
+                timestamp: Date.now(),
+                fetchedAt: new Date().toISOString(),
+                payload,
+              };
+              writeCache(effectiveCacheKey, entry);
+              return attachMeta(payload, {
+                cacheKey: effectiveCacheKey,
+                fetchedAt: entry.fetchedAt,
+                fromCache: false,
+                stale: false,
+                ageMs: 0,
+              });
+            }
+            return payload;
+          } catch (err) {
+            let fetchError = err instanceof Error ? err : new Error(String(err));
+            if (timedOut) {
+              const timeoutError = new Error(`Tiempo de espera agotado tras ${timeoutMs}ms para ${url}`);
+              timeoutError.code = 'ETIMEDOUT';
+              timeoutError.cause = fetchError;
+              fetchError = timeoutError;
+            }
+            const response = fetchError.response || null;
+            const decider = typeof retryDecider === 'function' ? retryDecider : defaultRetryDecider;
+            const shouldRetry = attempt <= retries && decider({ error: fetchError, response, attempt, retries });
+            if (shouldRetry) {
+              lastError = fetchError;
+              delayMs = delayMs > 0 ? Math.round(delayMs * backoffFactor) : Math.round(retryDelayMs * backoffFactor);
+              continue;
+            }
+            if (cacheEntry && staleTtlMs > 0) {
+              const age = Date.now() - cacheEntry.timestamp;
+              if (age <= staleTtlMs) {
+                logger?.warn?.(LOG_PREFIX, `Fallo solicitando ${url}: ${fetchError.message || fetchError}. Usando cache local (${Math.round(age / 1000)}s).`);
+                return useCacheEntry(cacheEntry, true);
+              }
+            }
+            throw fetchError;
+          } finally {
+            if (timeoutId) clearTimeout(timeoutId);
+          }
+        }
+        if (cacheEntry && staleTtlMs > 0) {
+          const age = Date.now() - cacheEntry.timestamp;
+          if (age <= staleTtlMs) {
+            logger?.warn?.(LOG_PREFIX, `Fallo persistente solicitando ${url}. Usando cache local (${Math.round(age / 1000)}s).`);
+            return useCacheEntry(cacheEntry, true);
+          }
+        }
+        if (lastError) throw lastError;
+        throw new Error(`No se pudo obtener ${url}`);
+      };
+      return {
+        requestJson,
+        getCacheEntry: (key) => readCache(key),
+        clearCacheEntry: (key) => removeCache(key),
+      };
+    };
+
+    const resilientApiClient = baseFetch
+      ? createResilientApiClient({ fetchFn: baseFetch, logger: console, namespace: 'nexoSimApi' })
+      : null;
+
+    const resilientFetchJson = resilientApiClient ? resilientApiClient.requestJson : null;
+
     const clone = (value) => {
       if (Array.isArray(value)) return value.map(clone);
       if (value && typeof value === 'object') {
@@ -253,7 +481,7 @@
       return;
     }
 
-    const upstreamFetch = window.fetch ? window.fetch.bind(window) : null;
+    const upstreamFetch = baseFetch;
     if (!upstreamFetch) {
       console.warn(LOG_PREFIX, 'fetch no está disponible, abortando shim dinámico.');
       return;
@@ -717,7 +945,7 @@
       console.warn(LOG_PREFIX, 'Error inicial al preparar snapshot dinámico:', error);
     });
 
-    window.fetch = async function dynamicModelFetch(input, init) {
+    const dynamicModelFetch = async function dynamicModelFetch(input, init) {
       try {
         const requestInit = init || {};
         const method = ((requestInit.method) || (typeof input === 'object' && input && input.method) || 'GET').toUpperCase();
@@ -754,6 +982,12 @@
       }
       return upstreamFetch(input, init);
     };
+
+    const existingApiClient = (window.__nexoApiClient && typeof window.__nexoApiClient === 'object')
+      ? window.__nexoApiClient
+      : {};
+    const appFetch = dynamicModelFetch;
+    window.__nexoApiClient = { ...existingApiClient, fetch: appFetch, baseFetch, resilient: resilientApiClient };
   })();
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2287,7 +2521,7 @@
         }
       }
       try {
-        const response = await fetch(url, { ...rest, signal: controller.signal });
+        const response = await baseFetch(url, { ...rest, signal: controller.signal });
         return response;
       } catch (error) {
         if (error?.name === 'AbortError') {
@@ -4885,9 +5119,19 @@
           lastAttempt: now,
         }));
         try {
-          const serverRes = await fetchWithTimeout(`${BINANCE_API_BASE}/api/v3/time`);
-          if (!serverRes.ok) throw new Error(`HTTP ${serverRes.status}`);
-          const serverData = await serverRes.json();
+          const serverData = await resilientFetchJson(
+            `${BINANCE_API_BASE}/api/v3/time`,
+            {},
+            {
+              cacheKey: 'binance:serverTime',
+              cacheTtlMs: 15_000,
+              staleTtlMs: 120_000,
+              retries: 3,
+              retryDelayMs: 600,
+              backoffFactor: 2,
+              timeoutMs: BINANCE_SYNC_TIMEOUT_MS,
+            },
+          );
           const serverTime = Number(serverData?.serverTime);
           if (!Number.isFinite(serverTime)) throw new Error('Server time inválido.');
           const clockSkew = serverTime - Date.now();
@@ -5017,18 +5261,29 @@
           const indexCoins = new Set([...loanCoinsArray, ...collateralCoinsArray]);
           const indexPrices = {};
           if (indexCoins.size > 0) {
-            const indexResults = await Promise.allSettled(Array.from(indexCoins).map((coin) => {
+            const indexResults = await Promise.allSettled(Array.from(indexCoins).map(async (coin) => {
               if (coin === 'USDT') {
-                return Promise.resolve({ coin, price: 1 });
+                return { coin, price: 1 };
               }
               const symbol = `${coin}USDT`;
-              return fetchWithTimeout(`${BINANCE_FAPI_BASE}/fapi/v1/premiumIndex?symbol=${symbol}`)
-                .then((res) => {
-                  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                  return res.json();
-                })
-                .then((data) => ({ coin, price: parseNumber(data?.indexPrice) }))
-                .catch((error) => ({ coin, error }));
+              try {
+                const data = await resilientFetchJson(
+                  `${BINANCE_FAPI_BASE}/fapi/v1/premiumIndex?symbol=${symbol}`,
+                  {},
+                  {
+                    cacheKey: `binance:premiumIndex:${symbol}`,
+                    cacheTtlMs: 30_000,
+                    staleTtlMs: 300_000,
+                    retries: 3,
+                    retryDelayMs: 700,
+                    backoffFactor: 2,
+                    timeoutMs: BINANCE_SYNC_TIMEOUT_MS,
+                  },
+                );
+                return { coin, price: parseNumber(data?.indexPrice) };
+              } catch (error) {
+                return { coin, error };
+              }
             }));
             indexResults.forEach((result) => {
               if (result.status === 'fulfilled') {
@@ -5322,9 +5577,19 @@
           const symbols = FX_SYMBOLS.join(',');
           let ratesPayload = {};
           if (symbols) {
-            const res = await fetch(`https://api.exchangerate.host/latest?base=USDT&symbols=${symbols}`);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            ratesPayload = await res.json();
+            ratesPayload = await resilientFetchJson(
+              `https://api.exchangerate.host/latest?base=USDT&symbols=${symbols}`,
+              {},
+              {
+                cacheKey: `exchangerate:USDT:${symbols}`,
+                cacheTtlMs: FX_REFRESH_MINUTES * 60 * 1000,
+                staleTtlMs: 12 * 60 * 60 * 1000,
+                retries: 3,
+                retryDelayMs: 800,
+                backoffFactor: 2,
+                timeoutMs: 12_000,
+              },
+            );
           }
           const rawRates = ratesPayload?.rates && typeof ratesPayload.rates === 'object' ? ratesPayload.rates : {};
           let usdPerUsdt = Number(rawRates?.USD);
@@ -5332,13 +5597,22 @@
             usdPerUsdt = null;
           }
           try {
-            const usdtRes = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=usd');
-            if (usdtRes.ok) {
-              const usdtData = await usdtRes.json();
-              const usdtUsd = Number(usdtData?.tether?.usd);
-              if (Number.isFinite(usdtUsd) && usdtUsd > 0) {
-                usdPerUsdt = usdtUsd;
-              }
+            const usdtData = await resilientFetchJson(
+              'https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=usd',
+              {},
+              {
+                cacheKey: 'coingecko:tetherUSD',
+                cacheTtlMs: 10 * 60 * 1000,
+                staleTtlMs: 60 * 60 * 1000,
+                retries: 3,
+                retryDelayMs: 800,
+                backoffFactor: 2,
+                timeoutMs: 12_000,
+              },
+            );
+            const usdtUsd = Number(usdtData?.tether?.usd);
+            if (Number.isFinite(usdtUsd) && usdtUsd > 0) {
+              usdPerUsdt = usdtUsd;
             }
           } catch {}
           const normalizedRates = {};
@@ -5998,10 +6272,22 @@
           if (!params.liveQuotes && !force) { inFlight.current = false; return; }
           const ids = Array.from(new Set(assets.filter(a => a.priceAuto !== false).map(a => tickerToId(a.ticker)).filter(Boolean)));
           if (!ids.length) { setLastPriceTs(Date.now()); inFlight.current = false; return; }
+          const sortedKey = ids.slice().sort().join(',');
           const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(',')}&vs_currencies=usd`;
-          const res = await fetch(url);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const data = await res.json();
+          const data = await resilientFetchJson(
+            url,
+            {},
+            {
+              cacheKey: `coingecko:prices:${sortedKey}`,
+              cacheTtlMs: 5_000,
+              staleTtlMs: 60_000,
+              retries: 3,
+              retryDelayMs: 700,
+              backoffFactor: 2,
+              timeoutMs: 12_000,
+              forceRefresh: force,
+            },
+          );
           setAssets(prev => prev.map(a => {
             const id = tickerToId(a.ticker);
             if (!id || a.priceAuto === false) return a;
@@ -6018,10 +6304,21 @@
           if (!params.liveQuotes) return;
           const ids = Array.from(new Set(tickers.map(tickerToId).filter(Boolean)));
           if (!ids.length) return;
+          const sortedKey = ids.slice().sort().join(',');
           const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(',')}&vs_currencies=usd`;
-          const res = await fetch(url);
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const data = await res.json();
+          const data = await resilientFetchJson(
+            url,
+            {},
+            {
+              cacheKey: `coingecko:prices:${sortedKey}`,
+              cacheTtlMs: 5_000,
+              staleTtlMs: 60_000,
+              retries: 3,
+              retryDelayMs: 700,
+              backoffFactor: 2,
+              timeoutMs: 12_000,
+            },
+          );
           setAssets(prev => prev.map(a => {
             const id = tickerToId(a.ticker);
             if (!id || a.priceAuto === false) return a;
