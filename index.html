@@ -138,8 +138,7 @@
   </script>
   <script>
   (function () {
-    const DEFAULT_STORAGE_RECOVERY_HINT = 'Sugerencia: revisá los permisos de almacenamiento del navegador o usá los botones "Reset" en Plantillas & datos.';
-    const buildStorageAlert = ({ key, title = 'Preferencias no disponibles', message, error, hint = DEFAULT_STORAGE_RECOVERY_HINT, tone = 'warn' }) => {
+    function buildStorageAlert({ key, title = 'Preferencias no disponibles', message, error, hint = 'Sugerencia: revisá los permisos de almacenamiento del navegador o usá los botones "Reset" en Plantillas & datos.', tone = 'warn' }) {
       const detail = error ? ` Detalle: ${error?.message || error}.` : '';
       return {
         key,
@@ -148,7 +147,11 @@
         hint,
         tone,
       };
-    };
+    }
+
+    if (typeof window !== 'undefined' && !window.buildStorageAlert) {
+      window.buildStorageAlert = buildStorageAlert;
+    }
 
     const LOG_PREFIX = '[nexo-sim]';
     const NAMESPACE = '__nexoSim';
@@ -2362,7 +2365,7 @@
         return sanitizeSimModelConfig(parsed, base);
       } catch (err) {
         if (typeof onError === 'function') {
-          onError(buildStorageAlert({
+          onError(window.buildStorageAlert({
             key: 'read-sim-config-dom',
             title: 'Configuración dinámica inválida',
             message: 'No se pudo interpretar el JSON embebido para el modelo dinámico. Se usará la configuración por defecto.',
@@ -2383,7 +2386,7 @@
         const parsed = JSON.parse(raw);
         if (!parsed || typeof parsed !== 'object') {
           if (typeof onError === 'function') {
-            onError(buildStorageAlert({
+            onError(window.buildStorageAlert({
               key: 'read-sim-config-storage-format',
               title: 'Configuración dinámica inválida',
               message: 'La configuración dinámica guardada no tiene un formato válido. Se ignorará el override.',
@@ -2394,7 +2397,7 @@
         const version = Number(parsed.version ?? 1);
         if (version !== 1) {
           if (typeof onError === 'function') {
-            onError(buildStorageAlert({
+            onError(window.buildStorageAlert({
               key: `read-sim-config-storage-version-${version}`,
               title: 'Configuración desactualizada',
               message: `La configuración dinámica guardada usa la versión ${parsed.version}, no compatible con esta build.`,
@@ -2405,7 +2408,7 @@
         return sanitizeSimModelConfig(parsed, baseConfig);
       } catch (err) {
         if (typeof onError === 'function') {
-          onError(buildStorageAlert({
+          onError(window.buildStorageAlert({
             key: 'read-sim-config-storage',
             title: 'Sin acceso a configuración guardada',
             message: 'No se pudo leer la configuración dinámica personalizada desde el navegador. Se usará el preset base.',
@@ -2459,7 +2462,7 @@
         return true;
       } catch (err) {
         if (typeof onError === 'function') {
-          onError(buildStorageAlert({
+          onError(window.buildStorageAlert({
             key: 'write-sim-config-storage',
             title: 'No se pudo guardar la configuración',
             message: 'El navegador bloqueó el guardado de la configuración dinámica. Los cambios solo se aplicarán en esta sesión.',
@@ -2477,7 +2480,7 @@
         return true;
       } catch (err) {
         if (typeof onError === 'function') {
-          onError(buildStorageAlert({
+          onError(window.buildStorageAlert({
             key: 'clear-sim-config-storage',
             title: 'No se pudo limpiar la configuración',
             message: 'El navegador bloqueó la eliminación de la configuración dinámica guardada. Probá borrar el almacenamiento manualmente.',
@@ -4235,7 +4238,7 @@
           const stored = localStorage.getItem('spm_platform');
           return PLATFORM_IDS.includes(stored) ? stored : initialPlatformId;
         } catch (err) {
-          registerInitialStorageAlert(buildStorageAlert({
+          registerInitialStorageAlert(window.buildStorageAlert({
             key: 'read-spm_platform',
             message: 'No se pudo leer la última plataforma seleccionada. Se usará la plataforma por defecto.',
             error: err,
@@ -4252,7 +4255,7 @@
           return stored && THEME_TOKENS[stored] ? stored : null;
         } catch (err) {
           console.warn('No se pudo leer el theme override almacenado:', err);
-          registerInitialStorageAlert(buildStorageAlert({
+          registerInitialStorageAlert(window.buildStorageAlert({
             key: 'read-spm_theme_override',
             message: 'No se pudo leer la preferencia de tema guardada. Se usará el modo automático.',
             error: err,
@@ -5301,7 +5304,7 @@
             return sanitizeAssets(JSON.parse(saved));
           }
         } catch (err) {
-          registerInitialStorageAlert(buildStorageAlert({
+          registerInitialStorageAlert(window.buildStorageAlert({
             key: `read-${storageKeys.assets}`,
             message: 'No se pudieron leer tus activos guardados. Se usaron los valores por defecto.',
             error: err,
@@ -5319,7 +5322,7 @@
             return sanitizeParams(JSON.parse(saved));
           }
         } catch (err) {
-          registerInitialStorageAlert(buildStorageAlert({
+          registerInitialStorageAlert(window.buildStorageAlert({
             key: `read-${storageKeys.params}`,
             message: 'No se pudieron leer tus parámetros guardados. Se aplicaron los valores iniciales.',
             error: err,
@@ -5963,7 +5966,7 @@
             return sanitizeCashflowPlan(JSON.parse(saved), previewSnapshot?.repayDate || todayISO());
           }
         } catch (err) {
-          registerInitialStorageAlert(buildStorageAlert({
+          registerInitialStorageAlert(window.buildStorageAlert({
             key: `read-${storageKeys.cashflow}`,
             message: 'No se pudo recuperar tu plan de cashflow guardado. Se usará la plantilla inicial.',
             error: err,
@@ -5981,7 +5984,7 @@
             return sanitizeBenchmarkConfig(JSON.parse(saved));
           }
         } catch (err) {
-          registerInitialStorageAlert(buildStorageAlert({
+          registerInitialStorageAlert(window.buildStorageAlert({
             key: `read-${storageKeys.benchmark}`,
             message: 'No se pudo recuperar la configuración de benchmark guardada. Se usará el esquema base.',
             error: err,
@@ -5996,7 +5999,7 @@
         try {
           localStorage.setItem('spm_platform', platformId);
         } catch (err) {
-          pushStorageAlert(buildStorageAlert({
+          pushStorageAlert(window.buildStorageAlert({
             key: 'write-spm_platform',
             message: 'No se pudo guardar la plataforma seleccionada en el navegador.',
             error: err,
@@ -6018,7 +6021,7 @@
               return parsed;
             }
           } catch (err) {
-            pushStorageAlert(buildStorageAlert({
+            pushStorageAlert(window.buildStorageAlert({
               key: `read-${storageKeys.assets}`,
               message: 'No se pudieron cargar tus activos guardados. Se restauraron los valores base.',
               error: err,
@@ -6043,7 +6046,7 @@
               return parsed;
             }
           } catch (err) {
-            pushStorageAlert(buildStorageAlert({
+            pushStorageAlert(window.buildStorageAlert({
               key: `read-${storageKeys.params}`,
               message: 'No se pudieron cargar los parámetros guardados. Se reestablecieron los valores iniciales.',
               error: err,
@@ -6064,7 +6067,7 @@
         try {
           localStorage.setItem(storageKeys.assets, JSON.stringify(assets));
         } catch (err) {
-          pushStorageAlert(buildStorageAlert({
+          pushStorageAlert(window.buildStorageAlert({
             key: `write-${storageKeys.assets}`,
             message: 'No se pudieron guardar tus activos personalizados en el navegador.',
             error: err,
@@ -6078,7 +6081,7 @@
         try {
           localStorage.setItem(storageKeys.params, JSON.stringify(params));
         } catch (err) {
-          pushStorageAlert(buildStorageAlert({
+          pushStorageAlert(window.buildStorageAlert({
             key: `write-${storageKeys.params}`,
             message: 'No se pudieron guardar tus parámetros personalizados en el navegador.',
             error: err,
@@ -6154,7 +6157,7 @@
               return parsed;
             }
           } catch (err) {
-            pushStorageAlert(buildStorageAlert({
+            pushStorageAlert(window.buildStorageAlert({
               key: `read-${storageKeys.cashflow}`,
               message: 'No se pudo cargar tu plan de cashflow guardado. Se aplicó el valor por defecto.',
               error: err,
@@ -6179,7 +6182,7 @@
               return parsed;
             }
           } catch (err) {
-            pushStorageAlert(buildStorageAlert({
+            pushStorageAlert(window.buildStorageAlert({
               key: `read-${storageKeys.benchmark}`,
               message: 'No se pudo cargar la configuración de benchmark guardada. Se restableció la versión inicial.',
               error: err,
@@ -6196,7 +6199,7 @@
         try {
           localStorage.setItem(storageKeys.cashflow, JSON.stringify(cashflowPlan));
         } catch (err) {
-          pushStorageAlert(buildStorageAlert({
+          pushStorageAlert(window.buildStorageAlert({
             key: `write-${storageKeys.cashflow}`,
             message: 'No se pudo guardar el plan de cashflow en el navegador.',
             error: err,
@@ -6210,7 +6213,7 @@
         try {
           localStorage.setItem(storageKeys.benchmark, JSON.stringify(benchmarkConfig));
         } catch (err) {
-          pushStorageAlert(buildStorageAlert({
+          pushStorageAlert(window.buildStorageAlert({
             key: `write-${storageKeys.benchmark}`,
             message: 'No se pudo guardar la configuración de benchmark en el navegador.',
             error: err,
@@ -6740,7 +6743,7 @@
           try {
             localStorage.removeItem(storageKeys.params);
           } catch (err) {
-            pushStorageAlert(buildStorageAlert({
+            pushStorageAlert(window.buildStorageAlert({
               key: `clear-${storageKeys.params}`,
               message: 'No se pudo limpiar los parámetros guardados en el navegador.',
               error: err,
@@ -6758,7 +6761,7 @@
           try {
             localStorage.removeItem(storageKeys.assets);
           } catch (err) {
-            pushStorageAlert(buildStorageAlert({
+            pushStorageAlert(window.buildStorageAlert({
               key: `clear-${storageKeys.assets}`,
               message: 'No se pudieron limpiar los activos guardados en el navegador.',
               error: err,
@@ -6789,7 +6792,7 @@
           try {
             localStorage.removeItem(storageKeys.cashflow);
           } catch (err) {
-            pushStorageAlert(buildStorageAlert({
+            pushStorageAlert(window.buildStorageAlert({
               key: `clear-${storageKeys.cashflow}`,
               message: 'No se pudo limpiar el plan de cashflow guardado.',
               error: err,
@@ -6798,7 +6801,7 @@
           try {
             localStorage.removeItem(storageKeys.benchmark);
           } catch (err) {
-            pushStorageAlert(buildStorageAlert({
+            pushStorageAlert(window.buildStorageAlert({
               key: `clear-${storageKeys.benchmark}`,
               message: 'No se pudo limpiar la configuración de benchmark guardada.',
               error: err,
@@ -7820,7 +7823,7 @@
           }
         } catch (err) {
           console.warn('No se pudo persistir el theme override:', err);
-          pushStorageAlert(buildStorageAlert({
+          pushStorageAlert(window.buildStorageAlert({
             key: 'write-spm_theme_override',
             message: 'No se pudo guardar la preferencia de tema en el navegador.',
             error: err,
@@ -8374,7 +8377,7 @@
                       try {
                         localStorage.removeItem(storageKeys.assets);
                       } catch (err) {
-                        pushStorageAlert(buildStorageAlert({
+                        pushStorageAlert(window.buildStorageAlert({
                           key: `clear-${storageKeys.assets}`,
                           message: 'No se pudieron limpiar los activos guardados en el navegador.',
                           error: err,
