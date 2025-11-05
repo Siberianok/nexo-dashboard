@@ -3,5 +3,8 @@
   "version": "1.0.0",
   "description": "Simulador de préstamos con presets CeFi y calculadora de Earn",
   "type": "module",
-  "private": true
+  "private": true,
+  "scripts": {
+    "test": "node --test"
+  }
 }

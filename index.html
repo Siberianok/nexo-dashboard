@@ -97,6 +97,18 @@
       return target.toString();
     };
 
+    let pendingPresetAlertShown = false;
+    const notifyPresetDelay = (resource, detail) => {
+      if (pendingPresetAlertShown) return;
+      pendingPresetAlertShown = true;
+      const target = resource ? ` "${resource}"` : '';
+      const message = `Preset estático${target} en preparación. Se intentará usar el endpoint en vivo.`;
+      console.warn('[shim] ' + message, detail);
+      try {
+        setTimeout(() => { try { alert(message); } catch (_) {} }, 0);
+      } catch (_) {}
+    };
+
     const cloneInit = (input, init) => {
       if (!input || typeof input !== 'object') return init;
       return {
@@ -121,9 +133,21 @@
         const requestUrl = toRequestUrl(input);
         if (requestUrl && requestUrl.pathname.startsWith(API_PREFIX)) {
           const staticUrl = mapToStatic(requestUrl.pathname, requestUrl.search);
-          return typeof input === 'string'
-            ? _fetch(staticUrl, init)
-            : _fetch(staticUrl, cloneInit(input, init));
+          const useInit = typeof input === 'string' ? init : cloneInit(input, init);
+          const fallbackUrl = requestUrl.toString();
+          const performFallback = (reason) => {
+            notifyPresetDelay(requestUrl.pathname, reason);
+            if (!fallbackUrl) {
+              throw reason;
+            }
+            return _fetch(fallbackUrl, useInit);
+          };
+          return _fetch(staticUrl, useInit).then((response) => {
+            if (response && response.status === 404) {
+              return performFallback(new Error('Preset estático no encontrado (404).'));
+            }
+            return response;
+          }).catch((error) => performFallback(error));
         }
       } catch (_) {}
       return _fetch(input, init);
