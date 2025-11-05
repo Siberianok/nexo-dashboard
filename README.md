@@ -1,14 +1,21 @@
-# Simulador de Préstamos — HTML (portable)
+# Simulador de Préstamos — Vite + React
 
-Simulador multiplataforma (Nexo, Binance, etc.) con **precios en vivo**, **LTV**, **APR por tier**, cálculo de **intereses**, estimación de **Earn** y planificador de cashflow. Todo el tablero vive en un único `index.html` (React + Tailwind vía CDN), sin build ni backend obligatorio.
+Simulador multiplataforma (Nexo, Binance, etc.) con **precios en vivo**, **LTV**, **APR por tier**, cálculo de **intereses**, estimación de **Earn** y planificador de cashflow. Ahora vive en un proyecto moderno (Vite + React + TypeScript opcional) pero sigue desplegándose como **sitio estático** 100 % compatible con GitHub Pages.
 
 ## 🚀 Uso rápido
-1. Abrí `index.html` directamente o servilo desde un servidor estático (recomendado para evitar CORS). Ejemplos:
-   - Python: `python3 -m http.server 8000`
-   - Node: `npx serve .`
-2. Editá tus activos (cantidad, toggle “Auto” para precios en vivo, marcar como colateral).
-3. Ajustá parámetros (frecuencia de refresco, Earn on/off, preset de plataforma).
-4. Simulá un préstamo (monto + fecha de repago) y seguí la proyección de cashflow.
+1. Instalá dependencias (`npm install`).
+2. Levantá el dev server con `npm run dev` (Vite expone el dashboard en `http://localhost:5173`).
+3. Ajustá parámetros (frecuencia de refresco, Earn on/off, preset de plataforma) y simulá tu préstamo.
+4. Para generar la versión estática lista para GitHub Pages: `npm run build` → los assets terminan en `dist/`.
+
+> ¿Querés un build ultra portable? El resultado sigue siendo HTML/CSS/JS plano dentro de `dist/`. Podés servirlo con `python3 -m http.server`, `npx serve dist`, Netlify o GitHub Pages sin tocar configuraciones extra.
+
+## 🧪 Scripts disponibles
+- `npm run dev`: entorno de desarrollo con recarga caliente.
+- `npm run build`: build optimizado listo para deploy estático.
+- `npm run preview`: sirve el contenido generado en `dist/` para validarlo.
+- `npm run lint`: ejecuta ESLint + Prettier rules sobre `src/`.
+- `npm run test`: corre Vitest + Testing Library sobre los componentes clave.
 
 > El micro-servicio Node que vivía en Render fue retirado. Ahora la app es 100 % estática y el preset remoto quedó deshabilitado: el modelo dinámico corre en el navegador con datos públicos.
 
