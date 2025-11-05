@@ -834,6 +834,32 @@ const sanitizeTickerList = (value) => {
     });
 };
 
+const clone = (value) => {
+  if (Array.isArray(value)) return value.map(clone);
+  if (value && typeof value === 'object') {
+    const out = {};
+    Object.keys(value).forEach((key) => {
+      out[key] = clone(value[key]);
+    });
+    return out;
+  }
+  return value;
+};
+
+const mergeDeep = (target, source) => {
+  if (!source || typeof source !== 'object') return target;
+  Object.keys(source).forEach((key) => {
+    const incoming = source[key];
+    if (incoming && typeof incoming === 'object' && !Array.isArray(incoming)) {
+      const baseTarget = target[key] && typeof target[key] === 'object' ? target[key] : {};
+      target[key] = mergeDeep(baseTarget, incoming);
+    } else {
+      target[key] = clone(incoming);
+    }
+  });
+  return target;
+};
+
 const sanitizeSimModelConfig = (rawConfig, baseConfig = createDefaultSimModelConfig()) => {
   const base = clone(baseConfig);
   const source = rawConfig && typeof rawConfig === 'object' ? rawConfig : {};
