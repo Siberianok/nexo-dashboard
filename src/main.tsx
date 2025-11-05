@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { initBinanceShim } from './shim/binanceShim';
 import { initDynamicModel } from './runtime/dynamicModel';
+import './index.css';
 
 initBinanceShim();
 initDynamicModel();
