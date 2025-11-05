@@ -1,0 +1,19 @@
+{
+  "source": "dynamic_model",
+  "fetchedAt": "2025-01-15T00:00:00.000Z",
+  "total": 2,
+  "rows": [
+    {
+      "collateralCoin": "ADA",
+      "initialLTV": 0.7478646456062593,
+      "marginCallLTV": 0.8,
+      "liquidationLTV": 0.84124
+    },
+    {
+      "collateralCoin": "ALGO",
+      "initialLTV": 0.6398718015265647,
+      "marginCallLTV": 0.8,
+      "liquidationLTV": 0.85143
+    }
+  ]
+}
