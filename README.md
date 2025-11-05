@@ -19,6 +19,15 @@ Simulador multiplataforma (Nexo, Binance, etc.) con **precios en vivo**, **LTV**
 
 > El micro-servicio Node que vivía en Render fue retirado. Ahora la app es 100 % estática y el preset remoto quedó deshabilitado: el modelo dinámico corre en el navegador con datos públicos.
 
+## 🔍 Endpoints del preset estático Binance
+El shim del navegador intercepta las solicitudes `fetch` a `/api/binance/*` y las redirige a archivos JSON locales dentro de `./api/binance/`. Actualmente se utilizan:
+
+- `/api/binance/loans` → `api/binance/loans.json` (snapshot completo del preset).
+- `/api/binance/loanable` → `api/binance/loanable.json` (tasas de préstamo por moneda).
+- `/api/binance/collateral` → `api/binance/collateral.json` (parámetros de colateral disponibles).
+- `/api/binance/snapshot` → alias de `/api/binance/loans`.
+- `/api/admin/state` → `api/admin/state.json` (estado de cache del simulador).
+
 ## 🔄 Binance en tiempo real (opcional)
 - **API keys personales**: ingresá tu `API Key` y `Secret` (permiso READ) en el panel "Binance Live" para sincronizar préstamos, APR y parámetros de colateral directamente con los endpoints SAPI oficiales.
 - **Modelo dinámico**: sin backend. El panel “Modelo dinámico activo” resume la cache local, la edad del snapshot y el origen `dynamic_model` generado con fórmulas + APIs públicas de spot/funding.
