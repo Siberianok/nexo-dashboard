@@ -1,4 +1,5 @@
 import { DEFAULT_EXCHANGE_RATES, LIVE_REFRESH_SECONDS } from "../sharedDefaults";
+import { annualToHourly } from "../../utils/rates";
 
 export const PLATFORM_PRESETS_V1 = {
   nexo: {
