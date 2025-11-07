@@ -14,7 +14,7 @@ Simulador multiplataforma (Nexo, Binance, etc.) con **precios en vivo**, **LTV**
 - `npm run dev`: entorno de desarrollo con recarga caliente.
 - `npm run build`: build optimizado listo para deploy estático.
 - `npm run preview`: sirve el contenido generado en `dist/` para validarlo.
-- `npm run lint`: ejecuta ESLint + Prettier rules sobre `src/`.
+- `npm run lint`: corre la verificación de tipos (`tsc --noEmit`).
 - `npm run test`: corre Vitest + Testing Library sobre los componentes clave.
 
 > El micro-servicio Node que vivía en Render fue retirado. Ahora la app es 100 % estática y el preset remoto quedó deshabilitado: el modelo dinámico corre en el navegador con datos públicos.

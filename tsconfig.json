@@ -3,7 +3,7 @@
     "target": "ES2020",
     "useDefineForClassFields": true,
     "module": "ESNext",
-    "moduleResolution": "Node",
+    "moduleResolution": "Bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
     "esModuleInterop": true,
@@ -11,7 +11,8 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "allowJs": true,
-    "types": ["vitest/globals", "@testing-library/jest-dom", "node"]
+    "types": ["vitest/globals", "node"],
+    "typeRoots": ["./types", "./node_modules/@types", "./node_modules"]
   },
   "include": ["src", "tests"],
   "references": [{ "path": "./tsconfig.node.json" }]
