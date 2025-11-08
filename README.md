@@ -1,12 +1,12 @@
 # Simulador de Préstamos — Vite + React
 
-Simulador multiplataforma (Nexo, Binance, etc.) con **precios en vivo**, **LTV**, **APR por tier**, cálculo de **intereses**, estimación de **Earn** y planificador de cashflow. Ahora vive en un proyecto moderno (Vite + React + TypeScript opcional) pero sigue desplegándose como **sitio estático** 100 % compatible con GitHub Pages.
+Simulador multiplataforma (Nexo, Binance, etc.) con **precios en vivo**, **LTV**, **APR por tier**, cálculo de **intereses**, estimación de **Earn** y planificador de cashflow. Vive en un proyecto moderno (Vite + React + TypeScript) pero sigue publicándose como **sitio estático** compatible con GitHub Pages.
 
 ## 🚀 Uso rápido
 1. Instalá dependencias (`npm install`).
 2. Levantá el dev server con `npm run dev` (Vite expone el dashboard en `http://localhost:5173`).
 3. Ajustá parámetros (frecuencia de refresco, Earn on/off, preset de plataforma) y simulá tu préstamo.
-4. Para generar la versión estática lista para GitHub Pages: `npm run build` → los assets terminan en `dist/`.
+4. Generá el build para GitHub Pages con `npm run build` → los assets terminan en `dist/` con rutas relativas.
 
 > ¿Querés un build ultra portable? El resultado sigue siendo HTML/CSS/JS plano dentro de `dist/`. Podés servirlo con `python3 -m http.server`, `npx serve dist`, Netlify o GitHub Pages sin tocar configuraciones extra.
 
@@ -20,13 +20,13 @@ Simulador multiplataforma (Nexo, Binance, etc.) con **precios en vivo**, **LTV**
 > El micro-servicio Node que vivía en Render fue retirado. Ahora la app es 100 % estática y el preset remoto quedó deshabilitado: el modelo dinámico corre en el navegador con datos públicos.
 
 ## 🔍 Endpoints del preset estático Binance
-El shim del navegador intercepta las solicitudes `fetch` a `/api/binance/*` y las redirige a archivos JSON locales dentro de `./api/binance/`. Actualmente se utilizan:
+El shim del navegador intercepta las solicitudes `fetch` a `/api/binance/*` y las redirige a archivos JSON locales dentro de `public/api`. Asegurate de que esos respaldos queden versionados para que el build no falle aun sin conectividad.
 
-- `/api/binance/loans` → `api/binance/loans.json` (snapshot completo del preset).
-- `/api/binance/loanable` → `api/binance/loanable.json` (tasas de préstamo por moneda).
-- `/api/binance/collateral` → `api/binance/collateral.json` (parámetros de colateral disponibles).
+- `/api/binance/loans` → `public/api/binance/loans.json` (snapshot completo del preset).
+- `/api/binance/loanable` → `public/api/binance/loanable.json` (tasas de préstamo por moneda).
+- `/api/binance/collateral` → `public/api/binance/collateral.json` (parámetros de colateral disponibles).
 - `/api/binance/snapshot` → alias de `/api/binance/loans`.
-- `/api/admin/state` → `api/admin/state.json` (estado de cache del simulador).
+- `/api/admin/state` → `public/api/admin/state.json` (estado de cache del simulador).
 
 ## 🔄 Binance en tiempo real (opcional)
 - **API keys personales**: ingresá tu `API Key` y `Secret` (permiso READ) en el panel "Binance Live" para sincronizar préstamos, APR y parámetros de colateral directamente con los endpoints SAPI oficiales.
@@ -79,7 +79,10 @@ El simulador los usa como fallback para el Earn flexible (columna “APR Earn”
 Ambos flags se pueden combinar. El estado se muestra en los indicadores (“forzado (sim)”).
 
 ## 📂 Estructura del repo
-- `index.html`: todo el simulador (React + lógica + estilos).
-- `README.md`: este documento.
+- `index.html`: HTML base + configuración embebida (`#sim-model-config`).
+- `public/`: assets estáticos que Vite copia tal cual al build (`public/api/**` son los respaldos del shim Binance).
+- `src/`: componentes React, lógica del simulador, estilos y shims del runtime.
+- `tests/`: pruebas unitarias (Vitest) para presets, storage y configuración embebida.
+- `api/`: snapshots en crudo (fuente de verdad) que se sincronizan manualmente con `public/api/`.
 
-¡Listo! Con sólo `index.html` podés seguir iterando los presets, exportar/importar configuraciones (`Exportar JSON`) y documentar tus propios snapshots sin depender de servicios externos.
+¡Listo! Con `npm run build` y el branch configurado para GitHub Pages, el dashboard vuelve a publicarse con todos los estilos y mejoras visuales.
