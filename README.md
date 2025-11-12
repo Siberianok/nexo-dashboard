@@ -80,9 +80,8 @@ Ambos flags se pueden combinar. El estado se muestra en los indicadores (“forz
 
 ## 📂 Estructura del repo
 - `index.html`: HTML base + configuración embebida (`#sim-model-config`).
-- `public/`: assets estáticos que Vite copia tal cual al build (`public/api/**` son los respaldos del shim Binance).
+- `public/`: assets estáticos que Vite copia tal cual al build (incluye los respaldos del shim Binance en `public/api/**`).
 - `src/`: componentes React, lógica del simulador, estilos y shims del runtime.
 - `tests/`: pruebas unitarias (Vitest) para presets, storage y configuración embebida.
-- `api/`: snapshots en crudo (fuente de verdad) que se sincronizan manualmente con `public/api/`.
 
 ¡Listo! Con `npm run build` y el branch configurado para GitHub Pages, el dashboard vuelve a publicarse con todos los estilos y mejoras visuales.
