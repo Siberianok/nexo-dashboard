@@ -11,9 +11,9 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "allowJs": true,
-    "types": ["vitest/globals", "node"],
-    "typeRoots": ["./types", "./node_modules/@types", "./node_modules"]
+    "types": ["node"],
+    "typeRoots": ["./node_modules/@types", "./node_modules"]
   },
-  "include": ["src", "tests"],
+  "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
