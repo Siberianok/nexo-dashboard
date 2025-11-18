@@ -175,31 +175,28 @@ export const readSimModelConfigFromStorage = (
   baseConfig: SimModelConfig = createDefaultSimModelConfig(),
 ) => {
   if (typeof window === 'undefined') return null;
+
+  const clearInvalidConfig = () => {
+    try {
+      window.localStorage.removeItem(SIM_MODEL_STORAGE_KEY);
+    } catch (_) {
+      // noop
+    }
+  };
+
   try {
     const raw = window.localStorage.getItem(SIM_MODEL_STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as RawSimModelConfig & { version?: number };
     if (!parsed || typeof parsed !== 'object') {
-      if (typeof onError === 'function') {
-        onError(buildStorageAlert({
-          key: 'read-sim-config-storage-format',
-          title: 'Configuración dinámica inválida',
-          message: 'La configuración dinámica guardada no tiene un formato válido. Se ignorará el override.',
-          error: undefined,
-        }));
-      }
+      clearInvalidConfig();
+      console.warn('[sim-model-config] formato guardado inválido, limpiando override');
       return null;
     }
     const version = Number(parsed.version ?? 1);
     if (version !== 1) {
-      if (typeof onError === 'function') {
-        onError(buildStorageAlert({
-          key: `read-sim-config-storage-version-${version}`,
-          title: 'Configuración desactualizada',
-          message: `La configuración dinámica guardada usa la versión ${parsed.version}, no compatible con esta build.`,
-          error: undefined,
-        }));
-      }
+      clearInvalidConfig();
+      console.warn('[sim-model-config] versión no compatible en almacenamiento, limpiando override', parsed.version);
       return null;
     }
     return sanitizeSimModelConfig(parsed, baseConfig);
