@@ -156,16 +156,7 @@ export const readSimModelConfigFromDom = (onError?: (alert: ReturnType<typeof bu
     const parsed = JSON.parse(text) as RawSimModelConfig;
     return sanitizeSimModelConfig(parsed, base);
   } catch (err) {
-    if (typeof onError === 'function') {
-      onError(buildStorageAlert({
-        key: 'read-sim-config-dom',
-        title: 'Configuración dinámica inválida',
-        message: 'No se pudo interpretar el JSON embebido para el modelo dinámico. Se usará la configuración por defecto.',
-        error: err,
-      }));
-    } else {
-      console.warn('[sim-model-config] JSON inválido, usando default', err);
-    }
+    console.warn('[sim-model-config] JSON inválido, usando default', err);
     return base;
   }
 };
